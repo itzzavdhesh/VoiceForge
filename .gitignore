@@ -1,0 +1,6 @@
+# Keeps generated dependencies, build output, and local secrets out of version control.
+node_modules
+dist
+.env
+.DS_Store
+npm-debug.log*

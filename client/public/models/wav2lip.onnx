@@ -1,0 +1,2 @@
+# Browser-served placeholder for the Wav2Lip ONNX model during MVP development.
+# TODO: Replace this text file with the same real model stored at ../../models/wav2lip.onnx.
