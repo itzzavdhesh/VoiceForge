@@ -1,6 +1,11 @@
 // Implements ElevenLabs voice cloning and text-to-speech proxy handlers.
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
+// ElevenLabs bills by character count. This cap prevents a single request
+// from consuming a large share of the monthly quota. Configurable via the
+// SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
+const SPEAK_TEXT_MAX_LENGTH = parseInt(process.env.SPEAK_TEXT_MAX_LENGTH, 10) || 2000;
+
 function getApiKey() {
   return process.env.ELEVENLABS_API_KEY?.trim();
 }
@@ -71,6 +76,13 @@ export async function speak(request, response, next) {
 
     if (!text || !voiceId) {
       response.status(400).json({ error: "Both text and voice_id are required." });
+      return;
+    }
+
+    if (text.length > SPEAK_TEXT_MAX_LENGTH) {
+      response.status(400).json({
+        error: `Text must not exceed ${SPEAK_TEXT_MAX_LENGTH} characters. Received ${text.length}.`
+      });
       return;
     }
 
