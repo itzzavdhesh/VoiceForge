@@ -1,0 +1,237 @@
+name: PR Template Validator
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: pr-template-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR template, issue link, and labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = pr.number;
+            const username = pr.user.login;
+            const title = pr.title || '';
+            const body = pr.body || '';
+
+            const labelDefinitions = {
+              gssoc26: '0E8A16',
+              nsoc26: '1D76DB',
+              SSoC26: '5319E7',
+              ELUSOC: 'FBCA04',
+              bug: 'D73A4A',
+              enhancement: 'A2EEEF',
+              documentation: '0075CA',
+              accessibility: '7057FF',
+              ci: 'C5DEF5',
+              refactor: 'FBCA04',
+              'needs-template': 'B60205',
+              'needs-quality': 'D4C5F9',
+              'needs-linked-issue': 'D93F0B',
+              'size/xs': 'C2E0C6',
+              'size/s': 'BFDADC',
+              'size/m': 'D4C5F9',
+              'size/l': 'F9D0C4',
+              'size/xl': 'D73A4A'
+            };
+
+            async function ensureLabel(name) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status === 404) {
+                  await github.rest.issues.createLabel({
+                    owner,
+                    repo,
+                    name,
+                    color: labelDefinitions[name] || 'EDEDED'
+                  });
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            async function addLabels(labels) {
+              for (const label of labels) await ensureLabel(label);
+              if (labels.length > 0) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
+              }
+            }
+
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            async function assignAuthor() {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number,
+                  assignees: [username]
+                });
+              } catch (error) {
+                core.warning(`Could not assign @${username}: ${error.message}`);
+              }
+            }
+
+            const programs = [
+              { name: 'GSSoC', label: 'gssoc26', pattern: /\bGSSoC\b/i },
+              { name: 'NSOC', label: 'nsoc26', pattern: /\bNSOC\b/i },
+              { name: 'SSOC', label: 'SSoC26', pattern: /\bSSOC\b/i },
+              { name: 'ELUSOC', label: 'ELUSOC', pattern: /\bELUSOC\b/i }
+            ];
+
+            const matchedProgram = programs.find(program => program.pattern.test(body));
+            const requiredSections = [
+              /##.*Program/i,
+              /##.*Description/i,
+              /##.*Related Issue/i,
+              /##.*Type of Change/i,
+              /##.*How to Test/i,
+              /##.*Checklist/i
+            ];
+            const linkedIssueRegex = /(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#\d+/i;
+            const conventionalTitleRegex = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+/i;
+
+            const problems = [];
+            const labelsToAdd = [];
+
+            if (!matchedProgram) {
+              problems.push('Select a program PR template: GSSoC, NSOC, SSOC, or ELUSOC.');
+            } else {
+              labelsToAdd.push(matchedProgram.label);
+            }
+
+            if (!requiredSections.every(section => section.test(body))) {
+              problems.push('Use the mandatory VoiceForge PR template and keep all required sections.');
+              labelsToAdd.push('needs-template');
+            }
+
+            if (!linkedIssueRegex.test(body)) {
+              problems.push('Link the related issue using `Closes #issue-number`.');
+              labelsToAdd.push('needs-linked-issue');
+            }
+
+            if (!conventionalTitleRegex.test(title)) {
+              problems.push('Use a Conventional Commits PR title, for example `feat: add voice preview`.');
+            }
+
+            const cleanedBody = body
+              .replace(/<!--[\s\S]*?-->/g, '')
+              .replace(/[#>*`\-\[\]]/g, '')
+              .replace(/\.\.\./g, '')
+              .trim();
+
+            if (cleanedBody.length < 120) {
+              problems.push('Please fill in the PR template with enough detail for maintainers to review it.');
+              labelsToAdd.push('needs-quality');
+            }
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100
+            });
+
+            const totalChanges = files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
+            const sizeLabel =
+              totalChanges <= 20 ? 'size/xs' :
+              totalChanges <= 100 ? 'size/s' :
+              totalChanges <= 300 ? 'size/m' :
+              totalChanges <= 700 ? 'size/l' :
+              'size/xl';
+            labelsToAdd.push(sizeLabel);
+
+            const changedPaths = files.map(file => file.filename);
+            if (changedPaths.some(path => path.startsWith('client/'))) labelsToAdd.push('client');
+            if (changedPaths.some(path => path.startsWith('server/'))) labelsToAdd.push('server');
+            if (changedPaths.some(path => path.startsWith('.github/'))) labelsToAdd.push('ci');
+            if (/documentation|docs|readme/i.test(body) || changedPaths.some(path => /\.md$/i.test(path))) labelsToAdd.push('documentation');
+            if (/accessibility|a11y/i.test(body)) labelsToAdd.push('accessibility');
+            if (/bug fix/i.test(body)) labelsToAdd.push('bug');
+            if (/new feature/i.test(body)) labelsToAdd.push('enhancement');
+            if (/refactor|cleanup/i.test(body)) labelsToAdd.push('refactor');
+
+            await addLabels([...new Set(labelsToAdd)]);
+
+            for (const label of ['size/xs', 'size/s', 'size/m', 'size/l', 'size/xl']) {
+              if (label !== sizeLabel) await removeLabel(label);
+            }
+            if (linkedIssueRegex.test(body)) await removeLabel('needs-linked-issue');
+            if (requiredSections.every(section => section.test(body))) await removeLabel('needs-template');
+            if (cleanedBody.length >= 120) await removeLabel('needs-quality');
+
+            const marker = '<!-- voiceforge-pr-template-validator -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+            const existing = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body &&
+              comment.body.includes(marker)
+            );
+
+            if (problems.length === 0) {
+              await assignAuthor();
+              if (existing) {
+                await github.rest.issues.deleteComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id
+                });
+              }
+              return;
+            }
+
+            const commentBody =
+              `${marker}\n` +
+              `## PR Update Needed\n\n` +
+              `Hi @${username}, thanks for the PR. VoiceForge requires the program PR template and a linked issue before review.\n\n` +
+              problems.map(problem => `- ${problem}`).join('\n') +
+              `\n\nPlease edit the PR description/title and push updates. This comment updates automatically.`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: commentBody
+              });
+            }
+
+            core.setFailed(problems.join('\n'));

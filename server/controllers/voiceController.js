@@ -1,15 +1,21 @@
 // Implements ElevenLabs voice cloning and text-to-speech proxy handlers.
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
-function getApiKey() {
-  return process.env.ELEVENLABS_API_KEY?.trim();
-}
+// ElevenLabs bills by character count. This cap prevents a single request
+// from consuming a large share of the monthly quota. Configurable via the
+// SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
+const SPEAK_TEXT_MAX_LENGTH = parseInt(process.env.SPEAK_TEXT_MAX_LENGTH, 10) || 2000;
 
-function requireApiKey() {
-  const apiKey = getApiKey();
+// Callers must supply their own ElevenLabs key via the X-ElevenLabs-Api-Key
+// request header. The server no longer falls back to its own environment key
+// so anonymous requests cannot charge the server operator's account.
+function requireApiKey(request) {
+  const apiKey = request.get("X-ElevenLabs-Api-Key")?.trim();
   if (!apiKey) {
-    const error = new Error("Missing ElevenLabs API key. Set ELEVENLABS_API_KEY in your server .env file.");
-    error.status = 500;
+    const error = new Error(
+      "An ElevenLabs API key is required. Add it via the X-ElevenLabs-Api-Key header."
+    );
+    error.status = 401;
     throw error;
   }
   return apiKey;
@@ -27,7 +33,7 @@ async function readElevenLabsError(response) {
 
 export async function cloneVoice(request, response, next) {
   try {
-    const apiKey = requireApiKey();
+    const apiKey = requireApiKey(request);
     const audioFile = request.file;
 
     if (!audioFile) {
@@ -71,6 +77,13 @@ export async function speak(request, response, next) {
 
     if (!text || !voiceId) {
       response.status(400).json({ error: "Both text and voice_id are required." });
+      return;
+    }
+
+    if (text.length > SPEAK_TEXT_MAX_LENGTH) {
+      response.status(400).json({
+        error: `Text must not exceed ${SPEAK_TEXT_MAX_LENGTH} characters. Received ${text.length}.`
+      });
       return;
     }
 

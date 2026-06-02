@@ -32,6 +32,27 @@ npm run dev
 - Keep accessibility visible: labels, keyboard paths, semantic buttons, and readable contrast matter.
 - Do not commit `.env`, generated build output, or `node_modules`.
 
+## Program Contributions
+
+VoiceForge accepts contributions through GSSoC, NSOC, SSOC, and ELUSOC. Program contributors must use the matching issue and pull request templates.
+
+- Open bugs with the bug report template for your program.
+- Open feature ideas with the feature request template for your program.
+- Open pull requests with the PR template for your program.
+- Link every pull request to an issue with `Closes #issue-number`.
+- Use a Conventional Commits PR title, for example `feat: add voice preview` or `fix: handle empty recording`.
+- Sign-offs are encouraged with `git commit --signoff`. Missing sign-offs receive a friendly reminder, not an automatic block.
+
+Issues and pull requests that use the required template are assigned to their author automatically and receive the matching program label.
+
+Issues or pull requests that skip the required template will receive a `needs-template` label and an automated comment asking for updates before review. Issues that need more detail may also receive `needs-quality`.
+
+To claim an open issue that has no assignee, comment:
+
+```text
+-assign
+```
+
 ## Good First Issues
 
 
@@ -41,3 +62,5 @@ npm run dev
 - New stubs have clear TODO comments.
 - User-facing changes are reflected in the README when needed.
 - The change is scoped to one concern.
+- The correct program template is used.
+- The PR links its related issue.

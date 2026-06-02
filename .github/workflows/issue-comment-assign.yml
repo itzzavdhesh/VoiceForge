@@ -1,0 +1,55 @@
+name: Issue Assignment Request
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-comment-assign-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  request-assignment:
+    if: |
+      github.event.issue.pull_request == null &&
+      github.event.issue.state == 'open' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Respond to assignment request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = issue.number;
+            const username = comment.user.login;
+
+            if ((comment.body || '').trim().toLowerCase() !== '-assign') {
+              return;
+            }
+
+            if ((issue.assignees || []).length > 0) {
+              const assigned = issue.assignees.map(assignee => `@${assignee.login}`).join(', ');
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: `Hi @${username}, thank you for your interest. This issue is already assigned to ${assigned}, so please look for another open issue or wait for a maintainer update.`
+              });
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: `Hi @${username}, thank you for wanting to work on this issue. Your request is in the review queue, and a maintainer will check the issue and assign it when it is ready.`
+            });

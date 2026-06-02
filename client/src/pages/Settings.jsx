@@ -30,6 +30,13 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const [apiKey, setApiKey] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:elevenlabsApiKey") || "";
+    } catch {
+      return "";
+    }
+  });
   
   React.useEffect(() => {
     async function loadProfiles() {
@@ -54,12 +61,20 @@ export default function Settings() {
   });
 
   function saveApiKey() {
-    localStorage.setItem("voiceforge:elevenlabsApiKey", apiKey);
+    try {
+      localStorage.setItem("voiceforge:elevenlabsApiKey", apiKey);
+    } catch {
+      // Storage unavailable
+    }
   }
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
-    localStorage.setItem("voiceforge:voiceSettings", JSON.stringify(newSettings));
+    try {
+      localStorage.setItem("voiceforge:voiceSettings", JSON.stringify(newSettings));
+    } catch {
+      // Storage unavailable
+    }
   }
 
   async function removeProfile(voiceId) {
