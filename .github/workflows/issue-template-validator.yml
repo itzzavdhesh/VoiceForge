@@ -30,10 +30,10 @@ jobs:
             const body = issue.body || '';
 
             const labelDefinitions = {
-              gssoc: '0E8A16',
-              nsoc: '1D76DB',
-              ssoc: '5319E7',
-              elusoc: 'FBCA04',
+              gssoc26: '0E8A16',
+              nsoc26: '1D76DB',
+              SSoC26: '5319E7',
+              ELUSOC: 'FBCA04',
               bug: 'D73A4A',
               enhancement: 'A2EEEF',
               'needs-template': 'B60205',
@@ -86,10 +86,10 @@ jobs:
             }
 
             const programs = [
-              { name: 'GSSoC', label: 'gssoc', pattern: /\bGSSoC\b/i },
-              { name: 'NSOC', label: 'nsoc', pattern: /\bNSOC\b/i },
-              { name: 'SSOC', label: 'ssoc', pattern: /\bSSOC\b/i },
-              { name: 'ELUSOC', label: 'elusoc', pattern: /\bELUSOC\b/i }
+              { name: 'GSSoC', label: 'gssoc26', pattern: /\bGSSoC\b/i },
+              { name: 'NSOC', label: 'nsoc26', pattern: /\bNSOC\b/i },
+              { name: 'SSOC', label: 'SSoC26', pattern: /\bSSOC\b/i },
+              { name: 'ELUSOC', label: 'ELUSOC', pattern: /\bELUSOC\b/i }
             ];
 
             const matchedProgram = programs.find(program => program.pattern.test(body));
