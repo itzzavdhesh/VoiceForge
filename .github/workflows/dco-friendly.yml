@@ -1,0 +1,122 @@
+name: Friendly DCO Check
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: dco-friendly-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check commit sign-offs without blocking
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = pr.number;
+            const username = pr.user.login;
+
+            const labels = {
+              'dco-missing': 'D93F0B',
+              'dco-verified': '0E8A16'
+            };
+
+            async function ensureLabel(name) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status === 404) {
+                  await github.rest.issues.createLabel({
+                    owner,
+                    repo,
+                    name,
+                    color: labels[name]
+                  });
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            async function addLabel(name) {
+              await ensureLabel(name);
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [name] });
+            }
+
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100
+            });
+
+            const signoffRegex = /^Signed-off-by:\s+.+\s+<[^<>]+>\s*$/im;
+            const invalidCommits = commits
+              .filter(commit => !signoffRegex.test(commit.commit.message || ''))
+              .map(commit => commit.sha.substring(0, 7));
+
+            const missingDco = invalidCommits.length > 0;
+            if (missingDco) {
+              await addLabel('dco-missing');
+              await removeLabel('dco-verified');
+            } else {
+              await addLabel('dco-verified');
+              await removeLabel('dco-missing');
+            }
+
+            const marker = '<!-- voiceforge-dco-friendly -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+            const existing = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body &&
+              comment.body.includes(marker)
+            );
+
+            const body = missingDco
+              ? `${marker}\n## DCO Sign-off Suggested\n\nHi @${username}, some commits are missing a valid \`Signed-off-by\` line.\n\nInvalid commits:\n${invalidCommits.map(sha => `- \`${sha}\``).join('\n')}\n\nYou can fix the latest commit with:\n\n\`\`\`bash\ngit commit --amend --signoff\ngit push --force-with-lease\n\`\`\`\n\nFor multiple commits, use an interactive rebase or recommit with sign-off. This is a friendly reminder and does not block the PR.`
+              : `${marker}\n## DCO Sign-off Verified\n\nHi @${username}, all commits currently include a valid \`Signed-off-by\` line.`;
+
+            if (existing && existing.body.trim() === body.trim()) return;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
