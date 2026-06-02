@@ -87,8 +87,11 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     return () => {
       window.clearInterval(timerRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
+  }, []);
+
+  React.useEffect(() => {
+    return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
   }, [audioUrl]);
 
   return (

@@ -1,6 +1,6 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
 import React from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, CircleAlert } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 
@@ -10,6 +10,7 @@ export default function Onboarding({ onReady }) {
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error } = useVoiceClone();
   const isCloning = status === "cloning";
+  const hasApiKey = Boolean(localStorage.getItem("voiceforge:elevenlabsApiKey")?.trim());
 
   async function handleClone() {
     if (!recording) return;
@@ -49,6 +50,16 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
+      {!hasApiKey && (
+        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
+          <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
+          <span>
+            No ElevenLabs API key found. Go to the{" "}
+            <strong>Settings</strong> tab to add your key before cloning.
+          </span>
+        </div>
+      )}
+
       <VoiceRecorder onRecordingReady={setRecording} disabled={isCloning} />
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -68,7 +79,7 @@ export default function Onboarding({ onReady }) {
           <button
             type="button"
             onClick={handleClone}
-            disabled={!recording || isCloning}
+            disabled={!recording || isCloning || !hasApiKey}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isCloning && (
