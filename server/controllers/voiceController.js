@@ -68,7 +68,21 @@ export async function cloneVoice(request, response, next) {
   }
 }
 
+// Hard cap on the number of pending stream entries kept in memory.
+// Each entry stores an ElevenLabs API key and request parameters for up
+// to 60 seconds. Without a cap a burst of requests can exhaust heap memory.
+// When the cap is reached the oldest entry is evicted to make room.
+const PENDING_STREAMS_MAX = 500;
 const pendingStreams = new Map();
+
+function addPendingStream(id, value) {
+  if (pendingStreams.size >= PENDING_STREAMS_MAX) {
+    // Evict the oldest entry (Map iteration order is insertion order).
+    const oldestKey = pendingStreams.keys().next().value;
+    pendingStreams.delete(oldestKey);
+  }
+  pendingStreams.set(id, value);
+}
 
 export async function speak(request, response, next) {
   try {
@@ -125,7 +139,7 @@ export async function speak(request, response, next) {
 
     const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
     const speechId = Math.random().toString(36).substring(2, 15);
-    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings });
+    addPendingStream(speechId, { text, voiceId, apiKey, mergedSettings });
 
     // Set a timeout to clean up if the stream is never requested within 60s
     setTimeout(() => {
