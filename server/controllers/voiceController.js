@@ -6,6 +6,18 @@ const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 // SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
 const SPEAK_TEXT_MAX_LENGTH = parseInt(process.env.SPEAK_TEXT_MAX_LENGTH, 10) || 2000;
 
+// Maximum number of pending speech streams allowed in memory to prevent heap exhaustion.
+// When exceeded, the oldest entry is evicted. Configurable via MAX_PENDING_STREAMS.
+const MAX_PENDING_STREAMS = parseInt(process.env.MAX_PENDING_STREAMS, 10) || 200;
+
+// Sanitizes a filename by removing path traversal characters and special characters.
+function sanitizeFilename(filename) {
+  return (filename || "reference.webm")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.{2,}/g, "_")
+    .substring(0, 100);
+}
+
 // Callers must supply their own ElevenLabs key via the X-ElevenLabs-Api-Key
 // request header. The server no longer falls back to its own environment key
 // so anonymous requests cannot charge the server operator's account.
@@ -44,7 +56,8 @@ export async function cloneVoice(request, response, next) {
     const formData = new FormData();
     formData.append("name", request.body.name || "VoiceForge Voice");
     formData.append("description", "Voice profile created locally by VoiceForge.");
-    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), audioFile.originalname || "reference.webm");
+    const safeName = sanitizeFilename(audioFile.originalname);
+    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), safeName);
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
       method: "POST",
@@ -127,6 +140,13 @@ export async function speak(request, response, next) {
     const speechId = Math.random().toString(36).substring(2, 15);
     pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings });
 
+    // Enforce maximum pending streams limit to prevent memory exhaustion.
+    // If limit is exceeded, evict the oldest entry (first in iteration order).
+    if (pendingStreams.size > MAX_PENDING_STREAMS) {
+      const oldestKey = pendingStreams.keys().next().value;
+      pendingStreams.delete(oldestKey);
+    }
+
     // Set a timeout to clean up if the stream is never requested within 60s
     setTimeout(() => {
       pendingStreams.delete(speechId);
@@ -144,10 +164,19 @@ export async function speak(request, response, next) {
 export async function streamSpeech(request, response, next) {
   try {
     const { speechId } = request.params;
+    const requestApiKey = request.get("X-ElevenLabs-Api-Key")?.trim();
+
     const streamData = pendingStreams.get(speechId);
 
     if (!streamData) {
       response.status(404).json({ error: "Speech stream not found or expired." });
+      return;
+    }
+
+    // Verify the caller's API key matches the key used to create the speech stream.
+    // This prevents unauthorized callers from using another user's speechId to consume their quota.
+    if (requestApiKey !== streamData.apiKey) {
+      response.status(403).json({ error: "Unauthorized. The API key provided does not match the speech request." });
       return;
     }
 

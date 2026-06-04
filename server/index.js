@@ -2,6 +2,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
 
 dotenv.config();
@@ -13,11 +14,34 @@ const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
+// Rate limiter for voice API endpoints to prevent quota abuse.
+// Limits requests per IP address per minute to prevent billing attacks.
+const voiceRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many voice requests. Please try again in a minute." },
+  skip: (request) => {
+    // Skip rate limiting for /health endpoint
+    return request.path === "/health";
+  }
+});
+
+// Stricter limiter for /clone endpoint since it requires file upload.
+const cloneRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many voice clone requests. Please try again in a minute." }
+});
+
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true, service: "voiceforge-api" });
 });
 
-app.use("/api/voice", voiceRoutes);
+app.use("/api/voice", voiceRateLimiter, voiceRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
