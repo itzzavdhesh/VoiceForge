@@ -144,10 +144,19 @@ export async function speak(request, response, next) {
 export async function streamSpeech(request, response, next) {
   try {
     const { speechId } = request.params;
+    const requestApiKey = request.get("X-ElevenLabs-Api-Key")?.trim();
+
     const streamData = pendingStreams.get(speechId);
 
     if (!streamData) {
       response.status(404).json({ error: "Speech stream not found or expired." });
+      return;
+    }
+
+    // Verify the caller's API key matches the key used to create the speech stream.
+    // This prevents unauthorized callers from using another user's speechId to consume their quota.
+    if (requestApiKey !== streamData.apiKey) {
+      response.status(403).json({ error: "Unauthorized. The API key provided does not match the speech request." });
       return;
     }
 
