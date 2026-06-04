@@ -10,7 +10,24 @@ const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-app.use(cors({ origin: clientUrl, credentials: true }));
+// AFTER — restricted CORS with explicit origin and credentials
+const allowedOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (e.g. server-to-server, curl) in dev
+      if (!origin || origin === allowedOrigin) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: origin '${origin}' not allowed`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_request, response) => {

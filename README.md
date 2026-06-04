@@ -52,7 +52,7 @@ npm run dev
 | --- | --- | --- |
 | `ELEVENLABS_API_KEY` | Yes | Server-side API key used for voice cloning and TTS requests. |
 | `PORT` | No | Express API port. Defaults to `3001`. |
-| `CLIENT_URL` | No | Allowed CORS origin for the Vite app. Defaults to `http://localhost:5173`. |
+| `CLIENT_URL` | No | Trusted frontend origin for the CORS policy. In production, set this to your deployed frontend URL (e.g. `https://voice-forge-client.vercel.app`). Defaults to `http://localhost:5173`. Requests from any other origin will be rejected. |
 
 ## Using VoiceForge In A Call
 
