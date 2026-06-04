@@ -21,6 +21,15 @@ function requireApiKey(request) {
   return apiKey;
 }
 
+// Sanitizes a filename by removing path traversal sequences and special characters.
+// Prevents injection attacks and ensures safe transmission to external APIs.
+function sanitizeFilename(filename) {
+  return (filename || "reference.webm")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.{2,}/g, "_")
+    .substring(0, 100);
+}
+
 async function readElevenLabsError(response) {
   const text = await response.text();
   try {
@@ -44,7 +53,8 @@ export async function cloneVoice(request, response, next) {
     const formData = new FormData();
     formData.append("name", request.body.name || "VoiceForge Voice");
     formData.append("description", "Voice profile created locally by VoiceForge.");
-    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), audioFile.originalname || "reference.webm");
+    const safeName = sanitizeFilename(audioFile.originalname);
+    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), safeName);
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
       method: "POST",
