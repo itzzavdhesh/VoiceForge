@@ -6,6 +6,10 @@ const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 // SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
 const SPEAK_TEXT_MAX_LENGTH = parseInt(process.env.SPEAK_TEXT_MAX_LENGTH, 10) || 2000;
 
+// Maximum number of pending speech streams allowed in memory to prevent heap exhaustion.
+// When exceeded, the oldest entry is evicted. Configurable via MAX_PENDING_STREAMS.
+const MAX_PENDING_STREAMS = parseInt(process.env.MAX_PENDING_STREAMS, 10) || 200;
+
 // Callers must supply their own ElevenLabs key via the X-ElevenLabs-Api-Key
 // request header. The server no longer falls back to its own environment key
 // so anonymous requests cannot charge the server operator's account.
@@ -126,6 +130,13 @@ export async function speak(request, response, next) {
     const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
     const speechId = Math.random().toString(36).substring(2, 15);
     pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings });
+
+    // Enforce maximum pending streams limit to prevent memory exhaustion.
+    // If limit is exceeded, evict the oldest entry (first in iteration order).
+    if (pendingStreams.size > MAX_PENDING_STREAMS) {
+      const oldestKey = pendingStreams.keys().next().value;
+      pendingStreams.delete(oldestKey);
+    }
 
     // Set a timeout to clean up if the stream is never requested within 60s
     setTimeout(() => {
