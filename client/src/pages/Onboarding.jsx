@@ -64,7 +64,10 @@ export default function Onboarding({ onReady }) {
 
       <VoiceRecorder onRecordingReady={setRecording} disabled={isCloning} />
 
-      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section
+        data-tour="clone-voice"
+        className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk"
+      >
         <label
           className="block text-sm font-bold text-ink dark:text-neutral-100"
           htmlFor="voice-name"

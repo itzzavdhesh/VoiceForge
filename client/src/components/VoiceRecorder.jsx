@@ -95,7 +95,10 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }, [audioUrl]);
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section
+      data-tour="record-voice"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">Record a 10-second reference</h2>
