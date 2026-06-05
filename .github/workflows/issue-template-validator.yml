@@ -115,23 +115,31 @@ jobs:
             }
 
             const programs = [
-              { name: 'GSSoC', label: 'gssoc26', pattern: /\bGSSoC\b/i },
-              { name: 'NSOC', label: 'nsoc26', pattern: /\bNSOC\b/i },
-              { name: 'SSOC', label: 'SSoC26', pattern: /\bSSOC\b/i },
-              { name: 'ELUSOC', label: 'ELUSOC', pattern: /\bELUSOC\b/i }
+              { name: 'GSSoC', label: 'gssoc26', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
+              { name: 'NSOC', label: 'nsoc26', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'SSOC', label: 'SSoC26', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'ELUSOC', label: 'ELUSOC', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
             ];
 
-            const matchedProgram = programs.find(program => program.pattern.test(body));
+            const matchedPrograms = programs.filter(program =>
+              program.patterns.some(pattern => pattern.test(body))
+            );
+            const matchedProgram = matchedPrograms.length === 1 ? matchedPrograms[0] : null;
+            function hasHeading(name) {
+              const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b`, 'im').test(body);
+            }
+
             const isBugTemplate =
-              /##.*Describe the bug/i.test(body) &&
-              /##.*Steps to Reproduce/i.test(body) &&
-              /##.*Expected Behavior/i.test(body) &&
-              /##.*Actual Behavior/i.test(body);
+              hasHeading('Describe the bug') &&
+              hasHeading('Steps to Reproduce') &&
+              hasHeading('Expected Behavior') &&
+              hasHeading('Actual Behavior');
             const isFeatureTemplate =
-              /##.*Feature Description/i.test(body) &&
-              /##.*Problem It Solves/i.test(body) &&
-              /##.*Proposed Solution/i.test(body) &&
-              /##.*Acceptance Criteria/i.test(body);
+              hasHeading('Feature Description') &&
+              hasHeading('Problem It Solves') &&
+              hasHeading('Proposed Solution') &&
+              hasHeading('Acceptance Criteria');
 
             function getCleanIssueBody(text) {
               return (text || '')
@@ -171,7 +179,9 @@ jobs:
             const labelsToAdd = [];
 
             if (!matchedProgram) {
-              templateProblems.push('Please select one program template: GSSoC, NSOC, SSOC, or ELUSOC.');
+              templateProblems.push(matchedPrograms.length > 1
+                ? 'Please select only one program: GSSoC, NSOC, SSOC, or ELUSOC.'
+                : 'Please select one program template: GSSoC, NSOC, SSOC, or ELUSOC.');
             }
 
             if (!isBugTemplate && !isFeatureTemplate) {
@@ -232,40 +242,20 @@ jobs:
                 ? `Skipped because @${username} has maintainer permissions`
                 : reviewerMentions.length > 0 ? reviewerMentions.join(' ') : 'No mentor configured for this program yet';
               const reviewerRequestText = authorCanSelfReview
-                ? `### Maintainer-Created Issue\n\n` +
-                  `@${username} has repo decision permissions, so automation skipped the automatic program mentor ping.\n\n` +
-                  `**Maintainer checklist**\n` +
-                  `- [ ] Add priority and difficulty labels if this issue should move forward\n` +
-                  `- [ ] Apply \`go ahead\`, \`duplicate\`, \`not needed\`, or \`out of scope\` when ready\n` +
-                  `- [ ] Assign a contributor only after the issue is ready for work\n\n`
+                ? `Maintainer-created issue: @${username} can review this directly, so no program mentor ping was sent.\n\n` +
+                  `Maintainer next steps: add priority/difficulty labels, choose a decision label, then assign only when ready.\n\n`
                 : reviewerMentions.length > 0
-                  ? `### Mentor Review Request\n\n` +
-                  `${reviewerMentionText}, this ${matchedProgram.name} issue is ready for your review.\n\n` +
-                  `**Review checklist**\n` +
-                  `- [ ] Confirm the issue is in project scope\n` +
-                  `- [ ] Choose a decision label: \`go ahead\`, \`duplicate\`, \`not needed\`, or \`out of scope\`\n` +
-                  `- [ ] Add priority and difficulty labels if the issue should move forward\n` +
-                  `- [ ] Assign the contributor only after the issue is ready for work\n\n`
-                  : `### Mentor Review Request\n\n` +
-                  `No mentor is configured for ${matchedProgram.name} yet, so automation did not send a mentor ping.\n\n` +
-                  `Please add this program's mentor mapping before relying on automatic review routing.\n\n`;
+                  ? `${reviewerMentionText}, this ${matchedProgram.name} issue is ready for review.\n\n` +
+                  `Mentor next steps: confirm scope, add priority/difficulty if needed, then apply \`go ahead\`, \`duplicate\`, \`not needed\`, or \`out of scope\`.\n\n`
+                  : `No mentor is configured for ${matchedProgram.name} yet, so no mentor ping was sent.\n\n`;
               const successBody =
                 `${marker}\n` +
                 `${authorCanSelfReview ? '## Maintainer Issue Intake Passed' : '## Issue Ready For Mentor Review'}\n\n` +
-                `Hi @${username}, thank you for using the correct ${matchedProgram.name} issue template.\n\n` +
-                `${authorCanSelfReview ? 'Your issue passed intake. Because it was opened by a maintainer, automation kept the labels but did not ping program mentors.' : 'Your issue passed intake and is now waiting for a program mentor to review scope, labels, and assignment readiness.'}\n\n` +
-                `### Intake Summary\n\n` +
-                `| Item | Result |\n` +
-                `| --- | --- |\n` +
-                `| Program | ${matchedProgram.name} |\n` +
-                `| Issue type | ${isBugTemplate ? 'Bug report' : 'Feature request'} |\n` +
-                `| Template status | Passed |\n` +
-                `| Detail level | Ready for review |\n` +
-                `| Requested mentor(s) | ${reviewerMentionText} |\n\n` +
+                `Hi @${username}, your ${matchedProgram.name} ${isBugTemplate ? 'bug report' : 'feature request'} passed intake.\n\n` +
+                `${authorCanSelfReview ? 'Labels were applied without a mentor ping because this was opened by a maintainer.' : 'A mentor will review scope, labels, and assignment readiness next.'}\n\n` +
                 reviewerRequestText +
-                `### Contributor Note\n\n` +
                 `${authorCanSelfReview ? 'Contributors should still wait for maintainer assignment before starting work.' : 'Please wait for mentor confirmation before starting work. Assignment requests are welcome, but work should begin only after a mentor approves and assigns the issue.'}\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
 
               if (existing) {
                 await github.rest.issues.updateComment({
@@ -289,18 +279,14 @@ jobs:
               `${marker}\n` +
               `## Issue Needs A Quick Update\n\n` +
               `Hi @${username}, thank you for opening this issue.\n\n` +
-              `The issue is almost ready, but a few intake checks need attention before a mentor can review or assign it.\n\n` +
-              `### Items To Fix\n\n` +
+              `Please update these items before mentor review:\n\n` +
               problems.map(problem => `- ${problem}`).join('\n') +
               `\n\n` +
-              `### Update Guide\n\n` +
-              `| Area | Correction |\n` +
-              `| --- | --- |\n` +
-              `${templateProblems.length > 0 ? '| Template | Use one complete program issue template: GSSoC, NSOC, SSOC, or ELUSOC. |\n' : ''}` +
-              `${qualityProblems.length > 0 ? '| Details | Replace placeholder text with clear context, expected behavior, screenshots/logs if useful, and enough steps for maintainers to understand the request. |\n' : ''}` +
-              `\n### What Happens Next\n\n` +
+              `${templateProblems.length > 0 ? '- Template: use one complete program issue template: GSSoC, NSOC, SSOC, or ELUSOC.\n' : ''}` +
+              `${qualityProblems.length > 0 ? '- Details: replace placeholders with clear context, expected behavior, useful screenshots/logs, and enough steps to review.\n' : ''}` +
+              `\n` +
               `Edit the issue body with the missing details. This comment will update automatically after the workflow runs again.\n\n` +
-              `VoiceForge automation`;
+              `_VoiceForge automation_`;
 
             if (existing) {
               await github.rest.issues.updateComment({

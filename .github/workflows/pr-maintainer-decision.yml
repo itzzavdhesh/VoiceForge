@@ -157,6 +157,7 @@ jobs:
                 (
                   (comment.body.includes('<!-- voiceforge-pr-template-validator -->') && comment.body.includes('## PR Update Needed')) ||
                   (comment.body.includes('<!-- voiceforge-pr-template-validator -->') && comment.body.includes('## PR Needs A Quick Update')) ||
+                  (comment.body.includes('<!-- voiceforge-pr-template-validator -->') && comment.body.includes('## PR Needs Updates')) ||
                   comment.body.includes('<!-- voiceforge-pr-invalid-warning -->')
                 )
               );
@@ -176,15 +177,9 @@ jobs:
                 `${marker}\n` +
                 `## Changes Requested By Mentor\n\n` +
                 `Hi @${username}, a maintainer requested changes on this PR.\n\n` +
-                `Please review the feedback, update the branch, and keep the PR focused on the linked issue scope.\n\n` +
-                `### Revision Summary\n\n` +
-                `| Item | Details |\n` +
-                `| --- | --- |\n` +
-                `| Review state | Changes requested |\n` +
-                `| Label applied | \`needs revision\` |\n` +
-                `| Next step | Push updates addressing maintainer feedback |\n\n` +
+                `Please review the feedback, update the same branch, and keep the PR focused on the linked issue scope.\n\n` +
                 `After you push updates, the PR validation and review flow will continue on this same PR.\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
               await createOrUpdateComment(marker, body);
               return;
             }
@@ -197,15 +192,9 @@ jobs:
                 `${warningMarker}\n` +
                 `## Invalid PR Label Noted\n\n` +
                 `Hi @${username}, a maintainer marked this PR with \`invalid-pr\`.\n\n` +
-                `Automation will pause before closing until a visible correction message exists on the PR. This keeps the decision reviewable and gives clear next steps.\n\n` +
-                `### Closure Guard\n\n` +
-                `| Item | Details |\n` +
-                `| --- | --- |\n` +
-                `| Maintainer label | \`invalid-pr\` |\n` +
-                `| Closure | Paused until an automation warning is present |\n` +
-                `| Next step | Check template, linked issue, issue assignment, and title format. |\n\n` +
-                `After the validator posts its correction message, a maintainer may re-apply or update the invalid decision if closure is still needed.\n\n` +
-                `VoiceForge automation`;
+                `Before automation closes it, please check the template, linked issue, issue assignment, and title format.\n\n` +
+                `If the validator posts a correction message and the problem remains, a maintainer may close this PR.\n\n` +
+                `_VoiceForge automation_`;
               await createOrUpdateComment(warningMarker, warningBody);
               return;
             }
@@ -215,15 +204,10 @@ jobs:
               `${marker}\n` +
               `## PR Closed By Maintainer Decision\n\n` +
               `Hi @${username}, thank you for taking the time to open this pull request.\n\n` +
-              `A maintainer marked this PR as \`invalid-pr\`, so VoiceForge automation is closing it to keep the review queue focused.\n\n` +
-              `### Closure Summary\n\n` +
-              `| Item | Decision |\n` +
-              `| --- | --- |\n` +
-              `| Maintainer label | \`invalid-pr\` |\n` +
-              `| PR status | Closed after maintainer review |\n` +
-              `| Next step | Please read the validator comment and open a new PR only after the issue, assignee, and template requirements are correct. |\n\n` +
+              `A maintainer marked this PR as \`invalid-pr\`, so it is being closed to keep the review queue focused.\n\n` +
+              `Please read the validator comment and open a new PR only after the issue, assignee, and template requirements are correct.\n\n` +
               `If you believe this was a mistake, please ask a maintainer before reopening.\n\n` +
-              `VoiceForge automation`;
+              `_VoiceForge automation_`;
 
             await createOrUpdateComment(marker, body);
             await addLabels(['closed']);

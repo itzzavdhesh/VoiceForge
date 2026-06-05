@@ -130,15 +130,9 @@ jobs:
               `${prMarker}\n` +
               `## PR Merged Successfully\n\n` +
               `Hi @${username}, thank you for your contribution to VoiceForge.\n\n` +
-              `This pull request has been merged successfully and marked as complete.\n\n` +
-              `### Merge Summary\n\n` +
-              `| Item | Status |\n` +
-              `| --- | --- |\n` +
-              `| PR | #${prNumber} merged |\n` +
-              `| Linked issue(s) | ${linkedIssueText} |\n` +
-              `| Completion labels | \`merged\`, \`pr-merged\`, \`completed\` |\n\n` +
+              `This pull request has been merged and marked complete. Linked issue(s): ${linkedIssueText}.\n\n` +
               `Maintainers may still handle final cleanup, release notes, or follow-up tracking after merge.\n\n` +
-              `VoiceForge automation`;
+              `_VoiceForge automation_`;
 
             await createOrUpdateComment(prNumber, prMarker, prCommentBody);
 
@@ -148,15 +142,9 @@ jobs:
               const issueCommentBody =
                 `${issueMarker}\n` +
                 `## Issue Completed\n\n` +
-                `This issue was completed by PR #${prNumber}, merged by the maintainer team.\n\n` +
+                `PR #${prNumber} has been merged, so this issue is marked complete.\n\n` +
                 `Thank you @${username} for working on this contribution.\n\n` +
-                `### Completion Summary\n\n` +
-                `| Item | Status |\n` +
-                `| --- | --- |\n` +
-                `| Closing PR | #${prNumber} |\n` +
-                `| Issue status | Completed |\n` +
-                `| Completion labels | \`completed\`, \`issue-completed\`, \`closed-by-pr\` |\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
 
               await createOrUpdateComment(linkedIssueNumber, issueMarker, issueCommentBody);
             }

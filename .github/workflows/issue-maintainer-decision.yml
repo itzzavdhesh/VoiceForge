@@ -193,14 +193,9 @@ jobs:
                 `## ${decision.title}\n\n` +
                 `Hi @${issue.user.login}, thank you for taking the time to open this issue.\n\n` +
                 `${decision.summary}\n\n` +
-                `### Review Summary\n\n` +
-                `| Item | Decision |\n` +
-                `| --- | --- |\n` +
-                `| Maintainer label | \`${closeLabel}\` |\n` +
-                `| Issue status | Closing after maintainer review |\n` +
-                `| Next step | ${decision.nextStep} |\n\n` +
+                `${decision.nextStep}\n\n` +
                 `If you believe important context was missed, please ask a maintainer before reopening or creating a new issue.\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
 
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['closed']);
@@ -235,16 +230,10 @@ jobs:
               const body =
                 `${marker}\n` +
                 `## Assignment Reopened\n\n` +
-                `This issue has been marked \`stale-assignment\` by the maintainer team.\n\n` +
-                `The previous assignment is being cleared so another contributor can request or receive assignment.\n\n` +
-                `### Assignment Status\n\n` +
-                `| Item | Status |\n` +
-                `| --- | --- |\n` +
-                `| Previous assignee | ${assigneeMentions} |\n` +
-                `| Issue status | Open for maintainer reassignment |\n` +
-                `| Contributor action | Comment \`/assign\` or wait for maintainer assignment |\n\n` +
+                `The previous assignment (${assigneeMentions}) is being cleared so maintainers can reassign this issue.\n\n` +
+                `Interested contributors may comment \`/assign\`, but work should begin only after maintainer assignment and approval.\n\n` +
                 `If you were previously assigned and still intend to work on this, please leave a fresh update for the maintainers.\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
 
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['needs maintainer review']);
@@ -278,14 +267,8 @@ jobs:
                 `${marker}\n` +
                 `## Approved, Waiting For Assignee\n\n` +
                 `This issue has been marked \`go ahead\`, but no contributor is assigned yet.\n\n` +
-                `### Current Status\n\n` +
-                `| Item | Details |\n` +
-                `| --- | --- |\n` +
-                `| Maintainer decision | Valid for contribution |\n` +
-                `| Assignment | Waiting for maintainer assignment |\n` +
-                `| Contributor action | Please wait until an assignee is selected |\n\n` +
-                `Once a maintainer assigns a contributor, VoiceForge automation will post the full start-work guidance.\n\n` +
-                `VoiceForge automation`;
+                `Please wait until a maintainer selects an assignee. Start-work guidance will be posted after assignment.\n\n` +
+                `_VoiceForge automation_`;
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['needs maintainer review']);
               await removeLabel('ready to work');
@@ -298,19 +281,13 @@ jobs:
               `${marker}\n` +
               `## Work Approved To Start\n\n` +
               `Hi ${assigneeMentions}, this issue has been reviewed and approved for work by the maintainer team.\n\n` +
-              `You may start now. Keep the implementation focused, and open a pull request when your solution is ready.\n\n` +
-              `### Start-Work Checklist\n\n` +
-              `| Step | Guidance |\n` +
-              `| --- | --- |\n` +
-              `| Scope | Stay aligned with this issue and maintainer comments. |\n` +
-              `| Priority | ${priorityLabel} |\n` +
-              `| Difficulty | ${levelLabel} |\n` +
-              `| PR template | Use the matching program PR template. |\n` +
-              `| Closing reference | Add \`Closes #${issue_number}\` in the PR body. |\n` +
-              `| Author check | Open the PR from the same account assigned on this issue. |\n` +
-              `| Review path | Automation will validate template, issue link, assignee match, and PR quality. |\n\n` +
+              `You may start now. Keep the work focused on this issue and maintainer comments.\n\n` +
+              `- Priority: ${priorityLabel}\n` +
+              `- Difficulty: ${levelLabel}\n` +
+              `- PR: use the matching program template and include \`Closes #${issue_number}\`\n` +
+              `- Author check: open the PR from the assigned account\n\n` +
               `If you cannot continue, please comment here so maintainers can reopen the assignment for another contributor.\n\n` +
-              `VoiceForge automation`;
+              `_VoiceForge automation_`;
 
             await addLabels(issue_number, ['ready to work']);
             await removeLabels(['needs maintainer review', 'stale-assignment']);

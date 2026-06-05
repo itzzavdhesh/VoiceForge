@@ -123,8 +123,8 @@ jobs:
             );
 
             const body = missingDco
-              ? `${marker}\n## DCO Sign-off Needed\n\nHi @${username}, this PR is missing a valid \`Signed-off-by:\` line on one or more commits.\n\nThe DCO sign-off confirms that you have the right to submit this contribution.\n\n### Commits To Fix\n\n${invalidCommits.map(commit => `- \`${commit.sha}\` - ${commit.title}`).join('\n')}\n\n### Fix The Most Recent Commit\n\n\`\`\`bash\ngit commit --amend --signoff\ngit push --force-with-lease\n\`\`\`\n\n### Fix Multiple Commits\n\nReplace \`N\` with the number of commits that need sign-off:\n\n\`\`\`bash\ngit rebase --signoff HEAD~N\ngit push --force-with-lease\n\`\`\`\n\nAfter you push the signed commits, this comment will update automatically.\n\nVoiceForge automation`
-              : `${marker}\n## DCO Sign-off Verified\n\nHi @${username}, all commits currently include a valid \`Signed-off-by:\` line.\n\n### Status\n\n| Item | Result |\n| --- | --- |\n| DCO check | Passed |\n| Label applied | \`dco-verified\` |\n| Review flow | Maintainers can continue normal PR review |\n\nVoiceForge automation`;
+              ? `${marker}\n## DCO Sign-off Needed\n\nHi @${username}, one or more commits need a \`Signed-off-by:\` line.\n\nFix these commits:\n${invalidCommits.map(commit => `- \`${commit.sha}\` ${commit.title}`).join('\n')}\n\nFor the latest commit:\n\n\`\`\`bash\ngit commit --amend --signoff\ngit push --force-with-lease\n\`\`\`\n\nFor multiple commits, replace \`N\` with the number to update:\n\n\`\`\`bash\ngit rebase --signoff HEAD~N\ngit push --force-with-lease\n\`\`\`\n\nThis comment will update after you push.\n\n_VoiceForge automation_`
+              : `${marker}\n## DCO Verified\n\nHi @${username}, all commits currently include a valid \`Signed-off-by:\` line.\n\nYour PR can continue through normal review.\n\n_VoiceForge automation_`;
 
             if (existing && existing.body.trim() === body.trim()) return;
 

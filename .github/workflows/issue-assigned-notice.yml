@@ -47,17 +47,10 @@ jobs:
             const body =
               `${marker}\n` +
               `## Assignment Recorded\n\n` +
-              `Hi @${assignee.login}, this issue has been assigned to you by the maintainer team.\n\n` +
-              `Thanks for stepping up to help. Please wait for a mentor to mark the issue with \`go ahead\` before starting implementation.\n\n` +
-              `### Before You Start\n\n` +
-              `| Step | Guidance |\n` +
-              `| --- | --- |\n` +
-              `| Assignment | Recorded for @${assignee.login} |\n` +
-              `| Start signal | Wait for the \`go ahead\` label and mentor guidance comment |\n` +
-              `| Scope | Read the issue description and maintainer comments carefully |\n` +
-              `| PR later | Use the matching program PR template and include \`Closes #${issue_number}\` |\n\n` +
-              `If you cannot continue, leave a quick comment here so maintainers can reopen the issue for another contributor.\n\n` +
-              `VoiceForge automation`;
+              `Hi @${assignee.login}, this issue is assigned to you.\n\n` +
+              `Please wait for the \`go ahead\` label before starting. When you open a PR later, use the matching program template and include \`Closes #${issue_number}\`.\n\n` +
+              `If you cannot continue, leave a quick update here so maintainers can reassign the issue.\n\n` +
+              `_VoiceForge automation_`;
 
             try {
               if (existing) {

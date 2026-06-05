@@ -41,7 +41,7 @@ VoiceForge accepts contributions through GSSoC, NSOC, SSOC, and ELUSOC. Program 
 - Open pull requests with the PR template for your program.
 - Link every pull request to an issue with `Closes #issue-number`.
 - Open a pull request only for an issue that is assigned to you.
-- Use a Conventional Commits PR title, for example `feat: add voice preview` or `fix: handle empty recording`.
+- Use a clear PR title, for example `feat: add voice preview`, `fix: handle empty recording`, or `[feature]: add voice preview`.
 - Sign-offs are encouraged with `git commit --signoff`. Missing sign-offs receive a friendly reminder, not an automatic block.
 
 Issues and pull requests that use the required template receive the matching program label and enter maintainer review. Maintainers assign issues after confirming scope and readiness.

@@ -218,24 +218,25 @@ jobs:
             }
 
             const programs = [
-              { name: 'GSSoC', label: 'gssoc26', pattern: /\bGSSoC\b/i },
-              { name: 'NSOC', label: 'nsoc26', pattern: /\bNSOC\b/i },
-              { name: 'SSOC', label: 'SSoC26', pattern: /\bSSOC\b/i },
-              { name: 'ELUSOC', label: 'ELUSOC', pattern: /\bELUSOC\b/i }
+              { name: 'GSSoC', label: 'gssoc26', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
+              { name: 'NSOC', label: 'nsoc26', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'SSOC', label: 'SSoC26', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'ELUSOC', label: 'ELUSOC', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
             ];
 
             const programLabels = programs.map(program => program.label);
-            const matchedProgram = programs.find(program => program.pattern.test(body));
-            const requiredSections = [
-              /##.*Program/i,
-              /##.*Description/i,
-              /##.*Related Issue/i,
-              /##.*Type of Change/i,
-              /##.*How to Test/i,
-              /##.*Checklist/i
-            ];
+            const matchedPrograms = programs.filter(program =>
+              program.patterns.some(pattern => pattern.test(body))
+            );
+            const matchedProgram = matchedPrograms.length === 1 ? matchedPrograms[0] : null;
+            function hasHeading(name) {
+              const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b`, 'im').test(body);
+            }
+
+            const requiredSections = ['Program', 'Description', 'Related Issue', 'Type of Change', 'How to Test', 'Checklist'];
             const linkedIssueRegex = /\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#(\d+)/gi;
-            const conventionalTitleRegex = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?: .+/i;
+            const validTitleRegex = /^(?:(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore)(?:\([^)]+\))?|\[(?:feature|feat|bug|fix|docs|documentation|style|refactor|perf|performance|test|build|ci|chore|enhancement)(?:\s+(?:feature|feat|bug|fix|docs|documentation|style|refactor|perf|performance|test|build|ci|chore|enhancement))*\])\s*:\s*\S.+/i;
 
             const problems = [];
             const statusLabelsToAdd = [];
@@ -245,10 +246,12 @@ jobs:
             const linkedIssues = [];
 
             if (!matchedProgram) {
-              problems.push('Select a program PR template: GSSoC, NSOC, SSOC, or ELUSOC.');
+              problems.push(matchedPrograms.length > 1
+                ? 'Select only one program in the PR template: GSSoC, NSOC, SSOC, or ELUSOC.'
+                : 'Select a program PR template: GSSoC, NSOC, SSOC, or ELUSOC.');
             }
 
-            if (!requiredSections.every(section => section.test(body))) {
+            if (!requiredSections.every(section => hasHeading(section))) {
               problems.push('Use the mandatory VoiceForge PR template and keep all required sections.');
               needsLabelsToAdd.push('needs-template');
             }
@@ -304,8 +307,8 @@ jobs:
               }
             }
 
-            if (!conventionalTitleRegex.test(title)) {
-              problems.push('Use a Conventional Commits PR title, for example `feat: add voice preview`.');
+            if (!validTitleRegex.test(title)) {
+              problems.push('Use a clear PR title, for example `feat: add voice preview` or `[feature]: add voice preview`.');
               needsLabelsToAdd.push('needs-title');
             }
 
@@ -372,9 +375,9 @@ jobs:
             }
             if (linkedIssueNumbers.length > 0 && !needsLabelsToAdd.includes('needs-linked-issue')) await removeLabel('needs-linked-issue');
             if (linkedIssues.length > 0 && !needsLabelsToAdd.includes('needs-assignee-match')) await removeLabel('needs-assignee-match');
-            if (requiredSections.every(section => section.test(body))) await removeLabel('needs-template');
+            if (requiredSections.every(section => hasHeading(section))) await removeLabel('needs-template');
             if (cleanedBody.length >= 120) await removeLabel('needs-quality');
-            if (conventionalTitleRegex.test(title)) await removeLabel('needs-title');
+            if (validTitleRegex.test(title)) await removeLabel('needs-title');
             if (!tooManyFilesChanged) await removeLabel('large PR');
 
             if (problems.length === 0) {
@@ -401,35 +404,20 @@ jobs:
               await assignAuthor();
               const reviewRequest = await requestPullRequestReview(matchedProgram);
               const reviewRequestText = reviewRequest.status === 'No review request sent'
-                ? `### Mentor Review Request\n\n` +
-                  `No mentor is configured for ${matchedProgram.name} yet, so automation did not send a mentor ping.\n\n` +
-                  `Please add this program's mentor mapping before relying on automatic review routing.\n\n`
-                : `### Mentor Review Request\n\n` +
-                  `${reviewRequest.mentions}, this ${matchedProgram.name} PR is ready for your review.\n\n` +
-                  `**Review checklist**\n` +
-                  `- [ ] Confirm the PR stays within the linked issue scope\n` +
-                  `- [ ] Review code quality, behavior, and edge cases\n` +
-                  `- [ ] Check tests or manual verification notes\n` +
-                  `- [ ] Approve, comment, or request changes through GitHub review\n\n`;
+                ? `No mentor is configured for ${matchedProgram.name} yet, so no mentor ping was sent.\n\n`
+                : `${reviewRequest.mentions}, this ${matchedProgram.name} PR is ready for review.\n\n` +
+                  `Mentor next steps: confirm scope, review behavior and tests, then approve, comment, or request changes.\n\n`;
               const successCommentBody =
                 `${marker}\n` +
                 `## PR Ready For Mentor Review\n\n` +
-                `Hi @${username}, thank you for opening this PR with the required structure.\n\n` +
-                `Your PR passed the automated checks and has moved into the ${matchedProgram.name} mentor review queue.\n\n` +
-                `### Validation Summary\n\n` +
-                `| Item | Result |\n` +
-                `| --- | --- |\n` +
-                `| Program | ${matchedProgram.name} |\n` +
-                `| Closing issue | ${linkedIssueNumbers.map(number => `#${number}`).join(', ')} |\n` +
-                `| Assignment check | PR author matches linked issue assignee |\n` +
-                `| Title check | Conventional Commits title detected |\n` +
-                `| Description check | Enough review context provided |\n` +
-                `| Change size | ${totalChanges} lines changed across ${files.length} file(s) |\n` +
-                `| Review request | ${reviewRequest.status}: ${reviewRequest.mentions} |\n\n` +
+                `Hi @${username}, your PR passed automated validation and moved into the ${matchedProgram.name} review queue.\n\n` +
+                `- Closing issue: ${linkedIssueNumbers.map(number => `#${number}`).join(', ')}\n` +
+                `- Title, template, and assignee checks: passed\n` +
+                `- Change size: ${totalChanges} lines across ${files.length} file(s)\n` +
+                `- Review request: ${reviewRequest.status}\n\n` +
                 reviewRequestText +
-                `### Contributor Note\n\n` +
                 `This does not mean the PR is approved yet. Please wait for mentor feedback before expecting merge. If changes are requested, update the same branch and keep the PR focused on the linked issue.\n\n` +
-                `VoiceForge automation`;
+                `_VoiceForge automation_`;
 
               if (existing && existing.body.trim() === successCommentBody.trim()) return;
 
@@ -472,7 +460,7 @@ jobs:
               fixRows.push(['Issue assignment', `Ask a maintainer to assign the linked issue to @${username}, or open a PR only for an issue already assigned to you.`]);
             }
             if (needsLabelsToAdd.includes('needs-title')) {
-              fixRows.push(['PR title', 'Use Conventional Commits, for example `fix: update onboarding progress bar`.']);
+              fixRows.push(['PR title', 'Use a clear title like `fix: update onboarding progress bar` or `[bug refactor]: replace pending stream cache`.']);
             }
             if (needsLabelsToAdd.includes('needs-quality')) {
               fixRows.push(['PR details', 'Fill the description and test steps with enough detail for maintainers to review the change.']);
@@ -484,28 +472,17 @@ jobs:
               fixRows.push(['Program', 'Choose exactly one program: GSSoC, NSOC, SSOC, or ELUSOC.']);
             }
 
-            const detectedLabels = [...new Set([...neutralLabelsToAdd, ...needsLabelsToAdd])];
             const commentBody =
               `${marker}\n` +
-              `## PR Needs A Quick Update\n\n` +
+              `## PR Needs Updates\n\n` +
               `Hi @${username}, thank you for opening this PR.\n\n` +
-              `The PR is close, but a few validation checks need attention before it can enter mentor review.\n\n` +
-              `### Items To Fix\n\n` +
+              `Please fix these items before mentor review:\n\n` +
               problems.map(problem => `- ${problem}`).join('\n') +
               `\n\n` +
-              `### Update Guide\n\n` +
-              `| Area | Correction |\n` +
-              `| --- | --- |\n` +
-              fixRows.map(([area, correction]) => `| ${area} | ${correction} |`).join('\n') +
+              fixRows.map(([area, correction]) => `- ${area}: ${correction}`).join('\n') +
               `\n\n` +
-              `### Label Summary\n\n` +
-              `| Category | Label(s) |\n` +
-              `| --- | --- |\n` +
-              `| Detected | ${detectedLabels.length > 0 ? detectedLabels.map(label => `\`${label}\``).join(', ') : 'None'} |\n` +
-              `| Blockers | ${needsLabelsToAdd.length > 0 ? [...new Set(needsLabelsToAdd)].map(label => `\`${label}\``).join(', ') : 'None'} |\n\n` +
-              `### What Happens Next\n\n` +
               `Update the PR title or description, then let the workflow run again. Once these blockers are clear, the correct program mentor(s) will be requested for review.\n\n` +
-              `VoiceForge automation`;
+              `_VoiceForge automation_`;
 
             if (existing) {
               try {
