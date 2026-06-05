@@ -110,7 +110,7 @@ function evictOldestPendingStreams() {
 export async function speak(request, response, next) {
   try {
     const apiKey = requireApiKey(request);
-    const { text, voice_id: voiceId, voice_settings } = request.body;
+    const { text, voice_id: voiceId, voice_settings, model_id } = request.body;
 
     if (!text || !voiceId) {
       response.status(400).json({ error: "Both text and voice_id are required." });
@@ -175,7 +175,7 @@ export async function speak(request, response, next) {
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
 
-    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, timeout });
+    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, modelId: model_id, timeout });
 
     response.json({
       speechId,
@@ -199,7 +199,7 @@ export async function streamSpeech(request, response, next) {
     // Clean up immediately after retrieving parameters to prevent memory leaks
     deletePendingStream(speechId);
 
-    const { text, voiceId, apiKey, mergedSettings } = streamData;
+    const { text, voiceId, apiKey, mergedSettings, modelId } = streamData;
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
       method: "POST",
@@ -210,7 +210,7 @@ export async function streamSpeech(request, response, next) {
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_multilingual_v2",
+        model_id: modelId || "eleven_multilingual_v2",
         voice_settings: mergedSettings
       })
     });

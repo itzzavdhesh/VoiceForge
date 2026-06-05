@@ -1,12 +1,23 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Clock, Pin, Play, MessageSquare, Trash2 } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
+import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
+
+const QUICK_REPLIES = [
+  { label: "Hello", phrase: "Hello" },
+  { label: "Thank you", phrase: "Thank you" },
+  { label: "Please wait", phrase: "Please wait" },
+  { label: "I need help", phrase: "I need help" },
+  { label: "Can you repeat that?", phrase: "Can you repeat that?" },
+  { label: "Yes, I understand", phrase: "Yes, I understand" },
+  { label: "No, thank you", phrase: "No, thank you" },
+];
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
@@ -18,6 +29,29 @@ export default function Call() {
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
+  const [modelId, setModelId] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:selectedModelId") || "eleven_multilingual_v2";
+    } catch {
+      return "eleven_multilingual_v2";
+    }
+  });
+
+  const handleModelChange = (val) => {
+    setModelId(val);
+    try {
+      localStorage.setItem("voiceforge:selectedModelId", val);
+    } catch { /* storage unavailable */ }
+  };
+
+  const {
+    history,
+    favorites,
+    addMessage,
+    removeMessage,
+    toggleFavorite,
+  } = useSpeechHistory();
+  const [activePanelTab, setActivePanelTab] = React.useState("quick-replies");
 
   React.useEffect(() => {
     async function loadActiveProfile() {
@@ -120,6 +154,7 @@ export default function Call() {
     if (!activeProfile?.voice_id) return;
     try {
       await speak({ text, voiceId: activeProfile.voice_id });
+      addMessage(text);
     } catch (err) {
       console.error("TTS streaming error:", err);
     }
@@ -138,10 +173,24 @@ export default function Call() {
               Call control room
             </h2>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span className="rounded-md bg-mint px-3 py-2 text-ink dark:bg-glow/20 dark:text-glow">
               Voice: {activeProfile?.name || "No profile selected"}
             </span>
+            <div className="flex items-center gap-1.5 rounded-md bg-cloud px-3 py-1 text-ink dark:bg-black dark:text-neutral-200">
+              <label htmlFor="call-model-select" className="text-xs uppercase tracking-wider opacity-75 font-bold">Model:</label>
+              <select
+                id="call-model-select"
+                value={modelId}
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="bg-transparent font-semibold border-none focus:outline-none cursor-pointer text-sm dark:text-neutral-200 dark:bg-black"
+              >
+                <option value="eleven_flash_v2_5">Flash v2.5 (Fastest)</option>
+                <option value="eleven_turbo_v2_5">Turbo v2.5</option>
+                <option value="eleven_multilingual_v2">Multilingual v2</option>
+                <option value="eleven_monolingual_v1">English v1</option>
+              </select>
+            </div>
             <span className="rounded-md bg-cloud px-3 py-2 text-ink dark:bg-black dark:text-neutral-200">
               Virtual camera: {virtualCamera.isLive ? "Live" : "Idle"}
             </span>
@@ -292,11 +341,148 @@ export default function Call() {
           )}
         </section>
 
-        <TextToSpeech
-          onSpeak={handleSpeak}
-          disabled={!activeProfile}
-          status={status}
-        />
+        <div className="flex flex-col gap-4">
+          <TextToSpeech
+            onSpeak={handleSpeak}
+            disabled={!activeProfile}
+            status={status}
+          />
+
+          <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+            <div className="flex border-b border-ink/10 pb-3 mb-4 dark:border-border">
+              <button
+                type="button"
+                onClick={() => setActivePanelTab("quick-replies")}
+                className={`inline-flex items-center gap-1.5 pb-2 border-b-2 px-1 text-sm font-bold transition-all ${
+                  activePanelTab === "quick-replies"
+                    ? "border-moss text-moss dark:border-glow dark:text-glow"
+                    : "border-transparent text-ink/60 hover:text-ink dark:text-neutral-400 dark:hover:text-neutral-100"
+                }`}
+              >
+                <MessageSquare size={16} />
+                Quick Replies
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanelTab("pinned")}
+                className={`ml-4 inline-flex items-center gap-1.5 pb-2 border-b-2 px-1 text-sm font-bold transition-all ${
+                  activePanelTab === "pinned"
+                    ? "border-moss text-moss dark:border-glow dark:text-glow"
+                    : "border-transparent text-ink/60 hover:text-ink dark:text-neutral-400 dark:hover:text-neutral-100"
+                }`}
+              >
+                <Pin size={16} />
+                Pinned ({history.filter(m => favorites.has(m.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanelTab("history")}
+                className={`ml-4 inline-flex items-center gap-1.5 pb-2 border-b-2 px-1 text-sm font-bold transition-all ${
+                  activePanelTab === "history"
+                    ? "border-moss text-moss dark:border-glow dark:text-glow"
+                    : "border-transparent text-ink/60 hover:text-ink dark:text-neutral-400 dark:hover:text-neutral-100"
+                }`}
+              >
+                <Clock size={16} />
+                History
+              </button>
+            </div>
+
+            <div>
+              {activePanelTab === "quick-replies" && (
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_REPLIES.map(({ label, phrase }) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      onClick={() => handleSpeak(phrase)}
+                      disabled={!activeProfile}
+                      className="rounded-full border border-ink/15 bg-cloud px-3 py-1.5 text-sm font-semibold text-ink transition hover:border-moss hover:bg-mint/30 dark:border-border dark:bg-black dark:text-neutral-300 dark:hover:border-glow dark:hover:bg-glow/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {activePanelTab === "pinned" && (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {history.filter(m => favorites.has(m.id)).length === 0 ? (
+                    <p className="text-sm text-ink/65 dark:text-neutral-400 py-4 text-center">No pinned phrases yet.</p>
+                  ) : (
+                    history.filter(m => favorites.has(m.id)).map((msg) => (
+                      <div key={msg.id} className="flex items-center justify-between p-2 rounded bg-cloud dark:bg-black border border-ink/10 dark:border-border">
+                        <span className="text-sm font-semibold truncate flex-1 mr-2">{msg.text}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSpeak(msg.text)}
+                            disabled={!activeProfile}
+                            title="Speak"
+                            className="p-1 rounded text-moss hover:bg-mint dark:text-glow dark:hover:bg-glow/20 disabled:opacity-50"
+                          >
+                            <Play size={16} fill="currentColor" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleFavorite(msg.id)}
+                            title="Unpin"
+                            className="p-1 rounded text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/15"
+                          >
+                            <Pin size={16} fill="currentColor" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activePanelTab === "history" && (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {history.length === 0 ? (
+                    <p className="text-sm text-ink/65 dark:text-neutral-400 py-4 text-center">No history yet. Type above to speak!</p>
+                  ) : (
+                    history.slice(0, 10).map((msg) => (
+                      <div key={msg.id} className="flex items-center justify-between p-2 rounded bg-cloud dark:bg-black border border-ink/10 dark:border-border">
+                        <span className="text-sm font-semibold truncate flex-1 mr-2">{msg.text}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSpeak(msg.text)}
+                            disabled={!activeProfile}
+                            title="Speak"
+                            className="p-1 rounded text-moss hover:bg-mint dark:text-glow dark:hover:bg-glow/20 disabled:opacity-50"
+                          >
+                            <Play size={16} fill="currentColor" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleFavorite(msg.id)}
+                            title={favorites.has(msg.id) ? "Unpin" : "Pin"}
+                            className={`p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                              favorites.has(msg.id) ? "text-amber-500" : "text-ink/40 dark:text-neutral-500"
+                            }`}
+                          >
+                            <Pin size={16} fill={favorites.has(msg.id) ? "currentColor" : "none"} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeMessage(msg.id)}
+                            title="Delete"
+                            className="p-1 rounded text-coral hover:bg-coral/10"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
 
         <VideoPreview
           ref={canvasRef}

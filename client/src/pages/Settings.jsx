@@ -51,6 +51,23 @@ export default function Settings() {
     loadProfiles();
   }, []);
 
+  const [modelId, setModelId] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:selectedModelId") || "eleven_multilingual_v2";
+    } catch {
+      return "eleven_multilingual_v2";
+    }
+  });
+
+  function saveModelId(newModelId) {
+    setModelId(newModelId);
+    try {
+      localStorage.setItem("voiceforge:selectedModelId", newModelId);
+    } catch {
+      // Storage unavailable
+    }
+  }
+
   const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
   const [voiceSettings, setVoiceSettings] = React.useState(() => {
     try {
@@ -146,6 +163,26 @@ export default function Settings() {
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how ElevenLabs generates your cloned speech.</p>
         
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2 text-ink dark:text-neutral-100" htmlFor="model-select">
+              ElevenLabs Model (Latency & Language)
+            </label>
+            <select
+              id="model-select"
+              value={modelId}
+              onChange={(e) => saveModelId(e.target.value)}
+              className="min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:focus:border-glow dark:focus:ring-glow/25"
+            >
+              <option value="eleven_flash_v2_5">Eleven Flash v2.5 (Ultra-low latency - Recommended for live calls)</option>
+              <option value="eleven_turbo_v2_5">Eleven Turbo v2.5 (Low latency - High quality)</option>
+              <option value="eleven_multilingual_v2">Eleven Multilingual v2 (Standard Multilingual)</option>
+              <option value="eleven_monolingual_v1">Eleven Monolingual v1 (Standard English)</option>
+            </select>
+            <p className="text-xs text-ink/50 mt-1 dark:text-neutral-400">
+              Flash and Turbo models generate audio much faster, reducing conversation delays.
+            </p>
+          </div>
+
           <div>
             <label className="flex justify-between text-sm font-bold" htmlFor="stability">
               <span>Stability</span>

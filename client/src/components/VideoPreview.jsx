@@ -103,10 +103,55 @@ export default React.forwardRef(function VideoPreview({
         const radiusY = mouthOpen * scale;
 
         context.save();
-        context.fillStyle = mouthColor;
+        
+        // 1. Draw inner mouth cavity (dark reddish/maroon shade)
+        context.fillStyle = isDark ? "rgba(69, 10, 10, 0.9)" : "rgba(59, 7, 18, 0.9)";
         context.beginPath();
         context.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
         context.fill();
+
+        // 2. Draw lips shape outline and fill tint
+        context.strokeStyle = "#f43f5e"; // rose/coral lip color
+        context.fillStyle = "rgba(244, 63, 94, 0.15)"; // subtle soft coral tint
+        context.lineWidth = 5 * scale;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+
+        // Cupid's bow upper lip curve
+        context.beginPath();
+        context.moveTo(centerX - radiusX, centerY);
+        context.bezierCurveTo(
+          centerX - radiusX / 2, centerY - radiusY - 8 * scale,
+          centerX - radiusX / 4, centerY - radiusY - 10 * scale,
+          centerX, centerY - radiusY / 2
+        );
+        context.bezierCurveTo(
+          centerX + radiusX / 4, centerY - radiusY - 10 * scale,
+          centerX + radiusX / 2, centerY - radiusY - 8 * scale,
+          centerX + radiusX, centerY
+        );
+        // Lower lip bottom curve
+        context.bezierCurveTo(
+          centerX + radiusX / 2, centerY + radiusY + 12 * scale,
+          centerX - radiusX / 2, centerY + radiusY + 12 * scale,
+          centerX - radiusX, centerY
+        );
+        context.closePath();
+        context.fill();
+        context.stroke();
+
+        // 3. Add a soft lip gloss highlight curve on the lower lip
+        context.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        context.lineWidth = 2 * scale;
+        context.beginPath();
+        context.moveTo(centerX - radiusX / 2, centerY + radiusY + 4 * scale);
+        context.bezierCurveTo(
+          centerX - radiusX / 4, centerY + radiusY + 7 * scale,
+          centerX + radiusX / 4, centerY + radiusY + 7 * scale,
+          centerX + radiusX / 2, centerY + radiusY + 4 * scale
+        );
+        context.stroke();
+
         context.restore();
       }
 
