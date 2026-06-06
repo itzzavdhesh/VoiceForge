@@ -157,7 +157,7 @@ export default function Call() {
       )}
 
       {!activeProfile && !dbError && (
-        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-200">
           <CircleAlert size={18} aria-hidden="true" />
           Create or select a voice profile before speaking.
         </div>
