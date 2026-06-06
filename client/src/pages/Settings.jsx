@@ -1,5 +1,6 @@
-// Lets users save their ElevenLabs API key locally and manage browser-stored voice profiles.
+// Lets users save their ElevenLabs API key for the current session and manage browser-stored voice profiles.
 import React from "react";
+import { getApiKey, setApiKey } from "../utils/apiKeyStorage.js";
 import { ExternalLink, Trash2, CircleAlert } from "lucide-react";
 import {
   deleteVoiceProfile,
@@ -30,13 +31,8 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
-  const [apiKey, setApiKey] = React.useState(() => {
-    try {
-      return sessionStorage.getItem("voiceforge:elevenlabsApiKey") || "";
-    } catch {
-      return "";
-    }
-  });
+  const [apiKeyInput, setApiKeyInput] = React.useState(() => getApiKey());
+
   
   React.useEffect(() => {
     async function loadProfiles() {
@@ -61,12 +57,9 @@ export default function Settings() {
   });
 
   function saveApiKey() {
-    try {
-      sessionStorage.setItem("voiceforge:elevenlabsApiKey", apiKey);
-    } catch {
-      // Storage unavailable
-    }
+    setApiKey(apiKeyInput);
   }
+
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
@@ -112,8 +105,9 @@ export default function Settings() {
             <input
               id="api-key"
               type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
+              value={apiKeyInput}
+              onChange={(event) => setApiKeyInput(event.target.value)}
+
               className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
               placeholder="sk_..."
             />
@@ -136,8 +130,11 @@ export default function Settings() {
           </a>
         </div>
         <p className="mt-3 text-sm text-ink/65 dark:text-muted">
-          The backend reads `.env` first. This local key is available for future
-          client-only experiments.
+          Your key is kept for this browser session only — it is cleared when
+          you close the tab and is not shared with other tabs. You will need to
+          re-enter it each session. The backend reads{" "}
+          <code className="font-mono">.env</code> first; this field is a
+          client-side override.
         </p>
       </section>
 
