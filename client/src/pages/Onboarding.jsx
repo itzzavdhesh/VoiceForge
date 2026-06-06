@@ -10,7 +10,7 @@ export default function Onboarding({ onReady }) {
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error } = useVoiceClone();
   const isCloning = status === "cloning";
-  const hasApiKey = Boolean(localStorage.getItem("voiceforge:elevenlabsApiKey")?.trim());
+  const hasApiKey = Boolean(sessionStorage.getItem("voiceforge:elevenlabsApiKey")?.trim());
 
   const currentStep = successProfile ? 2 : recording ? 1 : 0;
 

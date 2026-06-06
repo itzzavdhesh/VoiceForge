@@ -32,7 +32,7 @@ export default function Settings() {
   const [dbError, setDbError] = React.useState("");
   const [apiKey, setApiKey] = React.useState(() => {
     try {
-      return localStorage.getItem("voiceforge:elevenlabsApiKey") || "";
+      return sessionStorage.getItem("voiceforge:elevenlabsApiKey") || "";
     } catch {
       return "";
     }
@@ -62,7 +62,7 @@ export default function Settings() {
 
   function saveApiKey() {
     try {
-      localStorage.setItem("voiceforge:elevenlabsApiKey", apiKey);
+      sessionStorage.setItem("voiceforge:elevenlabsApiKey", apiKey);
     } catch {
       // Storage unavailable
     }

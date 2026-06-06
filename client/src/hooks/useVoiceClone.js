@@ -50,7 +50,7 @@ export default function useVoiceClone() {
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
 
-      const apiKey = localStorage.getItem("voiceforge:elevenlabsApiKey") || "";
+      const apiKey = sessionStorage.getItem("voiceforge:elevenlabsApiKey") || "";
       const response = await fetch("/api/voice/clone", {
         method: "POST",
         headers: { "X-ElevenLabs-Api-Key": apiKey },

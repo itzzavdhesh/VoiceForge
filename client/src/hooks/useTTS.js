@@ -18,7 +18,7 @@ export default function useTTS() {
         voiceSettings = defaultSettings;
       }
 
-      const apiKey = localStorage.getItem("voiceforge:elevenlabsApiKey") || "";
+      const apiKey = sessionStorage.getItem("voiceforge:elevenlabsApiKey") || "";
       const response = await fetch("/api/voice/speak", {
         method: "POST",
         headers: {
