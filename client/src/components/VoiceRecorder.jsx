@@ -99,50 +99,73 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }, [audioUrl]);
  
   React.useEffect(() => {
-    if (!isRecording) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (analyserRef.current) analyserRef.current.disconnect();
-      if (audioCtxRef.current) audioCtxRef.current.close();
-      analyserRef.current = null;
-      audioCtxRef.current = null;
-      setBarHeights([18, 30, 42, 30, 18]);
-      return;
+  if (!isRecording) {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (analyserRef.current) analyserRef.current.disconnect();
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      audioCtxRef.current.close();
     }
+    analyserRef.current = null;
+    audioCtxRef.current = null;
+    setBarHeights([18, 30, 42, 30, 18]);
+    return;
+  }
 
-    const stream = streamRef.current;
-    if (!stream) return;
+  const stream = streamRef.current;
+  if (!stream) return;
 
-    const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 64;
-    source.connect(analyser);
-    audioCtxRef.current = audioCtx;
-    analyserRef.current = analyser;
+  let cancelled = false;
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    const bucketSize = Math.floor(dataArray.length / 5);
+  (async () => {
+    try {
+      const audioCtx = new AudioContext();
+      await audioCtx.resume();
+      if (cancelled) {
+        audioCtx.close();
+        return;
+      }
 
-    const tick = () => {
-      analyser.getByteFrequencyData(dataArray);
-      const heights = Array.from({ length: 5 }, (_, i) => {
-        const slice = dataArray.slice(i * bucketSize, (i + 1) * bucketSize);
-        const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-        return Math.max(8, Math.round(Math.sqrt(avg / 255) * 48));
-      });
-      setBarHeights(heights);
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      audioCtxRef.current = audioCtx;
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const bucketSize = Math.floor(dataArray.length / 5);
+
+      const tick = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const heights = Array.from({ length: 5 }, (_, i) => {
+          const slice = dataArray.slice(i * bucketSize, (i + 1) * bucketSize);
+          const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+          return Math.max(8, Math.round(Math.sqrt(avg / 255) * 48));
+        });
+        setBarHeights(heights);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+
       rafRef.current = requestAnimationFrame(tick);
-    };
+    } catch (err) {
+      // AudioContext/AnalyserNode failed — fall back to static bars silently
+      console.warn("Waveform animation unavailable:", err);
+      setBarHeights([18, 30, 42, 30, 18]);
+    }
+  })();
 
-    rafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      analyser.disconnect();
-      audioCtx.close();
-    };
+  return () => {
+    cancelled = true;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (analyserRef.current) analyserRef.current.disconnect();
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      audioCtxRef.current.close();
+    }
+    analyserRef.current = null;
+    audioCtxRef.current = null;
+  };
   }, [isRecording]);
-  
+
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
