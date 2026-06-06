@@ -1,6 +1,7 @@
 // Lets users save their ElevenLabs API key for the current session and manage browser-stored voice profiles.
 import React from "react";
-import { getApiKey, setApiKey } from "../utils/apiKeyStorage.js";
+import { getApiKey, setApiKey, migrateFromLocalStorage } from "../utils/apiKeyStorage.js";
+
 import { ExternalLink, Trash2, CircleAlert } from "lucide-react";
 import {
   deleteVoiceProfile,
@@ -31,9 +32,23 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
-  const [apiKeyInput, setApiKeyInput] = React.useState(() => getApiKey());
+  const [migratedNotice, setMigratedNotice] = React.useState(false);
+  const [apiKey, setApiKeyInput] = React.useState(() => {
+    try {
+      return getApiKey();
+    } catch {
+      return "";
+    }
+  });
 
-  
+  React.useEffect(() => {
+    const migrated = migrateFromLocalStorage();
+    if (migrated) {
+      setApiKeyInput(getApiKey());
+      setMigratedNotice(true);
+    }
+  }, []);
+
   React.useEffect(() => {
     async function loadProfiles() {
       try {
@@ -47,6 +62,7 @@ export default function Settings() {
     loadProfiles();
   }, []);
 
+
   const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
   const [voiceSettings, setVoiceSettings] = React.useState(() => {
     try {
@@ -57,8 +73,9 @@ export default function Settings() {
   });
 
   function saveApiKey() {
-    setApiKey(apiKeyInput);
+    setApiKey(apiKey);
   }
+
 
 
   function saveVoiceSettings(newSettings) {
@@ -99,16 +116,37 @@ export default function Settings() {
     )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        {migratedNotice && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-moss/40 bg-mint/30 p-3 text-sm text-ink dark:bg-glow/10 dark:text-neutral-100">
+            <CircleAlert size={16} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
+            <span>
+              Your saved API key has been moved out of persistent storage for this session.
+              It will clear when you close this tab.
+            </span>
+          </div>
+        )}
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-sm text-ink dark:bg-amber-900/20 dark:text-neutral-100">
+          <CircleAlert size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+          <span>
+            <strong>Session-only key</strong> — cleared when you close this tab and not shared
+            with other tabs. For a persistent setup, set the key in the server{" "}
+            <code className="font-mono">.env</code> file instead.
+          </span>
+        </div>
+
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+
           <label className="flex-1 text-sm font-bold" htmlFor="api-key">
             ElevenLabs API key
             <input
               id="api-key"
               type="password"
-              value={apiKeyInput}
-              onChange={(event) => setApiKeyInput(event.target.value)}
+              value={apiKey}
 
+              onChange={(event) => setApiKeyInput(event.target.value)}
               className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+
+
               placeholder="sk_..."
             />
           </label>

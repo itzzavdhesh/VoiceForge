@@ -25,11 +25,12 @@ export function getApiKey() {
 
 export function setApiKey(value) {
   try {
-    sessionStorage.setItem(KEY, value);
+    sessionStorage.setItem(KEY, (value ?? "").trim());
   } catch {
     // Storage unavailable (e.g. private-browsing quota exceeded)
   }
 }
+
 
 export function clearApiKey() {
   try {
@@ -42,3 +43,17 @@ export function clearApiKey() {
 export function hasApiKey() {
   return Boolean(getApiKey().trim());
 }
+
+export function migrateFromLocalStorage() {
+  try {
+    const legacy = localStorage.getItem(KEY);
+    if (legacy?.trim()) {
+      sessionStorage.setItem(KEY, legacy.trim());
+      localStorage.removeItem(KEY);
+      return true;
+    }
+    if (legacy !== null) localStorage.removeItem(KEY);
+  } catch {}
+  return false;
+}
+
