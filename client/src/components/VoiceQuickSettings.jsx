@@ -106,9 +106,6 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
         persistSettings(next);
         return next;
       });
-      // Dispatch a storage event so the Settings page re-reads the value
-      // even within the same tab (StorageEvent only fires cross-tab natively).
-      window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
     },
     []
   );
@@ -167,7 +164,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           />
 
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
-            Changes apply to the next Speak action.{" "}
+            Changes apply to ElevenLabs voice synthesis.{" "}
             <span className="font-medium text-neutral-500 dark:text-neutral-400">
               Full controls in Settings →
             </span>
