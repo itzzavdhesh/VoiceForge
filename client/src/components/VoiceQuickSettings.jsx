@@ -100,14 +100,17 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
 
   const updateSetting = useCallback(
     (key) => (event) => {
-      const next = { ...settings, [key]: parseFloat(event.target.value) };
-      setSettings(next);
-      persistSettings(next);
+      const val = parseFloat(event.target.value);
+      setSettings((prev) => {
+        const next = { ...prev, [key]: val };
+        persistSettings(next);
+        return next;
+      });
       // Dispatch a storage event so the Settings page re-reads the value
       // even within the same tab (StorageEvent only fires cross-tab natively).
       window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
     },
-    [settings]
+    []
   );
 
   const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
