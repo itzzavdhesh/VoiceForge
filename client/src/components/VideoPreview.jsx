@@ -1,6 +1,5 @@
 // Draws the webcam and MVP lip-sync animation onto a canvas preview.
 import React from "react";
-import { Loader2 } from "lucide-react";
 import { useTheme } from "./ThemeContext";
 
 export default React.forwardRef(function VideoPreview({
@@ -127,11 +126,19 @@ export default React.forwardRef(function VideoPreview({
           </p>
         </div>
         {isSpeaking && (
-          <Loader2
-            className="animate-spin text-coral"
-            size={20}
-            aria-hidden="true"
-          />
+          <div
+            className="recording-wave flex h-5 items-center gap-0.5"
+            role="status"
+            aria-label="Avatar speech active"
+          >
+            {[14, 20, 16, 18, 12].map((height, index) => (
+              <span
+                key={index}
+                className="block w-[3px] bg-coral rounded-full"
+                style={{ height: `${height}px` }}
+              />
+            ))}
+          </div>
         )}
       </div>
       <video ref={videoRef} autoPlay muted playsInline className="hidden" />
