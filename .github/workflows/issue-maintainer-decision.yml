@@ -362,6 +362,15 @@ jobs:
               return;
             }
 
+            const defaultsToAdd = [];
+            if (decisionState.priorityLabel === 'Not set') defaultsToAdd.push('priority: medium');
+            if (decisionState.levelLabel === 'Not set') defaultsToAdd.push('level: medium');
+            if (defaultsToAdd.length > 0) {
+              await addLabels(issue_number, defaultsToAdd);
+              decisionIssue = await getFreshIssue();
+              decisionState = getDecisionState(decisionIssue);
+            }
+
             const assigneeMentions = decisionState.assignees.map(assignee => `@${assignee.login}`).join(', ');
             const marker = '<!-- voiceforge-issue-go-ahead -->';
             const body =
@@ -381,7 +390,6 @@ jobs:
             await addLabels(issue_number, ['ready to work']);
             await removeLabels(['needs maintainer review', 'stale-assignment']);
             await deleteBotCommentsByMarkers([
-              '<!-- voiceforge-issue-assigned-',
               '<!-- voiceforge-issue-go-ahead-waiting -->'
             ]);
             await createOrUpdateComment(marker, body);

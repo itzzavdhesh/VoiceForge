@@ -70,7 +70,7 @@ jobs:
                 owner,
                 repo,
                 issue_number,
-                body: `## Assignment Request Noted\n\nHi @${username}, thanks for offering to help.\n\nThis issue is already assigned to ${assigned}. Please do not start work unless a maintainer reassigns it to you.\n\nYour request is visible to maintainers. You can pick another open issue or wait for the assignment queue to reopen.\n\n_VoiceForge automation_`
+                body: `## 👥 Issue Already Assigned\n\n> [!WARNING]\n> This issue already has an assignee — please do not start work unless a maintainer reassigns it to you.\n\nHey @${username}! 👋 Thanks for offering to help.\n\nThis issue is currently assigned to ${assigned}. Your interest is noted and visible to maintainers.\n\nWhile you wait, feel free to explore other open issues — we'd love to have your contribution elsewhere! 🚀\n\n---\n<sub>🤖 VoiceForge Automation</sub>`
               });
               return;
             }
@@ -79,5 +79,5 @@ jobs:
               owner,
               repo,
               issue_number,
-              body: `## Assignment Request Received\n\nHi @${username}, thanks for volunteering.\n\nMaintainers can now see your request. Please wait until you are assigned before starting work.\n\nYou can keep exploring other open issues while this is reviewed.\n\n_VoiceForge automation_`
+              body: `## 🙋 Assignment Request Received\n\n> [!TIP]\n> A maintainer will review your request and assign you if approved.\n\nHey @${username}! 🎉 Thanks for volunteering — your request is now visible to maintainers.\n\n⚠️ **Please wait for an official assignment before starting any work.**\n\nIn the meantime, feel free to explore other open issues! 🔍\n\n---\n<sub>🤖 VoiceForge Automation</sub>`
             });

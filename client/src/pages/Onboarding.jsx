@@ -3,6 +3,7 @@ import React from "react";
 import { CheckCircle2, Loader2, CircleAlert, ArrowRight } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
+import { hasApiKey } from "../utils/apiKeyStorage.js";
 
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null);
@@ -10,7 +11,8 @@ export default function Onboarding({ onReady }) {
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const isCloning = status === "cloning";
-  const hasApiKey = Boolean(localStorage.getItem("voiceforge:elevenlabsApiKey")?.trim());
+  const apiKeyPresent = hasApiKey();
+
 
   // Track the highest milestone step the user is allowed to navigate to
   const [maxUnlockedStep, setMaxUnlockedStep] = React.useState(() => {

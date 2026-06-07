@@ -48,15 +48,23 @@ export default function App() {
     <main className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow">
-              Open source assistive video
-            </p>
-            <h1 className="mt-1 text-3xl font-bold tracking-normal text-ink dark:text-neutral-50">
-              VoiceForge
-            </h1>
-          </div>
+          <div className="flex items-center gap-4">
+            <img
+              src="/models/logo5.png"
+              alt="VoiceForge Logo"
+              className="h-14 w-14 object-contain"
+            />
 
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow">
+               Open source assistive video
+              </p>
+
+              <h1 className="mt-1 text-3xl font-bold tracking-normal text-ink dark:text-neutral-50">
+               VoiceForge
+              </h1>
+            </div>
+         </div>
           <div className="flex flex-wrap items-center gap-2">
             <nav className="flex flex-wrap gap-2" aria-label="VoiceForge pages">
               {tabs.map((tab) => {
