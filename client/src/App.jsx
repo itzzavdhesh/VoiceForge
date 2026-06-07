@@ -6,7 +6,7 @@ import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
 import VoiceForge from "./components/VoiceForge";
 import { useTheme } from "./components/ThemeContext.jsx";
-import Footer from "./components/Footer";
+import Footer from "./components/footer";
 
 const tabs = [
   { id: "onboarding", label: "Onboarding", icon: Mic2 },

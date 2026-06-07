@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="border-t border-ink/10 py-4">
       <div className="flex justify-center gap-4">
         <a
-          href="https://github.com/project"
+          href="https://github.com/itzzavdhesh/voiceforge"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub"
@@ -14,7 +14,7 @@ export default function Footer() {
         </a>
 
         <a
-          href="https://instagram.com/project"
+          href="https://www.instagram.com"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Instagram"
@@ -23,7 +23,7 @@ export default function Footer() {
         </a>
 
         <a
-          href="https://facebook.com/project"
+          href="https://www.facebook.com"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Facebook"
