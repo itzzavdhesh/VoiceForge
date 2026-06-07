@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { Copy, Eraser, Mic2 } from "lucide-react";
+import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
 import { SpeechHistory } from "./SpeechHistory";
@@ -209,6 +210,8 @@ export default function VoiceForge() {
             Tip: Press <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Ctrl</kbd> +{" "}
             <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Enter</kbd> to speak quickly.
           </p>
+
+          <VoiceQuickSettings />
 
           <div className="flex items-center gap-2">
             <button
