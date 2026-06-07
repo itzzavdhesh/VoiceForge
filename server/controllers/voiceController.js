@@ -95,22 +95,18 @@ function deletePendingStream(speechId) {
   return entry;
 }
 
-// Drop the oldest entries until the store is below its configured cap. Map
-// preserves insertion order, so the first key is always the oldest.
-function evictOldestPendingStreams() {
-  while (pendingStreams.size >= PENDING_STREAMS_MAX) {
-    const oldestKey = pendingStreams.keys().next().value;
-    if (oldestKey === undefined) {
-      break;
-    }
-    deletePendingStream(oldestKey);
-  }
-}
-
 export async function speak(request, response, next) {
   try {
     const apiKey = requireApiKey(request);
     const { text, voice_id: voiceId, voice_settings } = request.body;
+
+    if (pendingStreams.size >= PENDING_STREAMS_MAX) {
+      response.status(503).json({
+        error:
+          "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+      });
+      return;
+    }
 
     if (!text || !voiceId) {
       response.status(400).json({ error: "Both text and voice_id are required." });
@@ -166,8 +162,6 @@ export async function speak(request, response, next) {
     // cannot be reproduced from a seed or enumerated by a co-located process,
     // so the stored API key cannot be retrieved by guessing the stream key.
     const speechId = randomUUID();
-
-    evictOldestPendingStreams();
 
     const timeout = setTimeout(() => {
       deletePendingStream(speechId);

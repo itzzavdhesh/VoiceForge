@@ -45,9 +45,9 @@ test("audioUrl embeds the matching speechId", async () => {
   );
 });
 
-test("pending-stream store stays bounded under a burst of /speak calls", async (t) => {
+test("pending-stream store rejects new /speak calls when full", async (t) => {
   // Force a tiny cap so the test stays fast, and a long TTL so the timer does
-  // not evict entries during the test. Re-import so the new ceiling is read.
+  // not expire entries during the test. Re-import so the new ceiling is read.
   process.env.PENDING_STREAMS_MAX = "10";
   process.env.PENDING_STREAM_TTL_MS = "60000";
   const modulePath = `../controllers/voiceController.js?cap=${Date.now()}`;
@@ -64,19 +64,25 @@ test("pending-stream store stays bounded under a burst of /speak calls", async (
   });
 
   const created = [];
-  for (let i = 0; i < 50; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     created.push(await callSpeak(speak));
   }
 
-  // The newest entry survives and streams; the oldest has been evicted (404).
-  const newest = created[created.length - 1];
-  const newestResponse = createResponse();
+  const overflowResponse = createResponse();
   await invoke(
-    streamSpeech,
-    createRequest({ params: { speechId: newest.speechId } }),
-    newestResponse
+    speak,
+    createRequest({ headers: API_KEY_HEADER, body: { text: "Hello there", voice_id: "voice_1" } }),
+    overflowResponse
   );
-  assert.equal(newestResponse.ended, true, "recent entry should still stream");
+  assert.equal(
+    overflowResponse.statusCode,
+    503,
+    "new /speak requests should be rejected when the pending stream store is full"
+  );
+  assert.equal(
+    overflowResponse.jsonBody.error,
+    "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+  );
 
   const oldest = created[0];
   const oldestResponse = createResponse();
@@ -85,5 +91,14 @@ test("pending-stream store stays bounded under a burst of /speak calls", async (
     createRequest({ params: { speechId: oldest.speechId } }),
     oldestResponse
   );
-  assert.equal(oldestResponse.statusCode, 404, "oldest entry should be evicted");
+  assert.equal(oldestResponse.ended, true, "oldest entry should still stream when the store is full");
+
+  const newest = created[created.length - 1];
+  const newestResponse = createResponse();
+  await invoke(
+    streamSpeech,
+    createRequest({ params: { speechId: newest.speechId } }),
+    newestResponse
+  );
+  assert.equal(newestResponse.ended, true, "newest entry should still stream when the store is full");
 });
