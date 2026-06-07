@@ -41,8 +41,9 @@ export function QuickReplies({ onSelect }) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(replies));
-    } catch {
-      // storage quota exceeded — silently skip
+    } catch (error) {
+      showToast("Could not save changes. Storage may be full.", "error");
+
     }
   }, [replies]);
 
