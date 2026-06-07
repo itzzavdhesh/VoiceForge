@@ -167,13 +167,16 @@ jobs:
                 const marker = '<!-- voiceforge-duplicate-command-error -->';
                 const errorBody =
                   `${marker}\n` +
-                  `## Duplicate Target Not Found\n\n` +
-                  `@${context.actor}, #${duplicateOf} was not found.\n\n` +
-                  `Please check the issue number and run the command again:\n\n` +
+                  `## 🔍 Duplicate Target Not Found\n\n` +
+                  `> [!WARNING]\n` +
+                  `> Issue **#${duplicateOf}** could not be found in this repository.\n\n` +
+                  `Hey @${context.actor}! 👋 The \`/duplicate\` command couldn't be completed.\n\n` +
+                  `Double-check the issue number and try again:\n\n` +
                   `\`\`\`text\n` +
-                  `/duplicate #123\n` +
+                  `/duplicate #${duplicateOf}\n` +
                   `\`\`\`\n\n` +
-                  `_VoiceForge automation_`;
+                  `---\n` +
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
                 await createOrUpdateComment(marker, errorBody);
                 return;
               }
@@ -184,10 +187,13 @@ jobs:
               const marker = '<!-- voiceforge-duplicate-command-error -->';
               const errorBody =
                 `${marker}\n` +
-                `## Duplicate Target Must Be An Issue\n\n` +
-                `@${context.actor}, #${duplicateOf} is a pull request, not an issue.\n\n` +
-                `Please reference the issue that should collect the discussion and progress.\n\n` +
-                `_VoiceForge automation_`;
+                `## 👥 Duplicate Target Must Be An Issue\n\n` +
+                `> [!WARNING]\n` +
+                `> Issue **#${duplicateOf}** is a pull request, not an issue.\n\n` +
+                `Hey @${context.actor}! 👋 The \`/duplicate\` command couldn't be completed.\n\n` +
+                `Please run the \`/duplicate\` command with the actual issue number instead of a pull request.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               await createOrUpdateComment(marker, errorBody);
               return;
             }
@@ -195,11 +201,14 @@ jobs:
             const marker = '<!-- voiceforge-issue-duplicate-command -->';
             const duplicateBody =
               `${marker}\n` +
-              `## Duplicate Issue Closed\n\n` +
-              `Hi @${issue.user.login}, thanks for opening this issue.\n\n` +
-              `A maintainer marked it as a duplicate of #${duplicateOf}, so this issue is being closed to keep the conversation in one place.\n\n` +
-              `Please continue discussion on #${duplicateOf}. If this covers a different case, ask a maintainer before opening a new issue.\n\n` +
-              `_VoiceForge automation_`;
+              `## 🔁 Duplicate Issue Closed\n\n` +
+              `> [!NOTE]\n` +
+              `> This issue is a duplicate of **#${duplicateOf}** ➡️\n\n` +
+              `Hey @${issue.user.login}! 👋 Thanks for opening this issue.\n\n` +
+              `A maintainer has marked this issue as a duplicate to keep the conversation in one place.\n\n` +
+              `Please continue the discussion on **#${duplicateOf}**. If you believe this issue covers a different case, feel free to comment here so a maintainer can review it.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             await createOrUpdateComment(marker, duplicateBody);
             await addLabels(['duplicate', 'closed']);

@@ -3,6 +3,7 @@ import React from "react";
 import { CheckCircle2, Loader2, CircleAlert } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
+import { hasApiKey } from "../utils/apiKeyStorage.js";
 
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null);
@@ -10,7 +11,8 @@ export default function Onboarding({ onReady }) {
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error } = useVoiceClone();
   const isCloning = status === "cloning";
-  const hasApiKey = Boolean(localStorage.getItem("voiceforge:elevenlabsApiKey")?.trim());
+  const apiKeyPresent = hasApiKey();
+
 
   const currentStep = successProfile ? 2 : recording ? 1 : 0;
 
@@ -56,7 +58,7 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-      {!hasApiKey && (
+      {!apiKeyPresent && (
         <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
           <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
           <span>
@@ -85,7 +87,7 @@ export default function Onboarding({ onReady }) {
           <button
             type="button"
             onClick={handleClone}
-            disabled={!recording || isCloning || !hasApiKey}
+            disabled={!recording || isCloning || !apiKeyPresent}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isCloning && (

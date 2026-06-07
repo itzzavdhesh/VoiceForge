@@ -312,6 +312,8 @@ jobs:
               return;
             }
 
+            const baseUrl = `https://github.com/${owner}/${repo}/issues/new`;
+
             const problemLines = [];
 
             if (templateProblems.includes('multiple-programs')) {
@@ -321,12 +323,19 @@ jobs:
             }
 
             if (templateProblems.includes('no-template')) {
-              problemLines.push('| 📝 | **Template not used** | Re-open with the **Bug Report** or **Feature Request** template — do not file a blank issue |');
+              const noTemplateHowToFix = matchedProgram
+                ? `Use your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md) — do not file a blank issue`
+                : `Use a template: [pick a template](${baseUrl}/choose) — select your program and issue type, and please do not file a blank issue again`;
+              problemLines.push(`| 📝 | **Template not used** | ${noTemplateHowToFix} |`);
             }
 
             if (qualityProblems.includes('low-quality')) {
               problemLines.push('| 💬 | **Not enough detail** | Replace placeholder text with real context, clear reproduction steps, and expected vs. actual behavior |');
             }
+
+            const templateTip = matchedProgram
+              ? `or start fresh with your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md)`
+              : `or [start fresh with the right template](${baseUrl}/choose)`;
 
             const problemCount = problemLines.length;
             const commentBody =
@@ -339,8 +348,8 @@ jobs:
               `|---|---------|------------|\n` +
               problemLines.join('\n') +
               `\n\n` +
-              `**To revalidate:** edit the issue body → save. This comment updates automatically ✅\n` +
-              `> 💡 Need a template? Close this and open a new issue using **Bug Report** or **Feature Request** from the issue picker.\n\n` +
+              `**To run the checks again:** edit the issue body → save. This comment updates automatically ✅\n` +
+              `> 💡 **Tip:** You can edit this issue directly — ${templateTip}.\n\n` +
               `---\n` +
               `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
 
