@@ -140,7 +140,12 @@ function evictOldestPendingStreams() {
 
 export async function speak(request, response, next) {
   try {
-    const { text, voice_id: voiceId, voice_settings } = request.body;
+    const {
+  text,
+  voice_id: voiceId,
+  language_code,
+  voice_settings
+} = request.body;
 
     if (!getIsMock()) {
       // Only require a real API key when not in mock mode.
@@ -211,7 +216,14 @@ export async function speak(request, response, next) {
     timeout.unref?.();
 
     const apiKey = getIsMock() ? null : requireApiKey(request);
-    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, timeout });
+    pendingStreams.set(speechId, {
+  text,
+  voiceId,
+  language_code,
+  apiKey,
+  mergedSettings,
+  timeout
+});
 
     if (getIsMock()) {
       console.warn(`[VoiceForge] MOCK_ELEVENLABS: speak enqueued mock stream for speechId=${speechId}`);
@@ -248,7 +260,13 @@ export async function streamSpeech(request, response, next) {
       return;
     }
 
-    const { text, voiceId, apiKey, mergedSettings } = streamData;
+    const {
+  text,
+  voiceId,
+  language_code,
+  apiKey,
+  mergedSettings
+} = streamData;
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
       method: "POST",
@@ -258,10 +276,11 @@ export async function streamSpeech(request, response, next) {
         Accept: "audio/mpeg"
       },
       body: JSON.stringify({
-        text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: mergedSettings
-      })
+  text,
+  model_id: "eleven_multilingual_v2",
+  language_code,
+  voice_settings: mergedSettings
+})
     });
 
     if (!elevenResponse.ok) {
