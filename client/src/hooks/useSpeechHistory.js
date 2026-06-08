@@ -4,7 +4,7 @@
  * Drop this into src/hooks/useSpeechHistory.js in the VoiceForge project.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -50,7 +50,6 @@ function readStorage(key, fallback) {
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => readStorage(HISTORY_KEY, []));
-  const historyRef = useRef([]);
   const [favorites, setFavorites] = useState(
     () => new Set(readStorage(FAVS_KEY, []))
   );
@@ -71,10 +70,7 @@ export function useSpeechHistory() {
       /* storage quota exceeded — silently skip */
     }
   }, [favorites]);
-  
-  useEffect(() => {
-    historyRef.current = history;
-  }, [history]);
+
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -96,7 +92,7 @@ export function useSpeechHistory() {
   if (!trimmed) return;
 
   const entryId = id || crypto.randomUUID();
-  const existing = historyRef.current.find((m) => m.text === trimmed);
+  const existing = history.find((m) => m.text === trimmed);
   const resolvedId = existing ? existing.id : entryId;
 
   setHistory((prev) => {
@@ -107,7 +103,7 @@ export function useSpeechHistory() {
   });
 
   return resolvedId;
-  }, []);
+}, [history]);
 
   /**
    * Removes a message by id and also removes it from favorites.
