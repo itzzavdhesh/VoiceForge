@@ -35,11 +35,23 @@ export default function useTTS() {
         throw new Error(payload.error || "Speech generation failed.");
       }
 
-      const payload = await response.json();
-      const nextAudioUrl = payload.audioUrl;
-      setAudioUrl(nextAudioUrl);
-      setStatus("ready");
-      return { audioUrl: nextAudioUrl };
+        const payload = await response.json();
+        const nextAudioUrl = payload.audioUrl;
+
+          let blobUrl = "";
+          try {
+            const audioResponse = await fetch(nextAudioUrl);
+            if (audioResponse.ok) {
+              const blob = await audioResponse.blob();
+              blobUrl = URL.createObjectURL(blob);
+            }
+          } catch {
+            // Blob capture failed,download button won't appear.
+          }
+
+          setAudioUrl(blobUrl || nextAudioUrl);
+          setStatus("ready");
+          return { audioUrl: blobUrl || nextAudioUrl, blobUrl };
     } catch (ttsError) {
       setError(ttsError?.message || String(ttsError));
       setStatus("error");

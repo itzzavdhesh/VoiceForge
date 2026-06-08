@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Copy, Pin, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Copy, Download, Pin, Play, RotateCcw, Trash2 } from "lucide-react";
 import { formatTime } from "../utils/formatTime.js";
 
 function useRelativeTime(timestamp) {
@@ -22,6 +22,8 @@ export function MessageCard({
   onToggleFav,
   onDelete,
   onCopy,
+  audioUrl,
+  onDownload,
 }) {
   const { id, text, timestamp } = message;
   const timeLabel = useRelativeTime(timestamp);
@@ -61,6 +63,15 @@ export function MessageCard({
           <ActionButton onClick={() => onCopy(text)} aria-label="Copy message to clipboard" title="Copy">
             <Copy size={14} aria-hidden="true" />
           </ActionButton>
+          {audioUrl && onDownload && (
+          <ActionButton
+              onClick={() => onDownload(text)}
+              aria-label="Download audio for this message"
+              title="Download audio"
+            >
+              <Download size={14} aria-hidden="true" />
+            </ActionButton>
+          )}
           <ActionButton
             onClick={() => onToggleFav(id)}
             aria-label={isPinned ? "Unpin message" : "Pin message"}
@@ -71,7 +82,7 @@ export function MessageCard({
             <Pin size={14} aria-hidden="true" fill={isPinned ? "currentColor" : "none"} />
           </ActionButton>
           <ActionButton
-            onClick={() => onDelete(id)}
+            onClick={() => onDelete(id, text)}
             aria-label="Delete message from history"
             title="Delete"
             className="hover:text-red-500"

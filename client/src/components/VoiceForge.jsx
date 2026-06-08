@@ -6,6 +6,8 @@ import { QuickReplies } from "./QuickReplies";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
+import useTTS from "../hooks/useTTS";
+import { hasApiKey } from "../utils/apiKeyStorage";
 
 const MAX_CHARS = 500;
 
@@ -13,6 +15,8 @@ export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const textareaRef = useRef(null);
+  const audioMapRef = useRef(new Map());
+  const { speak: ttsSpeak } = useTTS();
 
   const {
     history,
@@ -45,22 +49,62 @@ export default function VoiceForge() {
     window.speechSynthesis.speak(utterance);
   }, [showToast]);
 
-  const handleSpeak = useCallback(() => {
-    const text = inputText.trim();
-    if (!text) {
-      showToast("Please type a message first", "error");
-      textareaRef.current?.focus();
-      return;
+  const handleSpeak = useCallback(async () => {
+  const text = inputText.trim();
+  if (!text) {
+    showToast("Please type a message first", "error");
+    textareaRef.current?.focus();
+    return;
+  }
+  speak(text);
+  addMessage(text);
+  showToast("Saved to history", "success");
+
+  try {
+    const activeVoiceId = localStorage.getItem("voiceforge:activeVoiceId");
+    if (hasApiKey() && activeVoiceId) {
+      const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
+      if (blobUrl) {
+        audioMapRef.current.set(text, blobUrl);
+      }
     }
-    speak(text);
-    addMessage(text);
-    showToast("Saved to history", "success");
-  }, [inputText, speak, addMessage, showToast]);
+  } catch {
+    // ElevenLabs unavailable,download button simply won't appear.
+  }
+}, [inputText, speak, addMessage, showToast, ttsSpeak]);
 
   const handleReplay = useCallback((text) => {
     speak(text);
     showToast("Replaying...", "info");
   }, [speak, showToast]);
+
+    const getAudioUrl = useCallback((text) => {
+  return audioMapRef.current.get(text);
+}, []);
+
+const handleDownload = useCallback((text) => {
+  const blobUrl = audioMapRef.current.get(text);
+  if (!blobUrl) return;
+  const safeName = text.trim().slice(0, 40).replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "audio";
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}-${String(now.getMinutes()).padStart(2,"0")}-${String(now.getSeconds()).padStart(2,"0")}`;
+  anchor.download = `${safeName}_${timestamp}.mp3`;
+  anchor.style.cssText = "position:absolute;opacity:0;pointer-events:none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}, []);
+
+const handleDeleteMessage = useCallback((id, text) => {
+  const blobUrl = audioMapRef.current.get(text);
+  if (blobUrl) {
+    URL.revokeObjectURL(blobUrl);
+    audioMapRef.current.delete(text);
+  }
+  removeMessage(id);
+}, [removeMessage]);
 
   const handleReuse = useCallback((text) => {
     setInputText(text);
@@ -128,9 +172,11 @@ export default function VoiceForge() {
         onReuse={handleReuse}
         onReplay={handleReplay}
         onToggleFav={toggleFavorite}
-        onDelete={removeMessage}
+        onDelete={handleDeleteMessage}
         onClearHistory={clearHistory}
         onCopy={handleCopy}
+        getAudioUrl={getAudioUrl}
+        onDownload={handleDownload}
       />
 
       <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
