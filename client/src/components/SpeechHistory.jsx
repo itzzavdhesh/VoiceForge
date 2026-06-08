@@ -151,7 +151,7 @@ export function SpeechHistory({
                       onToggleFav={onToggleFav}
                       onDelete={onDelete}
                       onCopy={onCopy}
-                      audioUrl={getAudioUrl ? getAudioUrl(message.text) : undefined}
+                      audioUrl={getAudioUrl ? getAudioUrl(message.id) : undefined}
                       onDownload={onDownload}
                     />
                   </li>

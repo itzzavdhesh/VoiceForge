@@ -64,8 +64,8 @@ export function MessageCard({
             <Copy size={14} aria-hidden="true" />
           </ActionButton>
           {audioUrl && onDownload && (
-          <ActionButton
-              onClick={() => onDownload(text)}
+            <ActionButton
+              onClick={() => onDownload(id, text)}
               aria-label="Download audio for this message"
               title="Download audio"
             >
@@ -82,7 +82,7 @@ export function MessageCard({
             <Pin size={14} aria-hidden="true" fill={isPinned ? "currentColor" : "none"} />
           </ActionButton>
           <ActionButton
-            onClick={() => onDelete(id, text)}
+            onClick={() => onDelete(id)}
             aria-label="Delete message from history"
             title="Delete"
             className="hover:text-red-500"

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Eraser, Mic2 } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
@@ -66,8 +66,9 @@ export default function VoiceForge() {
     textareaRef.current?.focus();
     return;
   }
+  const messageId = crypto.randomUUID();
   speak(text);
-  addMessage(text);
+  addMessage(text, messageId);
   showToast("Saved to history", "success");
 
   try {
@@ -75,27 +76,25 @@ export default function VoiceForge() {
     if (hasApiKey() && activeVoiceId) {
       const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
       if (blobUrl) {
-        const existing = audioMapRef.current.get(text);
-        if (existing) URL.revokeObjectURL(existing);
-        audioMapRef.current.set(text, blobUrl);
+        audioMapRef.current.set(messageId, blobUrl);
       }
     }
   } catch {
-    // ElevenLabs unavailable,download button simply won't appear.
-  }
-}, [inputText, speak, addMessage, showToast, ttsSpeak]);
+    // ElevenLabs unavailable — download button simply won't appear.
+    }
+  }, [inputText, speak, addMessage, showToast, ttsSpeak]);
 
   const handleReplay = useCallback((text) => {
     speak(text);
     showToast("Replaying...", "info");
   }, [speak, showToast]);
 
-    const getAudioUrl = useCallback((text) => {
-  return audioMapRef.current.get(text);
+    const getAudioUrl = useCallback((id) => {
+  return audioMapRef.current.get(id);
 }, []);
 
-const handleDownload = useCallback((text) => {
-  const blobUrl = audioMapRef.current.get(text);
+const handleDownload = useCallback((id, text) => {
+  const blobUrl = audioMapRef.current.get(id);
   if (!blobUrl) return;
   const safeName = text.trim().slice(0, 40).replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "audio";
   const anchor = document.createElement("a");
@@ -109,11 +108,11 @@ const handleDownload = useCallback((text) => {
   document.body.removeChild(anchor);
 }, []);
 
-const handleDeleteMessage = useCallback((id, text) => {
-  const blobUrl = audioMapRef.current.get(text);
+const handleDeleteMessage = useCallback((id) => {
+  const blobUrl = audioMapRef.current.get(id);
   if (blobUrl) {
     URL.revokeObjectURL(blobUrl);
-    audioMapRef.current.delete(text);
+    audioMapRef.current.delete(id);
   }
   removeMessage(id);
 }, [removeMessage]);

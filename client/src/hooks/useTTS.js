@@ -7,6 +7,7 @@ export default function useTTS() {
   const [error, setError] = React.useState("");
   const [audioUrl, setAudioUrl] = React.useState("");
   const prevBlobRef = React.useRef("");
+  const mountedRef = React.useRef(true);
 
   async function speak({ text, voiceId }) {
     setError("");
@@ -40,16 +41,18 @@ export default function useTTS() {
       const nextAudioUrl = payload.audioUrl;
 
         let blobUrl = "";
-        try {
-          const audioResponse = await fetch(nextAudioUrl);
-          if (audioResponse.ok) {
-              const blob = await audioResponse.blob();
-              blobUrl = URL.createObjectURL(blob);
-          }
-        } catch {
-            // Blob capture failed,download button won't appear.
-          }
+      try {
+        const audioResponse = await fetch(nextAudioUrl);
+        if (audioResponse.ok) {
+          const blob = await audioResponse.blob();
+          if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
+          blobUrl = URL.createObjectURL(blob);
+        }
+      } catch {
+        // Blob capture failed — download button won't appear.
+      }
 
+      if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
       prevBlobRef.current = blobUrl;
       setAudioUrl(blobUrl || nextAudioUrl);
       setStatus("ready");
@@ -60,12 +63,14 @@ export default function useTTS() {
       throw ttsError;
     }
   }
-  React.useEffect(() => {
-  return () => {
-    if (prevBlobRef.current) {
-      URL.revokeObjectURL(prevBlobRef.current);
-    }
-  };
-  }, []);
+    React.useEffect(() => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        if (prevBlobRef.current) {
+          URL.revokeObjectURL(prevBlobRef.current);
+        }
+      };
+    }, []);
   return { speak, status, error, audioUrl };
 }

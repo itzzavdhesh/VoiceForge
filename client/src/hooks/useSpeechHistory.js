@@ -84,11 +84,14 @@ export function useSpeechHistory() {
  * - enforces MAX_HISTORY limit
  *
  * @param {string} text - Message text to store
+ * @param {string} [id] - Optional stable id to assign to this entry
  */
-const addMessage = useCallback((text) => {
+const addMessage = useCallback((text, id) => {
   const trimmed = text.trim();
 
   if (!trimmed) return;
+
+  const entryId = id || crypto.randomUUID();
 
   setHistory((prev) => {
     // Check existing message
@@ -96,7 +99,7 @@ const addMessage = useCallback((text) => {
 
     // Preserve existing ID if duplicate found
     const entry = existing || {
-      id: crypto.randomUUID(),
+      id: entryId,
       text: trimmed,
       timestamp: Date.now(),
     };
