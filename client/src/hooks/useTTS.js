@@ -6,10 +6,11 @@ export default function useTTS() {
   const [status, setStatus] = React.useState("idle");
   const [error, setError] = React.useState("");
   const [audioUrl, setAudioUrl] = React.useState("");
+  const prevBlobRef = React.useRef("");
 
   async function speak({ text, voiceId }) {
     setError("");
-    setStatus("speaking");
+    setStatus("speaking"); 
 
     try {
       const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
@@ -35,20 +36,22 @@ export default function useTTS() {
         throw new Error(payload.error || "Speech generation failed.");
       }
 
-        const payload = await response.json();
-        const nextAudioUrl = payload.audioUrl;
+      const payload = await response.json();
+      const nextAudioUrl = payload.audioUrl;
 
-          let blobUrl = "";
-          try {
-            const audioResponse = await fetch(nextAudioUrl);
-            if (audioResponse.ok) {
+        let blobUrl = "";
+        try {
+          const audioResponse = await fetch(nextAudioUrl);
+          if (audioResponse.ok) {
               const blob = await audioResponse.blob();
               blobUrl = URL.createObjectURL(blob);
-            }
-          } catch {
+          }
+        } catch {
             // Blob capture failed,download button won't appear.
           }
 
+          if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+          prevBlobRef.current = blobUrl;
           setAudioUrl(blobUrl || nextAudioUrl);
           setStatus("ready");
           return { audioUrl: blobUrl || nextAudioUrl, blobUrl };

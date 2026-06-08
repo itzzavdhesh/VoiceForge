@@ -28,6 +28,11 @@ export default function VoiceForge() {
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
+  const handleClearHistory = useCallback(() => {
+  audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+  audioMapRef.current.clear();
+  clearHistory();
+  }, [clearHistory]);
 
   const speak = useCallback((text) => {
     if (!text.trim()) return;
@@ -65,6 +70,8 @@ export default function VoiceForge() {
     if (hasApiKey() && activeVoiceId) {
       const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
       if (blobUrl) {
+        const existing = audioMapRef.current.get(text);
+        if (existing) URL.revokeObjectURL(existing);
         audioMapRef.current.set(text, blobUrl);
       }
     }
@@ -173,7 +180,7 @@ const handleDeleteMessage = useCallback((id, text) => {
         onReplay={handleReplay}
         onToggleFav={toggleFavorite}
         onDelete={handleDeleteMessage}
-        onClearHistory={clearHistory}
+        onClearHistory={handleClearHistory}
         onCopy={handleCopy}
         getAudioUrl={getAudioUrl}
         onDownload={handleDownload}
