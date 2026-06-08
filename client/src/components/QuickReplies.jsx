@@ -20,6 +20,7 @@ export function QuickReplies({ onSelect }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === null) return DEFAULT_QUICK_REPLIES;
       const parsed = JSON.parse(saved);
+<<<<<<< HEAD
       if (
         Array.isArray(parsed) &&
         parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
@@ -27,6 +28,16 @@ export function QuickReplies({ onSelect }) {
         return parsed;
       }
       return DEFAULT_QUICK_REPLIES;
+=======
+      return Array.isArray(parsed) && parsed.every(
+        (item) =>
+          item &&
+          typeof item.label === "string" &&
+          typeof item.phrase === "string"
+      )
+        ? parsed
+        : DEFAULT_QUICK_REPLIES;
+>>>>>>> 89f8c2c (Update client/src/components/QuickReplies.jsx)
     } catch {
       return DEFAULT_QUICK_REPLIES;
     }
