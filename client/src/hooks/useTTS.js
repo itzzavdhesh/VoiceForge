@@ -50,17 +50,22 @@ export default function useTTS() {
             // Blob capture failed,download button won't appear.
           }
 
-          if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
-          prevBlobRef.current = blobUrl;
-          setAudioUrl(blobUrl || nextAudioUrl);
-          setStatus("ready");
-          return { audioUrl: blobUrl || nextAudioUrl, blobUrl };
+      prevBlobRef.current = blobUrl;
+      setAudioUrl(blobUrl || nextAudioUrl);
+      setStatus("ready");
+      return { audioUrl: blobUrl || nextAudioUrl, blobUrl };
     } catch (ttsError) {
       setError(ttsError?.message || String(ttsError));
       setStatus("error");
       throw ttsError;
     }
   }
-
+  React.useEffect(() => {
+  return () => {
+    if (prevBlobRef.current) {
+      URL.revokeObjectURL(prevBlobRef.current);
+    }
+  };
+  }, []);
   return { speak, status, error, audioUrl };
 }

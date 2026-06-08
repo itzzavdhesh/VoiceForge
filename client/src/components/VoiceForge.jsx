@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useEffect, useState } from "react";
 import { Copy, Eraser, Mic2 } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
