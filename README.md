@@ -55,7 +55,7 @@ npm install
 cp .env.example .env
 ```
 
-5. Add your ElevenLabs API key to `.env`.
+5. Add your ElevenLabs API key to `.env`, **or** skip it and set `MOCK_ELEVENLABS=true` to run in offline dev mode (see [Contributing](CONTRIBUTING.md) for details).
 6. Start the client and server together:
 
 ```bash
@@ -68,9 +68,10 @@ npm run dev
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `ELEVENLABS_API_KEY` | Yes | Server-side API key used for voice cloning and TTS requests. |
+| `ELEVENLABS_API_KEY` | Yes (or use `MOCK_ELEVENLABS`) | Server-side API key used for voice cloning and TTS requests. |
 | `PORT` | No | Express API port. Defaults to `3001`. |
 | `CLIENT_URL` | No | Allowed CORS origin for the Vite app. Defaults to `http://localhost:5173`. |
+| `MOCK_ELEVENLABS` | No | Set to `true` to skip real ElevenLabs calls in dev/CI. Returns fixture data. Ignored in production. |
 
 ## Using VoiceForge In A Call
 

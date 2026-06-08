@@ -3,6 +3,27 @@ import { randomUUID } from "node:crypto";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
+// ---------------------------------------------------------------------------
+// Dev/CI mock mode
+// ---------------------------------------------------------------------------
+// Set MOCK_ELEVENLABS=true in .env to skip real ElevenLabs network calls.
+// The mock is evaluated dynamically at request time to ensure dotenv has loaded.
+// ---------------------------------------------------------------------------
+const getIsMock = () =>
+  process.env.MOCK_ELEVENLABS === "true" &&
+  process.env.NODE_ENV !== "production";
+
+// A minimal valid MP3 frame (ID3v2 + one silent MPEG frame) so the browser
+// Audio element can actually decode and play the mock response.
+const MOCK_AUDIO_MP3 = Buffer.from(
+  "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
+  "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
+  "AAABAAAB/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "base64"
+);
+
 // ElevenLabs bills by character count. This cap prevents a single request
 // from consuming a large share of the monthly quota. Configurable via the
 // SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
@@ -18,14 +39,13 @@ const PENDING_STREAMS_MAX = parseInt(process.env.PENDING_STREAMS_MAX, 10) || 100
 // A pending stream is discarded if it is not consumed within this window.
 const PENDING_STREAM_TTL_MS = parseInt(process.env.PENDING_STREAM_TTL_MS, 10) || 60000;
 
-// Callers must supply their own ElevenLabs key via the X-ElevenLabs-Api-Key
-// request header. The server no longer falls back to its own environment key
-// so anonymous requests cannot charge the server operator's account.
+// Read the key from the request header first (client-side override).
+// Fall back to the server's environment variable (ELEVENLABS_API_KEY) if not provided by the client.
 function requireApiKey(request) {
-  const apiKey = request.get("X-ElevenLabs-Api-Key")?.trim();
+  const apiKey = request.get("X-ElevenLabs-Api-Key")?.trim() || process.env.ELEVENLABS_API_KEY?.trim();
   if (!apiKey) {
     const error = new Error(
-      "An ElevenLabs API key is required. Add it via the X-ElevenLabs-Api-Key header."
+      "An ElevenLabs API key is required. Configure ELEVENLABS_API_KEY on the server or provide it in the X-ElevenLabs-Api-Key header."
     );
     error.status = 401;
     throw error;
@@ -45,13 +65,24 @@ async function readElevenLabsError(response) {
 
 export async function cloneVoice(request, response, next) {
   try {
-    const apiKey = requireApiKey(request);
     const audioFile = request.file;
 
     if (!audioFile) {
       response.status(400).json({ error: "Reference audio is required." });
       return;
     }
+
+    // --- mock mode: return a deterministic fixture voice_id ---
+    if (getIsMock()) {
+      console.warn("[VoiceForge] MOCK_ELEVENLABS: skipping real voice clone, returning fixture.");
+      response.json({
+        voice_id: "mock-voice-id-00000000",
+        name: request.body.name || "VoiceForge Voice (mock)"
+      });
+      return;
+    }
+
+    const apiKey = requireApiKey(request);
 
     const formData = new FormData();
     formData.append("name", request.body.name || "VoiceForge Voice");
@@ -97,7 +128,6 @@ function deletePendingStream(speechId) {
 
 export async function speak(request, response, next) {
   try {
-    const apiKey = requireApiKey(request);
     const { text, voice_id: voiceId, voice_settings } = request.body;
 
     if (pendingStreams.size >= PENDING_STREAMS_MAX) {
@@ -106,6 +136,10 @@ export async function speak(request, response, next) {
           "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
       });
       return;
+    }
+    if (!getIsMock()) {
+      // Only require a real API key when not in mock mode.
+      requireApiKey(request);
     }
 
     if (!text || !voiceId) {
@@ -169,7 +203,12 @@ export async function speak(request, response, next) {
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
 
+    const apiKey = getIsMock() ? null : requireApiKey(request);
     pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, timeout });
+
+    if (getIsMock()) {
+      console.warn(`[VoiceForge] MOCK_ELEVENLABS: speak enqueued mock stream for speechId=${speechId}`);
+    }
 
     response.json({
       speechId,
@@ -192,6 +231,15 @@ export async function streamSpeech(request, response, next) {
 
     // Clean up immediately after retrieving parameters to prevent memory leaks
     deletePendingStream(speechId);
+
+    // --- mock mode: stream the bundled silent MP3 fixture ---
+    if (getIsMock()) {
+      console.warn(`[VoiceForge] MOCK_ELEVENLABS: streaming mock audio for speechId=${speechId}`);
+      response.setHeader("Content-Type", "audio/mpeg");
+      response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
+      response.end(MOCK_AUDIO_MP3);
+      return;
+    }
 
     const { text, voiceId, apiKey, mergedSettings } = streamData;
 
@@ -234,3 +282,11 @@ export async function streamSpeech(request, response, next) {
     next(error);
   }
 }
+
+export function getStatus(request, response) {
+  response.json({
+    isMock: getIsMock(),
+    hasServerKey: Boolean(process.env.ELEVENLABS_API_KEY?.trim())
+  });
+}
+

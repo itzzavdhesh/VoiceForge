@@ -1,0 +1,139 @@
+name: Mentor Label Guard
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: mentor-label-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Remove mentor label if the owning mentor has not reviewed this PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const actor        = context.actor;
+            const labelAdded   = context.payload.label.name;
+            const pr           = context.payload.pull_request;
+            const owner        = context.repo.owner;
+            const repo         = context.repo.repo;
+            const issue_number = pr.number;
+
+            // ─────────────────────────────────────────────────────────────
+            // CONFIGURE: must match exact label names in the repo
+            // Keep in sync with mentor-auto-label.yml + merge-violation-guard.yml
+            // ─────────────────────────────────────────────────────────────
+            const mentorLabelMap = {
+              'sabeenaviklar':  'mentor:sabeenaviklar',
+              '1754riya':       'mentor:1754riya',
+              'Anushreebasics': 'mentor:Anushreebasics',
+              'itsdakshjain':   'mentor:itsdakshjain',
+              'snehkris':       'mentor:snehkris',
+              'leonagoel':      'mentor:leonagoel',
+              'joyprakashk':    'mentor:joyprakashk',
+              'rushi-k12':      'mentor:rushi-k12'
+            };
+            const ADMINS = ['itzzavdhesh'];
+            // ─────────────────────────────────────────────────────────────
+
+            // 1. Only act on mentor labels — skip everything else immediately.
+            const allMentorLabels = Object.values(mentorLabelMap).map(l => l.toLowerCase());
+            if (!allMentorLabels.includes(labelAdded.toLowerCase())) {
+              core.info(`"${labelAdded}" is not a mentor label — nothing to guard.`);
+              return;
+            }
+
+            // 2. Applied by the automation bot itself (from mentor-auto-label.yml) → allow.
+            if (actor === 'github-actions[bot]') {
+              core.info(`"${labelAdded}" applied by automation — allowed.`);
+              return;
+            }
+
+            // 3. Applied by an admin → allow.
+            if (ADMINS.map(a => a.toLowerCase()).includes(actor.toLowerCase())) {
+              core.info(`"${labelAdded}" applied by admin @${actor} — allowed.`);
+              return;
+            }
+
+            // 4. Which mentor owns this label?
+            const owningMentor = Object.entries(mentorLabelMap).find(
+              ([, labelName]) => labelName.toLowerCase() === labelAdded.toLowerCase()
+            )?.[0];
+
+            core.info(`Mentor label "${labelAdded}" applied manually by @${actor}. Owning mentor: @${owningMentor ?? '?'}. Checking reviews…`);
+
+            // 5. Fetch all reviews on this PR.
+            let reviews = [];
+            try {
+              reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: issue_number, per_page: 100
+              });
+            } catch (err) {
+              core.warning(`Could not fetch reviews for PR #${issue_number}: ${err.message}`);
+            }
+
+            // 6. Did the OWNING MENTOR submit any review? (any state counts)
+            //    NOTE: if a mentor applied someone else's mentor label, that also
+            //    fails here — only the label owner's review matters.
+            const owningMentorReviewed = owningMentor
+              ? reviews.some(r => r.user?.login.toLowerCase() === owningMentor.toLowerCase())
+              : false;
+
+            if (owningMentorReviewed) {
+              core.info(`Review confirmed for @${owningMentor} — label "${labelAdded}" is legitimate.`);
+              return;
+            }
+
+            // ── VIOLATION ────────────────────────────────────────────────
+            core.warning(`@${owningMentor ?? actor} has NOT reviewed PR #${issue_number}. Removing label "${labelAdded}".`);
+
+            try {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: labelAdded });
+            } catch (err) {
+              if (err.status !== 404) core.warning(`Could not remove label: ${err.message}`);
+            }
+
+            // Post a transparent, idempotent warning comment.
+            const adminMentions = ADMINS.map(a => `@${a}`).join(' ');
+            const marker  = '<!-- voiceforge-mentor-label-guard -->';
+            const msgBody =
+              `${marker}\n` +
+              `## ❌ Mentor Label Removed\n\n` +
+              `> [!CAUTION]\n` +
+              `> **Review Required First** — The label \`${labelAdded}\` was manually applied by @${actor}, but @${owningMentor ?? actor} has not submitted a review on this pull request yet.\n\n` +
+              `Hey @${actor}! 👋 In VoiceForge, mentor labels are applied **automatically** when a mentor submits their review (approval, comment, or changes requested). They cannot be added manually.\n\n` +
+              `### 💡 How to apply this label correctly:\n` +
+              `1. **@${owningMentor ?? actor}**: Submit a review (approve, comment, or request changes) on this PR.\n` +
+              `2. The automation will immediately re-apply the \`${labelAdded}\` label for you.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Ping: ${adminMentions}*</sub>`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100
+            });
+            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+
+            try {
+              if (existing) {
+                if (existing.body.trim() !== msgBody.trim()) {
+                  await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: msgBody });
+                }
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number, body: msgBody });
+              }
+            } catch (err) {
+              if (err.status === 403) core.warning(`Could not post guard comment: ${err.message}`);
+              else throw err;
+            }

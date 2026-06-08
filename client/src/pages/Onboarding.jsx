@@ -11,7 +11,18 @@ export default function Onboarding({ onReady }) {
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const isCloning = status === "cloning";
-  const apiKeyPresent = hasApiKey();
+  const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
+
+  React.useEffect(() => {
+    fetch("/api/voice/status")
+      .then((res) => res.json())
+      .then((data) => setServerStatus(data))
+      .catch((err) => console.error("Failed to fetch server status:", err));
+  }, []);
+
+  const hasKey = React.useMemo(() => {
+    return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
+  }, [serverStatus]);
 
 
   // Track the highest milestone step the user is allowed to navigate to
@@ -62,7 +73,7 @@ export default function Onboarding({ onReady }) {
 
   async function handleClone() {
     // 1. Strict validation guards: Don't run without API key or a recorded sample
-    if (!hasApiKey || !recording) return;
+    if (!hasKey || !recording) return;
     
     try {
       // 2. Perform real API call without overlapping mock declarations
@@ -156,7 +167,7 @@ export default function Onboarding({ onReady }) {
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
         <>
-          {!hasApiKey && (
+          {!hasKey && (
             <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
               <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
               <span>
@@ -183,7 +194,7 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasApiKey || !recording}
+                disabled={isCloning || !hasKey || !recording}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCloning && <Loader2 className="animate-spin" size={18} />}
