@@ -47,8 +47,12 @@ test("MOCK_ELEVENLABS: cloneVoice returns fixture voice_id without an API key", 
   t.after(restore);
 
   const request = createRequest({ body: { name: "Contributor test voice" } });
+  // Buffer starting with WebM magic bytes (0x1A 0x45 0xDF 0xA3) followed by padding
   request.file = {
-    buffer: Buffer.from("fake-audio"),
+    buffer: Buffer.concat([
+      Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+      Buffer.alloc(12)
+    ]),
     mimetype: "audio/webm",
     originalname: "test.webm"
   };
@@ -161,8 +165,12 @@ test("MOCK_ELEVENLABS is ignored in production: cloneVoice requires a real API k
   t.after(restore);
 
   const request = createRequest({ body: { name: "prod test" } });
+  // Buffer starting with WebM magic bytes (0x1A 0x45 0xDF 0xA3) followed by padding
   request.file = {
-    buffer: Buffer.from("fake-audio"),
+    buffer: Buffer.concat([
+      Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+      Buffer.alloc(12)
+    ]),
     mimetype: "audio/webm",
     originalname: "test.webm"
   };
