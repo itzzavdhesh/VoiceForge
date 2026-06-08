@@ -75,11 +75,10 @@ export default function VoiceForge() {
     const activeVoiceId = localStorage.getItem("voiceforge:activeVoiceId");
     if (hasApiKey() && activeVoiceId) {
       // revoke any existing blob for this message before overwriting
-      const existing = audioMapRef.current.get(resolvedId);
-      if (existing) URL.revokeObjectURL(existing);
-
       const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
       if (blobUrl) {
+        const existing = audioMapRef.current.get(resolvedId);
+        if (existing) URL.revokeObjectURL(existing);
         audioMapRef.current.set(resolvedId, blobUrl);
       }
     }

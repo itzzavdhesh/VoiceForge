@@ -62,12 +62,6 @@ export default function useTTS() {
 
       if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
 
-      // fix: fail fast if nothing usable came back
-      if (!blobUrl && !nextAudioUrl) {
-        setError("Audio URL unavailable.");
-        setStatus("error");
-        return { audioUrl: "", blobUrl: "" };
-      }
 
       if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
       prevBlobRef.current = blobUrl;

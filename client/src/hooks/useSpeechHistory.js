@@ -4,7 +4,7 @@
  * Drop this into src/hooks/useSpeechHistory.js in the VoiceForge project.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -50,6 +50,7 @@ function readStorage(key, fallback) {
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => readStorage(HISTORY_KEY, []));
+  const historyRef = useRef([]);
   const [favorites, setFavorites] = useState(
     () => new Set(readStorage(FAVS_KEY, []))
   );
@@ -70,6 +71,10 @@ export function useSpeechHistory() {
       /* storage quota exceeded — silently skip */
     }
   }, [favorites]);
+  
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -86,23 +91,23 @@ export function useSpeechHistory() {
  * @param {string} text - Message text to store
  * @param {string} [id] - Optional stable id to assign to this entry
  */
-const addMessage = useCallback((text, id) => {
+  const addMessage = useCallback((text, id) => {
   const trimmed = text.trim();
-
   if (!trimmed) return;
 
   const entryId = id || crypto.randomUUID();
+  const existing = historyRef.current.find((m) => m.text === trimmed);
+  const resolvedId = existing ? existing.id : entryId;
 
-  let resolvedId = entryId;
   setHistory((prev) => {
-    const existing = prev.find((m) => m.text === trimmed);
-    const entry = existing || { id: entryId, text: trimmed, timestamp: Date.now() };
-    if (existing) resolvedId = existing.id;
+    const found = prev.find((m) => m.text === trimmed);
+    const entry = found || { id: entryId, text: trimmed, timestamp: Date.now() };
     const updated = [entry, ...prev.filter((m) => m.id !== entry.id)];
     return updated.slice(0, MAX_HISTORY);
   });
-  return resolvedId;   // <-- add this
-}, []);
+
+  return resolvedId;
+  }, []);
 
   /**
    * Removes a message by id and also removes it from favorites.
