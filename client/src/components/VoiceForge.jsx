@@ -17,7 +17,12 @@ export default function VoiceForge() {
   const textareaRef = useRef(null);
   const audioMapRef = useRef(new Map());
   const { speak: ttsSpeak } = useTTS();
-
+  useEffect(() => {
+   return () => {
+     audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+    audioMapRef.current.clear();
+    };
+   }, []);
   const {
     history,
     favorites,
