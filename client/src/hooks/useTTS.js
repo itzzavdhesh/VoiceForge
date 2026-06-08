@@ -40,19 +40,36 @@ export default function useTTS() {
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
 
+        if (!nextAudioUrl) {
+          throw new Error("Audio URL missing from server response.");
+        }
+
         let blobUrl = "";
-      try {
+        try {
         const audioResponse = await fetch(nextAudioUrl);
         if (audioResponse.ok) {
           const blob = await audioResponse.blob();
-          if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
-          blobUrl = URL.createObjectURL(blob);
+          const created = URL.createObjectURL(blob);
+          if (!mountedRef.current) {
+            URL.revokeObjectURL(created);   // fix: revoke before bailing
+            return { audioUrl: "", blobUrl: "" };
+          }
+          blobUrl = created;
         }
       } catch {
         // Blob capture failed — download button won't appear.
       }
 
       if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
+
+      // fix: fail fast if nothing usable came back
+      if (!blobUrl && !nextAudioUrl) {
+        setError("Audio URL unavailable.");
+        setStatus("error");
+        return { audioUrl: "", blobUrl: "" };
+      }
+
+      if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
       prevBlobRef.current = blobUrl;
       setAudioUrl(blobUrl || nextAudioUrl);
       setStatus("ready");

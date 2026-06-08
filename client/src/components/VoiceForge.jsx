@@ -66,20 +66,25 @@ export default function VoiceForge() {
     textareaRef.current?.focus();
     return;
   }
-  const messageId = crypto.randomUUID();
+  const tentativeId = crypto.randomUUID();
   speak(text);
-  addMessage(text, messageId);
+  const resolvedId = addMessage(text, tentativeId);
   showToast("Saved to history", "success");
 
   try {
     const activeVoiceId = localStorage.getItem("voiceforge:activeVoiceId");
     if (hasApiKey() && activeVoiceId) {
+      // revoke any existing blob for this message before overwriting
+      const existing = audioMapRef.current.get(resolvedId);
+      if (existing) URL.revokeObjectURL(existing);
+
       const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
       if (blobUrl) {
-        audioMapRef.current.set(messageId, blobUrl);
+        audioMapRef.current.set(resolvedId, blobUrl);
       }
     }
-  } catch {
+  }
+  catch {
     // ElevenLabs unavailable — download button simply won't appear.
     }
   }, [inputText, speak, addMessage, showToast, ttsSpeak]);

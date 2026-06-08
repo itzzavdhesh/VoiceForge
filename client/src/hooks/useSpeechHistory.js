@@ -93,25 +93,15 @@ const addMessage = useCallback((text, id) => {
 
   const entryId = id || crypto.randomUUID();
 
+  let resolvedId = entryId;
   setHistory((prev) => {
-    // Check existing message
     const existing = prev.find((m) => m.text === trimmed);
-
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: entryId,
-      text: trimmed,
-      timestamp: Date.now(),
-    };
-
-    // Move duplicate to top instead of recreating
-    const updated = [
-      entry,
-      ...prev.filter((m) => m.id !== entry.id),
-    ];
-
+    const entry = existing || { id: entryId, text: trimmed, timestamp: Date.now() };
+    if (existing) resolvedId = existing.id;
+    const updated = [entry, ...prev.filter((m) => m.id !== entry.id)];
     return updated.slice(0, MAX_HISTORY);
   });
+  return resolvedId;   // <-- add this
 }, []);
 
   /**
