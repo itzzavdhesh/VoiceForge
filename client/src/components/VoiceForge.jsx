@@ -16,6 +16,7 @@ export default function VoiceForge() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const textareaRef = useRef(null);
   const audioMapRef = useRef(new Map());
+  const speakCounterRef = useRef(0);
   const { speak: ttsSpeak } = useTTS();
   useEffect(() => {
    return () => {
@@ -74,18 +75,19 @@ export default function VoiceForge() {
   try {
     const activeVoiceId = localStorage.getItem("voiceforge:activeVoiceId");
     if (hasApiKey() && activeVoiceId) {
-      // revoke any existing blob for this message before overwriting
+      const requestId = ++speakCounterRef.current;
       const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
-      if (blobUrl) {
+      if (blobUrl && requestId === speakCounterRef.current) {
         const existing = audioMapRef.current.get(resolvedId);
         if (existing) URL.revokeObjectURL(existing);
         audioMapRef.current.set(resolvedId, blobUrl);
+      } else if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
       }
     }
-  }
-  catch {
+  } catch {
     // ElevenLabs unavailable — download button simply won't appear.
-    }
+  }
   }, [inputText, speak, addMessage, showToast, ttsSpeak]);
 
   const handleReplay = useCallback((text) => {
