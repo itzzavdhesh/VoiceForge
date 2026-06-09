@@ -268,7 +268,7 @@ jobs:
                   `Hey @${username}! 👋 Your **${matchedProgram.name} ${issueType}** cleared all checks — ${appliedLabels} applied.\n\n` +
                   `⚠️ Contributors must **not** start until the issue is assigned.\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation ·<em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               } else if (reviewerMentions.length > 0) {
                 successBody =
                   `${marker}\n` +
@@ -280,7 +280,7 @@ jobs:
                   `⚠️ **Do not start work until the issue is approved _and_ assigned to you.**\n\n` +
                   `📣 ${reviewerMentions.join(' ')} — **${matchedProgram.name}** issue ready for your review! 👀\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               } else {
                 successBody =
                   `${marker}\n` +
@@ -291,7 +291,7 @@ jobs:
                   `A maintainer will evaluate scope and apply: \`go ahead\` · \`duplicate\` · \`not needed\` · \`out of scope\`.\n` +
                   `🙋 You'll be notified when it's open to claim. ⚠️ Please wait for an explicit assignment before starting work.\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               }
 
               if (existing) {
@@ -351,7 +351,7 @@ jobs:
               `**To run the checks again:** edit the issue body → save. This comment updates automatically ✅\n` +
               `> 💡 **Tip:** You can edit this issue directly — ${templateTip}.\n\n` +
               `---\n` +
-              `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             if (existing) {
               await github.rest.issues.updateComment({

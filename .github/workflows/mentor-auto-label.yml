@@ -1,0 +1,146 @@
+name: Mentor Auto Label on Review
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: mentor-auto-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  auto-label:
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply mentor label (and ready-for-review on approval) when a mentor reviews
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const reviewer     = context.payload.review.user.login;
+            const reviewState  = context.payload.review.state;   // APPROVED | CHANGES_REQUESTED | COMMENTED
+            const pr           = context.payload.pull_request;
+            const owner        = context.repo.owner;
+            const repo         = context.repo.repo;
+            const issue_number = pr.number;
+
+            // ─────────────────────────────────────────────────────────────────
+            // CONFIGURE: GitHub username → mentor label (must match exact label
+            // names created in the repo — keep in sync with the other two files)
+            // ─────────────────────────────────────────────────────────────────
+            const mentorLabelMap = {
+              'sabeenaviklar':  'mentor:sabeenaviklar',
+              '1754riya':       'mentor:1754riya',
+              'Anushreebasics': 'mentor:Anushreebasics',
+              'itsdakshjain':   'mentor:itsdakshjain',
+              'snehkris':       'mentor:snehkris',
+              'leonagoel':      'mentor:leonagoel',
+              'joyprakashk':    'mentor:joyprakashk',
+              'rushi-k12':      'mentor:rushi-k12'
+            };
+            // Admin list — bypass guard (can always apply labels freely)
+            const ADMINS = ['itzzavdhesh'];
+            // ─────────────────────────────────────────────────────────────────
+
+            // Is this reviewer a configured mentor?
+            const mentorEntry = Object.entries(mentorLabelMap).find(
+              ([username]) => username.toLowerCase() === reviewer.toLowerCase()
+            );
+
+            if (!mentorEntry) {
+              core.info(`@${reviewer} is not a configured mentor — skipping auto-label.`);
+              return;
+            }
+
+            const [, mentorLabel] = mentorEntry;
+
+            // Fetch the current labels on the issue fresh from the API
+            let currentLabelsLower = [];
+            try {
+              const { data } = await github.rest.issues.listLabelsOnIssue({
+                owner, repo, issue_number
+              });
+              currentLabelsLower = data.map(l => l.name.toLowerCase());
+              core.info(`Successfully fetched current labels: ${currentLabelsLower.join(', ')}`);
+            } catch (err) {
+              core.warning(`Could not fetch current labels from API: ${err.message}. Falling back to payload.`);
+              currentLabelsLower = (pr.labels || []).map(l => l.name.toLowerCase());
+            }
+
+            // ── Helper: ensure a label exists in the repo ─────────────────
+            async function ensureLabel(name, color, description) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (err) {
+                if (err.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                    core.info(`Created label "${name}".`);
+                  } catch (createErr) {
+                    if (createErr.status === 403) {
+                      core.warning(`Cannot create label "${name}": ${createErr.message}`);
+                      return false;
+                    }
+                    throw createErr;
+                  }
+                } else { throw err; }
+              }
+              return true;
+            }
+
+            // ── Helper: add labels if not already present ─────────────────
+            async function addLabels(names) {
+              const toAdd = names.filter(n => !currentLabelsLower.includes(n.toLowerCase()));
+              if (toAdd.length === 0) {
+                core.info(`All labels (${names.join(', ')}) are already present.`);
+                return;
+              }
+              for (const name of toAdd) await ensureLabel(name, '0075CA', `Applied by mentor automation`);
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels: toAdd });
+                core.info(`Added labels: ${toAdd.join(', ')} to PR #${issue_number}.`);
+              } catch (err) {
+                if (err.status === 403) { core.warning(`Cannot add labels: ${err.message}`); return; }
+                throw err;
+              }
+            }
+
+            // ── Helper: remove a label ────────────────────────────────────
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+                core.info(`Removed label "${name}" from PR #${issue_number}.`);
+              } catch (err) {
+                if (err.status === 404 || err.status === 403) return;
+                throw err;
+              }
+            }
+
+            core.info(`Mentor @${reviewer} submitted "${reviewState}" review on PR #${issue_number}.`);
+
+            // ── Determine what to auto-apply based on review state ────────
+            const labelsToAdd = [mentorLabel]; // always add mentor label on any review
+
+            if (reviewState === 'approved') {
+              // Approval → also mark ready for review (if not blocked by needs revision)
+              const hasNeedsRevision = currentLabelsLower.includes('needs revision');
+              if (!hasNeedsRevision) {
+                labelsToAdd.push('ready for review');
+              }
+            }
+            // changes_requested → pr-maintainer-decision.yml already applies 'needs revision'
+            // commented        → just the mentor label
+
+            await addLabels(labelsToAdd);
+
+            // If mentor approved, ensure 'needs revision' is removed (was fixed)
+            if (reviewState === 'approved') {
+              await removeLabel('needs revision');
+            }

@@ -252,7 +252,7 @@ jobs:
                 `Hey @${issue.user.login}! 👋 Thank you for taking the time to open this.\n\n` +
                 `${decision.nextStep}\n\n` +
                 `---\n` +
-                `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['closed']);
@@ -294,7 +294,7 @@ jobs:
                 `⚠️ Work should only begin **after** a maintainer confirms your assignment.\n\n` +
                 `If you were previously assigned and still intend to work on this, please leave a fresh status update.\n\n` +
                 `---\n` +
-                `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['needs maintainer review']);
@@ -355,7 +355,7 @@ jobs:
                 `Hey ${maintainerMention}! 👋 You marked this \`go ahead\`, but no contributor is assigned yet.\n\n` +
                 `Once you assign someone, the start-work guidance will post automatically. 🙋\n\n` +
                 `---\n` +
-                `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               await createOrUpdateComment(marker, body);
               await addLabels(issue_number, ['needs maintainer review']);
               await removeLabel('ready to work');
@@ -385,7 +385,7 @@ jobs:
               `- 🔗 **PR:** use the matching program template and include \`Closes #${issue_number}\`\n\n` +
               `If you can no longer continue, please comment here so maintainers can reassign this issue.\n\n` +
               `---\n` +
-              `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             await addLabels(issue_number, ['ready to work']);
             await removeLabels(['needs maintainer review', 'stale-assignment']);

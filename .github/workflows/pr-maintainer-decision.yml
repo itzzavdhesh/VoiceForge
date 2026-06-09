@@ -175,11 +175,13 @@ jobs:
               const marker = '<!-- voiceforge-pr-needs-revision -->';
               const body =
                 `${marker}\n` +
-                `## Changes Requested By Mentor\n\n` +
-                `Hi @${username}, a maintainer requested changes on this PR.\n\n` +
-                `Please review the feedback, update the same branch, and keep the PR focused on the linked issue scope.\n\n` +
-                `After you push updates, the PR validation and review flow will continue on this same PR.\n\n` +
-                `_VoiceForge automation_`;
+                `## 🔄 Changes Requested\n\n` +
+                `Hey @${username}! 👋 A mentor has reviewed your PR and requested some changes.\n\n` +
+                `> [!WARNING]\n` +
+                `> Please review the feedback above, update this same branch, and keep the PR focused on the linked issue.\n\n` +
+                `Once you push your updates, the review flow will continue automatically on this same PR.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               await createOrUpdateComment(marker, body);
               return;
             }
@@ -190,11 +192,17 @@ jobs:
               const warningMarker = '<!-- voiceforge-pr-invalid-warning -->';
               const warningBody =
                 `${warningMarker}\n` +
-                `## Invalid PR Label Noted\n\n` +
-                `Hi @${username}, a maintainer marked this PR with \`invalid-pr\`.\n\n` +
-                `Before automation closes it, please check the template, linked issue, issue assignment, and title format.\n\n` +
-                `If the validator posts a correction message and the problem remains, a maintainer may close this PR.\n\n` +
-                `_VoiceForge automation_`;
+                `## ⚠️ Invalid PR — Action Required\n\n` +
+                `Hey @${username}! 👋 A maintainer has marked this PR as \`invalid-pr\`.\n\n` +
+                `> [!WARNING]\n` +
+                `> Before this PR is closed, please check and fix the following:\n` +
+                `> - ✅ PR template is complete\n` +
+                `> - ✅ Linked issue exists and has the correct program label\n` +
+                `> - ✅ The linked issue is assigned to you\n` +
+                `> - ✅ PR title follows the correct format\n\n` +
+                `If the issues are not resolved, a maintainer may close this PR.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               await createOrUpdateComment(warningMarker, warningBody);
               return;
             }
@@ -202,12 +210,13 @@ jobs:
             const marker = '<!-- voiceforge-pr-invalid-close -->';
             const body =
               `${marker}\n` +
-              `## PR Closed By Maintainer Decision\n\n` +
-              `Hi @${username}, thank you for taking the time to open this pull request.\n\n` +
-              `A maintainer marked this PR as \`invalid-pr\`, so it is being closed to keep the review queue focused.\n\n` +
-              `Please read the validator comment and open a new PR only after the issue, assignee, and template requirements are correct.\n\n` +
-              `If you believe this was a mistake, please ask a maintainer before reopening.\n\n` +
-              `_VoiceForge automation_`;
+              `## 🚫 PR Closed by Maintainer\n\n` +
+              `Hey @${username}! 👋 Thanks for your contribution.\n\n` +
+              `> [!CAUTION]\n` +
+              `> This PR has been closed because it was marked as \`invalid-pr\` and the issues were not resolved.\n\n` +
+              `Please fix the template, linked issue, assignee, and title requirements — then open a fresh PR. If you believe this was a mistake, reach out to a maintainer before reopening.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             await createOrUpdateComment(marker, body);
             await addLabels(['closed']);

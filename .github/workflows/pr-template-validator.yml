@@ -419,20 +419,19 @@ jobs:
               await assignAuthor();
               const reviewRequest = await requestPullRequestReview(matchedProgram);
               const reviewRequestText = reviewRequest.status === 'No review request sent'
-                ? `No mentor is configured for ${matchedProgram.name} yet, so no mentor ping was sent.\n\n`
-                : `${reviewRequest.mentions}, this ${matchedProgram.name} PR is ready for review.\n\n` +
-                  `Mentor next steps: confirm scope, review behavior and tests, then approve, comment, or request changes.\n\n`;
+                ? `No mentor is configured for ${matchedProgram.name} yet — no mentor ping was sent.\n\n`
+                : `${reviewRequest.mentions}, this PR is ready for your review — please confirm scope, check behavior and tests, then approve or request changes.\n\n`;
               const successCommentBody =
                 `${marker}\n` +
-                `## PR Ready For Mentor Review\n\n` +
-                `Hi @${username}, your PR passed automated validation and moved into the ${matchedProgram.name} review queue.\n\n` +
-                `- Closing issue: ${linkedIssueNumbers.map(number => `#${number}`).join(', ')}\n` +
-                `- Title, template, and assignee checks: passed\n` +
-                `- Change size: ${totalChanges} lines across ${files.length} file(s)\n` +
-                `- Review request: ${reviewRequest.status}\n\n` +
+                `## 🎉 PR Ready for Mentor Review\n\n` +
+                `Hey @${username}! 👋 Your PR passed all checks and is now in the **${matchedProgram.name}** review queue.\n\n` +
+                `> [!NOTE]\n` +
+                `> 🔗 Closing: ${linkedIssueNumbers.map(number => `#${number}`).join(', ')} · 📐 ${totalChanges} lines across ${files.length} file(s) · 📬 ${reviewRequest.status}\n\n` +
                 reviewRequestText +
-                `This does not mean the PR is approved yet. Please wait for mentor feedback before expecting merge. If changes are requested, update the same branch and keep the PR focused on the linked issue.\n\n` +
-                `_VoiceForge automation_`;
+                `> [!IMPORTANT]\n` +
+                `> This is not an approval. Please wait for mentor feedback before expecting a merge. If changes are requested, push them to this same branch and keep the PR focused on the linked issue.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
               if (existing && existing.body.trim() === successCommentBody.trim()) return;
 
@@ -489,15 +488,17 @@ jobs:
 
             const commentBody =
               `${marker}\n` +
-              `## PR Needs Updates\n\n` +
-              `Hi @${username}, thank you for opening this PR.\n\n` +
-              `Please fix these items before mentor review:\n\n` +
-              problems.map(problem => `- ${problem}`).join('\n') +
+              `## 🛠️ PR Needs Updates\n\n` +
+              `Hey @${username}! 👋 A few things need fixing before a mentor can review this PR.\n\n` +
+              `> [!WARNING]\n` +
+              problems.map(problem => `> - ${problem}`).join('\n') +
               `\n\n` +
-              fixRows.map(([area, correction]) => `- ${area}: ${correction}`).join('\n') +
+              `**How to fix:**\n` +
+              fixRows.map(([area, correction]) => `- **${area}:** ${correction}`).join('\n') +
               `\n\n` +
-              `Update the PR title or description, then let the workflow run again. Once these blockers are clear, the correct program mentor(s) will be requested for review.\n\n` +
-              `_VoiceForge automation_`;
+              `Once fixed, the workflow re-runs automatically and pings the right mentor.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             if (existing) {
               try {

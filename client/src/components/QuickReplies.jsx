@@ -20,7 +20,13 @@ export function QuickReplies({ onSelect }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === null) return DEFAULT_QUICK_REPLIES;
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.every((r) => r && typeof r.label === "string" && typeof r.phrase === "string") ? parsed : DEFAULT_QUICK_REPLIES;
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
+      ) {
+        return parsed;
+      }
+      return DEFAULT_QUICK_REPLIES;
     } catch {
       return DEFAULT_QUICK_REPLIES;
     }
