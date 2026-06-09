@@ -42,10 +42,11 @@ export default function VoiceForge() {
 
   const { toasts, showToast } = useToast();
   const handleClearHistory = useCallback(() => {
+  speakCounterRef.current++;
   audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
   audioMapRef.current.clear();
   clearHistory();
-  }, [clearHistory]);
+}, [clearHistory]);
 
   const speak = useCallback((text) => {
     if (!text.trim()) return;
