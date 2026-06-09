@@ -7,6 +7,7 @@ import Settings from "./pages/Settings.jsx";
 import VoiceForge from "./components/VoiceForge";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
+import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
 import ScrollToBottomButton from "./components/ScrollToBottomButton.jsx";
 
 const tabs = [
@@ -39,6 +40,25 @@ function saveActiveTab(tab) {
 export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
+  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  React.useEffect(() => {
+  function handleKeyDown(event) {
+    if (
+      event.key === "?" &&
+      !["INPUT", "TEXTAREA"].includes(event.target.tagName) &&
+      !event.target.isContentEditable &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      if (shortcutsOpen) return;
+      setShortcutsOpen(true);
+    }
+  }
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [shortcutsOpen]);
+    
 
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
@@ -120,6 +140,7 @@ export default function App() {
         )}
       </main>
 
+      <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
       <Footer onNavigate={selectTab} tabs={tabs} />
 
