@@ -44,7 +44,7 @@ export default function App() {
   React.useEffect(() => {
   function handleKeyDown(event) {
     if (event.key === "?" && !["INPUT", "TEXTAREA"].includes(event.target.tagName)) {
-      setShortcutsOpen((prev) => !prev);
+      setShortcutsOpen(true);
     }
   }
   window.addEventListener("keydown", handleKeyDown);

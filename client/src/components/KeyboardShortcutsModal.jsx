@@ -32,14 +32,46 @@ const SHORTCUTS = [
 ];
 
 export default function KeyboardShortcutsModal({ isOpen, onClose }) {
-  React.useEffect(() => {
-    if (!isOpen) return;
-    function handleKeyDown(event) {
-      if (event.key === "Escape") onClose();
+  const modalRef = React.useRef(null);
+
+React.useEffect(() => {
+  if (!isOpen) return;
+
+  const focusableSelectors = [
+    'button', '[href]', 'input', 'select', 'textarea',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(', ');
+
+  function handleKeyDown(event) {
+    if (event.key === "Escape") {
+      onClose();
+      return;
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+    if (event.key === "Tab" && modalRef.current) {
+      const focusable = Array.from(modalRef.current.querySelectorAll(focusableSelectors));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  // Move focus into modal on open
+  modalRef.current?.focus();
+
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -58,7 +90,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md rounded-xl border border-ink/10 bg-white shadow-lg dark:border-border dark:bg-surface">
+      <div ref={modalRef} tabIndex={-1} className="relative w-full max-w-md rounded-xl border border-ink/10 bg-white shadow-lg dark:border-border dark:bg-surface outline-none">
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4 dark:border-border">
@@ -109,11 +141,18 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
         </div>
 
         {/* Footer hint */}
-        <div className="border-t border-ink/10 px-6 py-3 dark:border-border">
-          <p className="text-center text-xs text-ink/40 dark:text-neutral-500">
-            Press <kbd className="rounded border border-ink/15 bg-ink/5 px-1 font-mono text-[10px] dark:border-border dark:bg-white/5">?</kbd> anywhere to open this modal
+        <div className="border-t border-ink/10 px-6 py-3 dark:border-border flex items-center justify-between">
+          <p className="text-xs text-ink/40 dark:text-neutral-500">
+            Press <kbd className="rounded border border-ink/15 bg-ink/5 px-1 font-mono text-[10px] dark:border-border dark:bg-white/5">?</kbd> anywhere to open
           </p>
-        </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-ink/50 hover:text-ink dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors duration-150"
+          >
+            Close
+          </button>
+        </div> 
 
       </div>
     </div>
