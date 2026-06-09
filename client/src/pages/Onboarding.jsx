@@ -31,7 +31,7 @@ export default function Onboarding({ onReady }) {
     return Math.min(parsedStep, parsedMax);
   });
 
-  // Refs for auto-focus on each step
+  // Refs for auto-focus (mutable objects)
   const voiceNameInputRef = useRef(null);
   const step2FirstInputRef = useRef(null);
   const step3FirstInputRef = useRef(null);
@@ -47,16 +47,64 @@ export default function Onboarding({ onReady }) {
     return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
   }, [serverStatus]);
 
-  // Auto-focus on step change
-  useEffect(() => {
-    if (activeStep === 1 && voiceNameInputRef.current) {
-      voiceNameInputRef.current.focus();
-    } else if (activeStep === 2 && step2FirstInputRef.current) {
-      step2FirstInputRef.current.focus();
-    } else if (activeStep === 3 && step3FirstInputRef.current) {
-      step3FirstInputRef.current.focus();
+  // Auto-focus helper function with retry mechanism for async rendering
+  const setFocusWithRetry = React.useCallback((element) => {
+    if (!element) return;
+    
+    const attemptFocus = (attempt = 0) => {
+      if (attempt > 5) return; // Max 5 attempts
+      
+      try {
+        element.focus();
+        if (document.activeElement === element) return; // Focus successful
+      } catch (e) {
+        // Ignore focus errors (e.g., element not focusable)
+      }
+      
+      // Retry with increasing delay
+      setTimeout(() => attemptFocus(attempt + 1), 50 * (attempt + 1));
+    };
+    
+    attemptFocus();
+  }, []);
+
+  // Callback refs for Step 1
+  const setVoiceNameRef = React.useCallback((element) => {
+    voiceNameInputRef.current = element;
+    if (activeStep === 1 && element) {
+      setFocusWithRetry(element);
     }
-  }, [activeStep]);
+  }, [activeStep, setFocusWithRetry]);
+
+  // Callback ref for Step 2
+  const setStep2Ref = React.useCallback((element) => {
+    step2FirstInputRef.current = element;
+    if (activeStep === 2 && element) {
+      setFocusWithRetry(element);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
+  // Callback ref for Step 3
+  const setStep3Ref = React.useCallback((element) => {
+    step3FirstInputRef.current = element;
+    if (activeStep === 3 && element) {
+      setFocusWithRetry(element);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
+  // Backup focus effect on step change
+  useEffect(() => {
+    const focusMap = {
+      1: voiceNameInputRef.current,
+      2: step2FirstInputRef.current,
+      3: step3FirstInputRef.current,
+    };
+    
+    const targetElement = focusMap[activeStep];
+    if (targetElement) {
+      setFocusWithRetry(targetElement);
+    }
+  }, [activeStep, setFocusWithRetry]);
 
   // Dynamic content dictionary for the header banner based on activeStep
   const stepContent = {
@@ -201,7 +249,7 @@ export default function Onboarding({ onReady }) {
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
               <input
                 id="voice-name"
-                ref={voiceNameInputRef}
+                ref={setVoiceNameRef}
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
@@ -249,7 +297,7 @@ export default function Onboarding({ onReady }) {
       {/* STEP 2: WORKSPACE PROPERTIES CONTROLS */}
       {activeStep === 2 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-          <div ref={step2FirstInputRef} tabIndex={-1} className="sr-only">Step 2 start</div>
+          <div ref={setStep2Ref} tabIndex={-1} className="sr-only">Step 2 start</div>
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Voice Workspace Parameters</h3>
           <p className="mt-2 text-sm text-neutral-500">Configure the engine settings for your voice identity.</p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
@@ -273,7 +321,7 @@ export default function Onboarding({ onReady }) {
       {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-          <div ref={step3FirstInputRef} tabIndex={-1} className="sr-only">Step 3 start</div>
+          <div ref={setStep3Ref} tabIndex={-1} className="sr-only">Step 3 start</div>
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
           <p className="mt-2 text-sm text-neutral-500">Your custom voice template setup is complete.</p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
