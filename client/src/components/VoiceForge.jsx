@@ -1,4 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useRef,
+  useState,
+  useEffect,
+} from "react";
 import { Copy, Eraser, Mic2 } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
@@ -14,6 +19,8 @@ const MAX_CHARS = 500;
 export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
   const audioMapRef = useRef(new Map());
   const speakCounterRef = useRef(0);
@@ -167,6 +174,19 @@ const handleDeleteMessage = useCallback((id) => {
 
   const charsLeft = MAX_CHARS - inputText.length;
 
+  
+  const hasAnnouncedRef = useRef(false);
+
+  useEffect(() => {
+    if (charsLeft < 50 && !hasAnnouncedRef.current) {
+      hasAnnouncedRef.current = true;
+      setAnnouncement(`Warning: only ${charsLeft} characters remaining.`);
+    } else if (charsLeft >= 50) {
+      hasAnnouncedRef.current = false;
+      setAnnouncement("");
+    }
+  }, [charsLeft]);
+
   function getCounterColor() {
     if (charsLeft < 50)  return "text-red-500";
     if (charsLeft < 100) return "text-orange-500";
@@ -245,6 +265,9 @@ const handleDeleteMessage = useCallback((id) => {
             >
               {inputText.length} / {MAX_CHARS}
             </span>
+            <div className="sr-only" aria-live="assertive" aria-atomic="true">
+              {announcement}
+            </div>
           </div>
 
           <textarea

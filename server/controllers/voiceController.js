@@ -63,6 +63,20 @@ async function readElevenLabsError(response) {
   }
 }
 
+// Reduces a user-supplied upload filename to a safe value before it is sent
+// onward to ElevenLabs. Removes any directory components, then keeps only
+// alphanumerics, dot, hyphen, and underscore. Everything else, including null
+// bytes and path separators, is replaced with an underscore. Falls back to a
+// default name when the input is missing or sanitizes to an empty string.
+function sanitizeUploadFileName(originalName) {
+  const withoutPath = String(originalName || "").split(/[/\\]/).pop();
+  const cleaned = withoutPath
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/^\.+/, "")
+    .slice(0, 200);
+  return cleaned || "reference.webm";
+}
+
 export async function cloneVoice(request, response, next) {
   try {
     const audioFile = request.file;
@@ -87,7 +101,12 @@ export async function cloneVoice(request, response, next) {
     const formData = new FormData();
     formData.append("name", request.body.name || "VoiceForge Voice");
     formData.append("description", "Voice profile created locally by VoiceForge.");
-    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), audioFile.originalname || "reference.webm");
+    // Sanitize the client-supplied filename before forwarding it to ElevenLabs.
+    // originalname is derived from the Content-Disposition header and is fully
+    // user controlled. Strip directory separators and reduce the name to a safe
+    // character set so it cannot be used for path traversal or header injection.
+    const safeFileName = sanitizeUploadFileName(audioFile.originalname);
+    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), safeFileName);
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
       method: "POST",

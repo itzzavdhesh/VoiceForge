@@ -128,11 +128,13 @@ jobs:
             const prMarker = '<!-- voiceforge-pr-merged-completion -->';
             const prCommentBody =
               `${prMarker}\n` +
-              `## PR Merged Successfully\n\n` +
-              `Hi @${username}, thank you for your contribution to VoiceForge.\n\n` +
-              `This pull request has been merged and marked complete. Linked issue(s): ${linkedIssueText}.\n\n` +
-              `Maintainers may still handle final cleanup, release notes, or follow-up tracking after merge.\n\n` +
-              `_VoiceForge automation_`;
+              `## 🎊 PR Merged Successfully\n\n` +
+              `Hey @${username}! 👋 Congratulations and thank you for your contribution to VoiceForge!\n\n` +
+              `> [!NOTE]\n` +
+              `> 🔗 Linked issue(s): ${linkedIssueText} · ✅ Marked as merged and complete\n\n` +
+              `Maintainers may still handle final cleanup, release notes, or follow-up tracking after the merge.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             await createOrUpdateComment(prNumber, prMarker, prCommentBody);
 
@@ -141,10 +143,12 @@ jobs:
               await addLabels(linkedIssueNumber, ['completed', 'issue-completed', 'closed-by-pr']);
               const issueCommentBody =
                 `${issueMarker}\n` +
-                `## Issue Completed\n\n` +
-                `PR #${prNumber} has been merged, so this issue is marked complete.\n\n` +
-                `Thank you @${username} for working on this contribution.\n\n` +
-                `_VoiceForge automation_`;
+                `## ✅ Issue Completed\n\n` +
+                `> [!NOTE]\n` +
+                `> PR #${prNumber} has been merged — this issue is now marked as complete! 🎉\n\n` +
+                `Great work @${username}! Thank you for your contribution to VoiceForge.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
               await createOrUpdateComment(linkedIssueNumber, issueMarker, issueCommentBody);
             }
