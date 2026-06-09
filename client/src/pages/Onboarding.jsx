@@ -297,7 +297,15 @@ export default function Onboarding({ onReady }) {
       {/* STEP 2: WORKSPACE PROPERTIES CONTROLS */}
       {activeStep === 2 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-          <div ref={setStep2Ref} tabIndex={-1} className="sr-only">Step 2 start</div>
+          <button
+            ref={setStep2Ref}
+            onClick={() => {}}
+            className="sr-only focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-coral focus:ring-offset-2"
+            aria-label="Step 2 start focus target"
+            tabIndex={0}
+          >
+            Step 2 ready for configuration - Press Tab to navigate through options
+          </button>
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Voice Workspace Parameters</h3>
           <p className="mt-2 text-sm text-neutral-500">Configure the engine settings for your voice identity.</p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
@@ -321,7 +329,15 @@ export default function Onboarding({ onReady }) {
       {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-          <div ref={setStep3Ref} tabIndex={-1} className="sr-only">Step 3 start</div>
+          <button
+            ref={setStep3Ref}
+            onClick={() => {}}
+            className="sr-only focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-coral focus:ring-offset-2"
+            aria-label="Step 3 start focus target"
+            tabIndex={0}
+          >
+            Step 3 ready for activation - Press Tab to navigate through options
+          </button>
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
           <p className="mt-2 text-sm text-neutral-500">Your custom voice template setup is complete.</p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
