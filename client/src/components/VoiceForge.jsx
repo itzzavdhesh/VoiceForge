@@ -153,7 +153,11 @@ export default function VoiceForge() {
         onCopy={handleCopy}
       />
 
-      <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
+      <main
+        data-tour="compose-workspace"
+        className="flex flex-1 flex-col overflow-hidden"
+        aria-label="Speech composer"
+      >
         <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-5 py-3.5 dark:border-border dark:bg-black">
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
@@ -208,6 +212,7 @@ export default function VoiceForge() {
           </div>
 
           <textarea
+            data-tour="compose-message"
             id="vf-compose"
             ref={textareaRef}
             value={inputText}
@@ -258,6 +263,7 @@ export default function VoiceForge() {
             </button>
 
             <button
+              data-tour="compose-speak"
               onClick={handleSpeak}
               disabled={!inputText.trim() || isSpeaking}
               aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}

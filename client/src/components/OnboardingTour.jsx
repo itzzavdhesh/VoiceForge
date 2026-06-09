@@ -243,8 +243,8 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
           next: "Next",
           skip: "Skip",
         }}
-        callback={handleCallback}
-        disableOverlayClose        
+        onEvent={handleCallback}
+        overlayClickAction={false}
         run={runTour}
         scrollOffset={96}
         scrollToFirstStep

@@ -117,7 +117,10 @@ export default React.forwardRef(function VideoPreview({
   }, [ref, isSpeaking, theme]);
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section
+      data-tour="video-preview"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold">Lip-synced output</h2>

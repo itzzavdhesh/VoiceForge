@@ -4,6 +4,7 @@ import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon } from
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
+import OnboardingTour from "./components/OnboardingTour.jsx";
 import VoiceForge from "./components/VoiceForge";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
@@ -67,9 +68,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
-      
-      {/* Global Header */}
+    <main className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+      <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center gap-4">
