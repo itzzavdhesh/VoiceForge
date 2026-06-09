@@ -120,7 +120,7 @@ export default function App() {
         )}
       </main>
 
-      <ScrollToBottomButton />
+      <ScrollToBottomButton activeTab={activeTab} />
       <Footer onNavigate={selectTab} tabs={tabs} />
       
     </div>

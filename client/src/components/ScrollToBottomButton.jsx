@@ -2,7 +2,7 @@
 import React from "react";
 import { ChevronDown } from "lucide-react";
 
-export default function ScrollToBottomButton() {
+export default function ScrollToBottomButton({ activeTab }) {
   const [visible, setVisible] = React.useState(true);
 
   React.useEffect(() => {
@@ -11,10 +11,16 @@ export default function ScrollToBottomButton() {
       const total = document.body.scrollHeight;
       setVisible(scrolled < total - 40);
     }
+
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [activeTab]);
 
   if (!visible) return null;
 
