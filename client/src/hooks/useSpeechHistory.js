@@ -71,6 +71,7 @@ export function useSpeechHistory() {
     }
   }, [favorites]);
 
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -84,32 +85,25 @@ export function useSpeechHistory() {
  * - enforces MAX_HISTORY limit
  *
  * @param {string} text - Message text to store
+ * @param {string} [id] - Optional stable id to assign to this entry
  */
-const addMessage = useCallback((text) => {
+  const addMessage = useCallback((text, id) => {
   const trimmed = text.trim();
-
   if (!trimmed) return;
 
+  const entryId = id || crypto.randomUUID();
+  const existing = history.find((m) => m.text === trimmed);
+  const resolvedId = existing ? existing.id : entryId;
+
   setHistory((prev) => {
-    // Check existing message
-    const existing = prev.find((m) => m.text === trimmed);
-
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      timestamp: Date.now(),
-    };
-
-    // Move duplicate to top instead of recreating
-    const updated = [
-      entry,
-      ...prev.filter((m) => m.id !== entry.id),
-    ];
-
+    const found = prev.find((m) => m.text === trimmed);
+    const entry = found || { id: entryId, text: trimmed, timestamp: Date.now() };
+    const updated = [entry, ...prev.filter((m) => m.id !== entry.id)];
     return updated.slice(0, MAX_HISTORY);
   });
-}, []);
+
+  return resolvedId;
+}, [history]);
 
   /**
    * Removes a message by id and also removes it from favorites.

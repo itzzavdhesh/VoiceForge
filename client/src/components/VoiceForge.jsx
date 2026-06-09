@@ -11,6 +11,8 @@ import { QuickReplies } from "./QuickReplies";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
+import useTTS from "../hooks/useTTS";
+import { hasApiKey } from "../utils/apiKeyStorage";
 
 const MAX_CHARS = 500;
 
@@ -20,7 +22,15 @@ export default function VoiceForge() {
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
-
+  const audioMapRef = useRef(new Map());
+  const speakCounterRef = useRef(0);
+  const { speak: ttsSpeak } = useTTS();
+  useEffect(() => {
+   return () => {
+     audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+    audioMapRef.current.clear();
+    };
+   }, []);
   const {
     history,
     favorites,
@@ -31,6 +41,12 @@ export default function VoiceForge() {
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
+  const handleClearHistory = useCallback(() => {
+  speakCounterRef.current++;
+  audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+  audioMapRef.current.clear();
+  clearHistory();
+}, [clearHistory]);
 
   const speak = useCallback((text) => {
     if (!text.trim()) return;
@@ -52,22 +68,68 @@ export default function VoiceForge() {
     window.speechSynthesis.speak(utterance);
   }, [showToast]);
 
-  const handleSpeak = useCallback(() => {
-    const text = inputText.trim();
-    if (!text) {
-      showToast("Please type a message first", "error");
-      textareaRef.current?.focus();
-      return;
+  const handleSpeak = useCallback(async () => {
+  const text = inputText.trim();
+  if (!text) {
+    showToast("Please type a message first", "error");
+    textareaRef.current?.focus();
+    return;
+  }
+  const tentativeId = crypto.randomUUID();
+  speak(text);
+  const resolvedId = addMessage(text, tentativeId);
+  showToast("Saved to history", "success");
+
+  try {
+    const activeVoiceId = localStorage.getItem("voiceforge:activeVoiceId");
+    if (hasApiKey() && activeVoiceId) {
+      const requestId = ++speakCounterRef.current;
+      const { blobUrl } = await ttsSpeak({ text, voiceId: activeVoiceId });
+      if (blobUrl && requestId === speakCounterRef.current) {
+        const existing = audioMapRef.current.get(resolvedId);
+        if (existing) URL.revokeObjectURL(existing);
+        audioMapRef.current.set(resolvedId, blobUrl);
+      } else if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
     }
-    speak(text);
-    addMessage(text);
-    showToast("Saved to history", "success");
-  }, [inputText, speak, addMessage, showToast]);
+  } catch {
+    // ElevenLabs unavailable — download button simply won't appear.
+  }
+  }, [inputText, speak, addMessage, showToast, ttsSpeak]);
 
   const handleReplay = useCallback((text) => {
     speak(text);
     showToast("Replaying...", "info");
   }, [speak, showToast]);
+
+    const getAudioUrl = useCallback((id) => {
+  return audioMapRef.current.get(id);
+}, []);
+
+const handleDownload = useCallback((id, text) => {
+  const blobUrl = audioMapRef.current.get(id);
+  if (!blobUrl) return;
+  const safeName = text.trim().slice(0, 40).replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "audio";
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}-${String(now.getMinutes()).padStart(2,"0")}-${String(now.getSeconds()).padStart(2,"0")}`;
+  anchor.download = `${safeName}_${timestamp}.mp3`;
+  anchor.style.cssText = "position:absolute;opacity:0;pointer-events:none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}, []);
+
+const handleDeleteMessage = useCallback((id) => {
+  const blobUrl = audioMapRef.current.get(id);
+  if (blobUrl) {
+    URL.revokeObjectURL(blobUrl);
+    audioMapRef.current.delete(id);
+  }
+  removeMessage(id);
+}, [removeMessage]);
 
   const handleReuse = useCallback((text) => {
     setInputText(text);
@@ -148,9 +210,11 @@ export default function VoiceForge() {
         onReuse={handleReuse}
         onReplay={handleReplay}
         onToggleFav={toggleFavorite}
-        onDelete={removeMessage}
-        onClearHistory={clearHistory}
+        onDelete={handleDeleteMessage}
+        onClearHistory={handleClearHistory}
         onCopy={handleCopy}
+        getAudioUrl={getAudioUrl}
+        onDownload={handleDownload}
       />
 
       <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">

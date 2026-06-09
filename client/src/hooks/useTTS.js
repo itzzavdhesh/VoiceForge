@@ -6,10 +6,12 @@ export default function useTTS() {
   const [status, setStatus] = React.useState("idle");
   const [error, setError] = React.useState("");
   const [audioUrl, setAudioUrl] = React.useState("");
+  const prevBlobRef = React.useRef("");
+  const mountedRef = React.useRef(true);
 
   async function speak({ text, voiceId }) {
     setError("");
-    setStatus("speaking");
+    setStatus("speaking"); 
 
     try {
       const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
@@ -37,15 +39,49 @@ export default function useTTS() {
 
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
-      setAudioUrl(nextAudioUrl);
+
+        if (!nextAudioUrl) {
+          throw new Error("Audio URL missing from server response.");
+        }
+
+        let blobUrl = "";
+        try {
+        const audioResponse = await fetch(nextAudioUrl);
+        if (audioResponse.ok) {
+          const blob = await audioResponse.blob();
+          const created = URL.createObjectURL(blob);
+          if (!mountedRef.current) {
+            URL.revokeObjectURL(created);   // fix: revoke before bailing
+            return { audioUrl: "", blobUrl: "" };
+          }
+          blobUrl = created;
+        }
+      } catch {
+        // Blob capture failed — download button won't appear.
+      }
+
+      if (!mountedRef.current) return { audioUrl: "", blobUrl: "" };
+
+
+      if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+      prevBlobRef.current = blobUrl;
+      setAudioUrl(blobUrl || nextAudioUrl);
       setStatus("ready");
-      return { audioUrl: nextAudioUrl };
+      return { audioUrl: blobUrl || nextAudioUrl, blobUrl };
     } catch (ttsError) {
       setError(ttsError?.message || String(ttsError));
       setStatus("error");
       throw ttsError;
     }
   }
-
+    React.useEffect(() => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        if (prevBlobRef.current) {
+          URL.revokeObjectURL(prevBlobRef.current);
+        }
+      };
+    }, []);
   return { speak, status, error, audioUrl };
 }

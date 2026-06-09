@@ -11,6 +11,8 @@ export function SpeechHistory({
   onDelete,
   onClearHistory,
   onCopy,
+  getAudioUrl,
+  onDownload,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
@@ -149,6 +151,8 @@ export function SpeechHistory({
                       onToggleFav={onToggleFav}
                       onDelete={onDelete}
                       onCopy={onCopy}
+                      audioUrl={getAudioUrl ? getAudioUrl(message.id) : undefined}
+                      onDownload={onDownload}
                     />
                   </li>
                 ))}
