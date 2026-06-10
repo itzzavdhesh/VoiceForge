@@ -203,31 +203,53 @@ jobs:
               const team_reviewers = targets.teamReviewers
                 .filter(team => !existingTeams.has(team.toLowerCase()));
 
-              if (reviewers.length === 0 && team_reviewers.length === 0) {
-                return {
-                  mentions: targets.mentions.join(' '),
-                  status: 'Already requested or no eligible reviewer found'
-                };
+              const succeeded = [];
+              const failed = [];
+              
+              for (const reviewer of reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    reviewers: [reviewer]
+                  });
+                  succeeded.push(reviewer);
+                } catch (error) {
+                  core.warning(`Could not request PR review from @${reviewer}: ${error.message}`);
+                  failed.push(reviewer);
+                }
               }
 
-              try {
-                const reviewRequestPayload = {
-                  owner,
-                  repo,
-                  pull_number: issue_number
-                };
-                if (reviewers.length > 0) reviewRequestPayload.reviewers = reviewers;
-                if (team_reviewers.length > 0) reviewRequestPayload.team_reviewers = team_reviewers;
-                await github.rest.pulls.requestReviewers(reviewRequestPayload);
+              for (const team of team_reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    team_reviewers: [team]
+                  });
+                  succeeded.push(team);
+                } catch (error) {
+                  core.warning(`Could not request PR review from team @${team}: ${error.message}`);
+                  failed.push(team);
+                }
+              }
+
+              if (succeeded.length > 0) {
                 return {
                   mentions: targets.mentions.join(' '),
                   status: 'Review requested'
                 };
-              } catch (error) {
-                core.warning(`Could not request PR review from ${targets.mentions.join(' ')}: ${error.message}`);
+              } else if (failed.length > 0) {
                 return {
                   mentions: targets.mentions.join(' '),
                   status: 'Mentioned in review queue comment'
+                };
+              } else {
+                return {
+                  mentions: targets.mentions.join(' '),
+                  status: 'Already requested or no eligible reviewer found'
                 };
               }
             }
