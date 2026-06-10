@@ -42,24 +42,48 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const headerRef = React.useRef(null);
+
+  // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
-  function handleKeyDown(event) {
-    if (
-      event.key === "?" &&
-      !["INPUT", "TEXTAREA"].includes(event.target.tagName) &&
-      !event.target.isContentEditable &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
-    ) {
-      if (shortcutsOpen) return;
-      setShortcutsOpen(true);
+    function handleKeyDown(event) {
+      if (
+        event.key === "?" &&
+        !["INPUT", "TEXTAREA"].includes(event.target.tagName) &&
+        !event.target.isContentEditable &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        if (shortcutsOpen) return;
+        setShortcutsOpen(true);
+      }
     }
-  }
-  window.addEventListener("keydown", handleKeyDown);
-  return () => window.removeEventListener("keydown", handleKeyDown);
-}, [shortcutsOpen]);
-    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [shortcutsOpen]);
+
+  // Close mobile nav when clicking outside the header
+  React.useEffect(() => {
+    if (!mobileNavOpen) return;
+    function handleClickOutside(event) {
+      if (headerRef.current && !headerRef.current.contains(event.target)) {
+        setMobileNavOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [mobileNavOpen]);
+
+  // Auto-close mobile nav when viewport reaches lg breakpoint (1024px)
+  React.useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    function handleBreakpoint(e) {
+      if (e.matches) setMobileNavOpen(false);
+    }
+    mql.addEventListener("change", handleBreakpoint);
+    return () => mql.removeEventListener("change", handleBreakpoint);
+  }, []);
 
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
@@ -72,7 +96,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       
       {/* Global Header */}
-      <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
+      <header ref={headerRef} className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo + Title */}
           <div className="flex items-center gap-3 min-w-0">

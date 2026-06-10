@@ -322,7 +322,7 @@ React.useEffect(() => {
 <option value="ja">Japanese</option>
   </select>
 </section>
-      <div className="grid gap-5 md:grid-cols-1 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
           <div className="mb-4 flex items-center gap-2">

@@ -18,6 +18,7 @@ export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const drawerRef = useRef(null);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -117,6 +118,13 @@ export default function VoiceForge() {
   
   const hasAnnouncedRef = useRef(false);
 
+  // Move focus into the history drawer when it opens (a11y)
+  useEffect(() => {
+    if (historyOpen && drawerRef.current) {
+      drawerRef.current.focus();
+    }
+  }, [historyOpen]);
+
   useEffect(() => {
     if (charsLeft < 50 && !hasAnnouncedRef.current) {
       hasAnnouncedRef.current = true;
@@ -154,8 +162,13 @@ export default function VoiceForge() {
 
       {/* Sidebar: always visible on lg+, drawer on mobile */}
       <div
+        ref={drawerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal={historyOpen}
+        aria-label="Speech history"
         className={[
-          "absolute inset-y-0 left-0 z-30 flex flex-col transition-transform duration-200",
+          "absolute inset-y-0 left-0 z-30 flex flex-col transition-transform duration-200 focus:outline-none",
           "lg:static lg:z-auto lg:translate-x-0 lg:flex",
           historyOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
@@ -185,7 +198,7 @@ export default function VoiceForge() {
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
-          <span className="hidden text-sm text-neutral-400 dark:text-neutral-500 sm:inline">
+          <span className="text-xs text-neutral-400 dark:text-neutral-500 sm:text-sm">
             Speech Composer
           </span>
           {isSpeaking && (

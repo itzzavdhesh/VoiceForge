@@ -113,7 +113,7 @@ export default function Onboarding({ onReady }) {
           </div>
           
           {/* STEP PROGRESS INDICATORS COMPONENT GRID */}
-          <div className="grid w-full grid-cols-3 gap-2 lg:max-w-sm" aria-label="Onboarding progress indicators">
+          <div className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm" aria-label="Onboarding progress indicators">
             {stepContent[activeStep].labels.map((label, index) => {
               let isBarFilled = false;
               if (activeStep === 1) {
