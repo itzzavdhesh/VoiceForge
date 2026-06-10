@@ -2,11 +2,14 @@
 import React from "react";
 import { Mic, Square, Upload, CircleAlert } from "lucide-react";
 
+const MIN_DURATION = 10;
+
 export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
   const [recorderError, setRecorderError] = React.useState("");
+  const durationRef = React.useRef(0);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -19,6 +22,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   async function startRecording() {
     setRecorderError("");
     setDuration(0);
+    durationRef.current = 0;
     setAudioUrl((previous) => {
       if (previous) URL.revokeObjectURL(previous);
       return "";
@@ -55,14 +59,19 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           if (previous) URL.revokeObjectURL(previous);
           return url;
         });
-        onRecordingReady(blob);
+        const finalDuration = durationRef.current;
+        onRecordingReady(blob, { duration: finalDuration, isValid: finalDuration >= MIN_DURATION });
         streamRef.current?.getTracks().forEach((track) => track.stop());
       };
 
       recorder.start();
       setIsRecording(true);
       timerRef.current = window.setInterval(() => {
-        setDuration((prev) => prev + 1);
+        setDuration((prev) => {
+          const next = prev + 1;
+          durationRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch (err) {
       window.clearInterval(timerRef.current);
@@ -84,6 +93,12 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }
 
   function stopRecording() {
+    if (durationRef.current < MIN_DURATION) {
+      const confirmStop = window.confirm(
+        `Your recording is only ${durationRef.current} seconds. A minimum of ${MIN_DURATION} seconds is recommended for high-quality voice cloning. Stop recording anyway?`
+      );
+      if (!confirmStop) return;
+    }
     recorderRef.current?.stop();
   }
 
@@ -181,6 +196,32 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
         </span>
       </div>
 
+      {/* Progress Indicator */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between text-xs font-semibold text-ink/60 dark:text-muted mb-1.5">
+          <span>Recording Progress</span>
+          <span>{duration}s / {MIN_DURATION}s</span>
+        </div>
+        <div className="w-full bg-ink/10 dark:bg-neutral-800 h-2 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 ${
+              duration >= MIN_DURATION ? "bg-moss dark:bg-glow" : "bg-coral"
+            }`}
+            style={{ width: `${Math.min((duration / MIN_DURATION) * 100, 100)}%` }}
+          />
+        </div>
+        {duration < MIN_DURATION && isRecording && (
+          <p className="mt-1.5 text-xs text-coral font-medium">
+            Keep recording! {MIN_DURATION - duration} more second{MIN_DURATION - duration !== 1 ? 's' : ''} needed for voice cloning.
+          </p>
+        )}
+        {duration >= MIN_DURATION && isRecording && (
+          <p className="mt-1.5 text-xs text-moss dark:text-glow font-medium">
+            Minimum duration met! You can stop recording or continue for a higher quality clone.
+          </p>
+        )}
+      </div>
+
       <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center">
         <button
           type="button"
@@ -222,6 +263,13 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           </audio>
         )}
       </div>
+
+      {audioUrl && duration < MIN_DURATION && (
+        <div className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2">
+          <CircleAlert size={18} aria-hidden="true" className="text-coral" />
+          <span>Warning: Your recording is only {duration}s. A minimum of {MIN_DURATION}s is required for voice cloning. Please record a longer reference.</span>
+        </div>
+      )}
 
       {recorderError && (
         <div className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2">
