@@ -48,8 +48,8 @@ export function SpeechHistory({
     <aside
       className={[
         "flex flex-shrink-0 flex-col border-r border-neutral-200 bg-neutral-50",
-        "transition-all duration-200 dark:border-border dark:bg-black",
-        collapsed ? "w-12" : "w-80",
+        "h-full transition-all duration-200 dark:border-border dark:bg-black",
+        collapsed ? "w-12" : "w-[min(80vw,320px)]",
       ].join(" ")}
       aria-label="Speech history"
     >

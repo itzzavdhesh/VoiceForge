@@ -223,7 +223,7 @@ React.useEffect(() => {
             <p className="text-sm text-ink/65 mb-4">
               Calibrate the animated fallback mouth position and size overlay to align with your camera.
             </p>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
@@ -322,7 +322,7 @@ React.useEffect(() => {
 <option value="ja">Japanese</option>
   </select>
 </section>
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
+      <div className="grid gap-5 md:grid-cols-1 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
           <div className="mb-4 flex items-center gap-2">

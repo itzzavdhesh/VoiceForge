@@ -39,7 +39,6 @@
 }
 
 body {
-  min-width: 320px;
   min-height: 100vh;
   margin: 0;
   /* Smooth background transition when toggling theme */

@@ -167,7 +167,7 @@ export function QuickReplies({ onSelect }) {
               onChange={(e) => setNewPhrase(e.target.value)}
               placeholder="New reply..."
               autoFocus
-              className="bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500 w-28"
+              className="bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500 w-20 sm:w-28"
             />
             <button
               type="submit"
