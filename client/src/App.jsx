@@ -45,8 +45,6 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
-  const headerRef = React.useRef(null);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -67,40 +65,19 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcutsOpen]);
 
-  // Close mobile nav when clicking outside the header
-  React.useEffect(() => {
-    if (!mobileNavOpen) return;
-    function handleClickOutside(event) {
-      if (headerRef.current && !headerRef.current.contains(event.target)) {
-        setMobileNavOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [mobileNavOpen]);
 
-  // Auto-close mobile nav when viewport reaches lg breakpoint (1024px)
-  React.useEffect(() => {
-    const mql = window.matchMedia("(min-width: 1024px)");
-    function handleBreakpoint(e) {
-      if (e.matches) setMobileNavOpen(false);
-    }
-    mql.addEventListener("change", handleBreakpoint);
-    return () => mql.removeEventListener("change", handleBreakpoint);
-  }, []);
 
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
     saveActiveTab(tab);
     setActiveTab(tab);
-    setMobileNavOpen(false);
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       
       {/* Global Header */}
-      <header ref={headerRef} className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
+      <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo + Title */}
           <div className="flex items-center gap-3 min-w-0">
@@ -118,6 +95,17 @@ export default function App() {
               </h1>
             </div>
           </div>
+
+          {/* Mobile: theme toggle only */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={theme === "dark"}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink transition hover:border-moss dark:border-border dark:bg-black dark:text-neutral-200 lg:hidden"
+          >
+            {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+          </button>
 
           {/* Desktop nav + theme toggle */}
           <div className="hidden items-center gap-2 lg:flex">
@@ -154,58 +142,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Mobile: theme toggle + hamburger */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-pressed={theme === "dark"}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink transition hover:border-moss dark:border-border dark:bg-black dark:text-neutral-200"
-            >
-              {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen((o) => !o)}
-              aria-expanded={mobileNavOpen}
-              aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink transition hover:border-moss dark:border-border dark:bg-black dark:text-neutral-200"
-            >
-              {mobileNavOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
-            </button>
-          </div>
         </div>
 
-        {/* Mobile dropdown nav */}
-        {mobileNavOpen && (
-          <nav
-            className="border-t border-ink/10 bg-white px-4 pb-4 pt-2 dark:border-border dark:bg-surface lg:hidden"
-            aria-label="VoiceForge pages (mobile)"
-          >
-            <div className="flex flex-col gap-2">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const selected = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => selectTab(tab.id)}
-                    className={`inline-flex w-full items-center gap-3 rounded-md border px-4 py-3 text-sm font-semibold transition ${
-                      selected
-                        ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
-                        : "border-ink/15 bg-white text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200"
-                    }`}
-                  >
-                    <Icon aria-hidden="true" size={18} />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        )}
       </header>
 
       {/* Main Content Area */}
@@ -222,6 +160,36 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-ink/10 bg-white pb-safe lg:hidden dark:border-border dark:bg-surface"
+        aria-label="VoiceForge mobile navigation"
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => selectTab(tab.id)}
+              aria-current={selected ? "page" : undefined}
+              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors ${
+                selected
+                  ? "text-moss dark:text-glow"
+                  : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
+              }`}
+            >
+              <Icon size={22} aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
+      <div className="h-16 lg:hidden" aria-hidden="true" />
 
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
