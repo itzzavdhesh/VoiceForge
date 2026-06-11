@@ -2,14 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Plus, X, Check } from "lucide-react";
 import { useToast, ToastContainer } from "./useToast.jsx";
 
+const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
+
 const DEFAULT_QUICK_REPLIES = [
-  { label: "Hello", phrase: "Hello" },
-  { label: "Thank you", phrase: "Thank you" },
-  { label: "Please wait", phrase: "Please wait" },
-  { label: "I need help", phrase: "I need help" },
-  { label: "Can you repeat that?", phrase: "Can you repeat that?" },
-  { label: "Yes, I understand", phrase: "Yes, I understand" },
-  { label: "No, thank you", phrase: "No, thank you" },
+  { label: "Hello", phrase: "Hello", category: "Social" },
+  { label: "Thank you", phrase: "Thank you", category: "Social" },
+  { label: "Please wait", phrase: "Please wait", category: "Urgent" },
+  { label: "I need help", phrase: "I need help", category: "Urgent" },
+  { label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
+  { label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
+  { label: "No, thank you", phrase: "No, thank you", category: "Needs" },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
@@ -24,7 +26,10 @@ export function QuickReplies({ onSelect }) {
         Array.isArray(parsed) &&
         parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
       ) {
-        return parsed;
+        return parsed.map((item) => ({
+          ...item,
+          category: item.category && CATEGORIES.includes(item.category) ? item.category : "General",
+        }));
       }
       return DEFAULT_QUICK_REPLIES;
     } catch {
@@ -35,6 +40,8 @@ export function QuickReplies({ onSelect }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newPhrase, setNewPhrase] = useState("");
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
+  const [newCategory, setNewCategory] = useState("General");
 
   const { toasts, showToast } = useToast();
 
@@ -50,6 +57,11 @@ export function QuickReplies({ onSelect }) {
     e.preventDefault();
     const cleanPhrase = newPhrase.trim();
 
+    if (cleanPhrase.length > 120) {
+      showToast("Phrase is too long (max 120 characters)", "error");
+      return;
+    }
+
     if (!cleanPhrase) {
       showToast("Phrase cannot be empty", "error");
       return;
@@ -64,9 +76,10 @@ export function QuickReplies({ onSelect }) {
       return;
     }
 
-    const newReply = { label: cleanPhrase, phrase: cleanPhrase };
+    const newReply = { label: cleanPhrase, phrase: cleanPhrase, category: newCategory };
     setReplies((prev) => [...prev, newReply]);
     setNewPhrase("");
+    setNewCategory("General");
     setIsAdding(false);
     showToast("Quick reply added", "success");
   };
@@ -75,6 +88,11 @@ export function QuickReplies({ onSelect }) {
     setReplies((prev) => prev.filter((r) => r.phrase !== phraseToDelete));
     showToast("Quick reply deleted", "success");
   };
+
+  const filteredReplies = replies.filter((reply) => {
+    if (selectedCategoryTab === "All") return true;
+    return reply.category === selectedCategoryTab;
+  });
 
   return (
     <section
@@ -113,8 +131,32 @@ export function QuickReplies({ onSelect }) {
         </div>
       </div>
 
+      {/* Category Tabs */}
+      <div
+        className="mb-3 flex overflow-x-auto gap-1.5 pb-1 no-scrollbar"
+        role="tablist"
+        aria-label="Quick replies categories"
+      >
+        {["All", ...CATEGORIES].map((cat) => (
+          <button
+            key={cat}
+            role="tab"
+            aria-selected={selectedCategoryTab === cat}
+            onClick={() => setSelectedCategoryTab(cat)}
+            className={[
+              "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150 shrink-0",
+              selectedCategoryTab === cat
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-surface dark:hover:text-neutral-300",
+            ].join(" ")}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
-        {replies.map(({ label, phrase }) => {
+        {filteredReplies.map(({ label, phrase }) => {
           if (isEditing) {
             return (
               <div
@@ -165,10 +207,23 @@ export function QuickReplies({ onSelect }) {
               type="text"
               value={newPhrase}
               onChange={(e) => setNewPhrase(e.target.value)}
+              maxLength={120}
               placeholder="New reply..."
               autoFocus
-              className="bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500 w-28"
+              className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />
+            <select
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              aria-label="Category"
+              className="bg-transparent text-xs text-neutral-500 dark:text-neutral-400 focus:outline-none border-l border-neutral-200 dark:border-neutral-700 pl-1.5 mr-1 cursor-pointer"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat} className="dark:bg-neutral-900 dark:text-neutral-100">
+                  {cat}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               aria-label="Save quick reply"
@@ -190,11 +245,11 @@ export function QuickReplies({ onSelect }) {
           </form>
         )}
 
-        {replies.length === 0 && !isAdding && (
+        {filteredReplies.length === 0 && !isAdding && (
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
-            {isEditing 
-              ? 'No quick replies. Click "Add" to create one.'
-              : 'No quick replies. Click "Customize" to add.'}
+            {isEditing
+              ? 'No quick replies in this category. Click "Add" to create one.'
+              : 'No quick replies in this category.'}
           </p>
         )}
       </div>

@@ -58,6 +58,12 @@ export default function useVoiceClone() {
         headers: { "X-ElevenLabs-Api-Key": apiKey },
         body: formData
       });
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Could not connect to the VoiceForge server. Please ensure your local backend is running on port 3001.");
+      }
+
       const payload = await response.json();
 
       if (!response.ok) {

@@ -1,0 +1,334 @@
+name: PR Review Handler
+
+on:
+  workflow_run:
+    workflows:
+      - "Mentor Auto Label on Review"
+      - "Mentor Merge Eligibility Check"
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+concurrency:
+  group: pr-review-handler-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  handle-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process PR reviews
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const runId = context.payload.workflow_run.id;
+            
+            const headSha = context.payload.workflow_run.head_sha;
+
+            // Step 1: payload pull_requests array (works for same-repo PRs)
+            let pr = context.payload.workflow_run.pull_requests?.[0];
+
+            // Step 2: re-fetch workflow run in case payload was trimmed
+            if (!pr) {
+              try {
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  owner, repo, run_id: runId
+                });
+                pr = run.pull_requests?.[0];
+              } catch (err) {
+                core.warning(`Could not fetch workflow run details: ${err.message}`);
+              }
+            }
+
+            // Step 3: listPullRequestsAssociatedWithCommit (works for non-fork commits)
+            if (!pr) {
+              try {
+                const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner, repo, commit_sha: headSha
+                });
+                pr = prs.find(p => p.state === 'open') || prs?.[0];
+                if (pr) core.info(`Found PR #${pr.number} via commit association.`);
+              } catch (err) {
+                core.warning(`listPullRequestsAssociatedWithCommit failed: ${err.message}`);
+              }
+            }
+
+            // Step 4: scan ALL open PRs and match by head SHA
+            // This is the critical fallback for fork PRs — fork commits are not
+            // indexed by listPullRequestsAssociatedWithCommit, but pulls.list
+            // returns full head info including SHA for every open PR.
+            if (!pr) {
+              try {
+                core.info(`Scanning open PRs for head SHA ${headSha}...`);
+                const openPrs = await github.paginate(github.rest.pulls.list, {
+                  owner, repo, state: 'open', per_page: 100
+                });
+                pr = openPrs.find(p => p.head.sha === headSha);
+                if (pr) {
+                  core.info(`Found PR #${pr.number} by scanning open PRs for SHA ${headSha}.`);
+                } else {
+                  core.warning(`No open PR found with head SHA ${headSha}. Skipping.`);
+                }
+              } catch (err) {
+                core.warning(`Could not scan open PRs: ${err.message}`);
+              }
+            }
+
+            if (!pr) {
+              core.info('Could not determine pull request associated with this workflow run. Skipping.');
+              return;
+            }
+            
+            const issue_number = pr.number;
+            const prHeadSha = pr.head?.sha || headSha;
+            
+            core.info(`Processing review state for PR #${issue_number} (SHA: ${headSha})`);
+            
+            // ─────────────────────────────────────────────────────────────
+            // CONFIGURATION: keep in sync with other workflows
+            // ─────────────────────────────────────────────────────────────
+            const MENTORS = [
+              'sabeenaviklar',
+              'Anushreebasics',
+              'itsdakshjain',
+              'snehkris',
+              'Mrigakshi-Rathore',
+              'vedhapprakashni',
+              'joyprakashk',
+              'rushi-k12'
+            ];
+            const mentorLabelMap = {
+              'sabeenaviklar':  'mentor:sabeenaviklar',
+              'Anushreebasics': 'mentor:Anushreebasics',
+              'itsdakshjain':   'mentor:itsdakshjain',
+              'snehkris':       'mentor:snehkris',
+              'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
+              'vedhapprakashni':  'mentor:vedhapprakashni',
+              'joyprakashk':    'mentor:joyprakashk',
+              'rushi-k12':      'mentor:rushi-k12'
+            };
+            const ADMINS = ['itzzavdhesh'];
+            const STATUS_CONTEXT = 'voiceforge/mentor-approved';
+            // ─────────────────────────────────────────────────────────────
+            
+            // 1. Fetch current labels on the PR fresh from the API
+            let currentLabelsLower = [];
+            try {
+              const { data } = await github.rest.issues.listLabelsOnIssue({
+                owner, repo, issue_number
+              });
+              currentLabelsLower = data.map(l => l.name.toLowerCase());
+              core.info(`Current labels: ${currentLabelsLower.join(', ')}`);
+            } catch (err) {
+              core.warning(`Could not fetch current labels: ${err.message}`);
+            }
+
+            // 2. Fetch all reviews for this PR
+            let reviews = [];
+            try {
+              reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner, repo, pull_number: issue_number, per_page: 100
+              });
+            } catch (err) {
+              core.warning(`Could not fetch reviews: ${err.message}`);
+              return;
+            }
+
+            // 3. Build a map of latest review states per user
+            const latestReviewByUser = {};
+            for (const review of reviews) {
+              const login = review.user?.login?.toLowerCase();
+              if (!login) continue;
+              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+            }
+
+            // Helper: ensure a label exists in the repo
+            async function ensureLabel(name, color, description) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (err) {
+                if (err.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                    core.info(`Created label "${name}".`);
+                  } catch (createErr) {
+                    if (createErr.status === 403) {
+                      core.warning(`Cannot create label "${name}": ${createErr.message}`);
+                      return false;
+                    }
+                    throw createErr;
+                  }
+                } else { throw err; }
+              }
+              return true;
+            }
+
+            // Helper: add labels
+            async function addLabels(names) {
+              const toAdd = names.filter(n => !currentLabelsLower.includes(n.toLowerCase()));
+              if (toAdd.length === 0) return;
+              for (const name of toAdd) await ensureLabel(name, '0075CA', `Applied by mentor automation`);
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels: toAdd });
+                core.info(`Added labels: ${toAdd.join(', ')}`);
+                // Update local list
+                for (const name of toAdd) currentLabelsLower.push(name.toLowerCase());
+              } catch (err) {
+                core.warning(`Cannot add labels: ${err.message}`);
+              }
+            }
+
+            // Helper: remove a label
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+                core.info(`Removed label "${name}"`);
+                // Update local list
+                currentLabelsLower = currentLabelsLower.filter(l => l !== name.toLowerCase());
+              } catch (err) {
+                if (err.status !== 404 && err.status !== 403) throw err;
+              }
+            }
+
+            // Helper: post commit status
+            async function setStatus(state, description) {
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner, repo, sha: prHeadSha, state, context: STATUS_CONTEXT, description
+                });
+                core.info(`Posted commit status: ${state} — "${description}"`);
+              } catch (err) {
+                core.warning(`Could not post commit status: ${err.message}`);
+              }
+            }
+
+            // Helper: comment handling
+            async function createOrUpdateComment(marker, body) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number, per_page: 100
+              });
+              const existing = comments.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body &&
+                comment.body.includes(marker)
+              );
+
+              try {
+                if (existing) {
+                  if (existing.body.trim() === body.trim()) return;
+                  await github.rest.issues.updateComment({
+                    owner, repo, comment_id: existing.id, body
+                  });
+                  core.info('Updated comment.');
+                } else {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number, body
+                  });
+                  core.info('Posted new comment.');
+                }
+              } catch (error) {
+                core.warning(`Could not write comment: ${error.message}`);
+              }
+            }
+
+            // 4. Update mentor label logic
+            const labelsToAdd = [];
+            const labelsToRemove = [];
+            
+            for (const mentor of MENTORS) {
+              const state = latestReviewByUser[mentor.toLowerCase()];
+              const label = mentorLabelMap[mentor];
+              if (!label) continue;
+              
+              if (state === 'APPROVED' || state === 'COMMENTED' || state === 'CHANGES_REQUESTED') {
+                labelsToAdd.push(label);
+              } else if (state === 'DISMISSED') {
+                labelsToRemove.push(label);
+              }
+            }
+            
+            // 5. Check if any mentor approved/changes requested
+            let hasApproved = false;
+            let hasChangesRequested = false;
+            
+            for (const user in latestReviewByUser) {
+              const state = latestReviewByUser[user];
+              const isMentor = MENTORS.map(m => m.toLowerCase()).includes(user);
+              
+              let hasWritePermission = false;
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner, repo, username: user
+                });
+                hasWritePermission = ['admin', 'maintain', 'write'].includes(data.permission);
+              } catch (err) {
+                // Ignore errors checking permissions for unknown users
+              }
+              
+              if (isMentor || hasWritePermission) {
+                if (state === 'APPROVED') {
+                  hasApproved = true;
+                }
+                if (state === 'CHANGES_REQUESTED') {
+                  hasChangesRequested = true;
+                }
+              }
+            }
+            
+            if (hasChangesRequested) {
+              labelsToAdd.push('needs revision');
+              labelsToRemove.push('ready for review');
+            } else if (hasApproved) {
+              labelsToRemove.push('needs revision');
+              const hasNeedsRevision = currentLabelsLower.includes('needs revision');
+              if (!hasNeedsRevision) {
+                labelsToAdd.push('ready for review');
+              }
+            }
+
+            // Apply label updates
+            for (const label of labelsToRemove) {
+              if (currentLabelsLower.includes(label.toLowerCase())) {
+                await removeLabel(label);
+              }
+            }
+            if (labelsToAdd.length > 0) {
+              await addLabels(labelsToAdd);
+            }
+
+            // 6. Post "Changes Requested" comment if active changes are requested
+            if (hasChangesRequested) {
+              const prAuthor = pr.user.login;
+              const marker = '<!-- voiceforge-pr-needs-revision -->';
+              const body =
+                `${marker}\n` +
+                `## 🔄 Changes Requested\n\n` +
+                `Hey @${prAuthor}! 👋 A mentor has reviewed your PR and requested some changes.\n\n` +
+                `> [!WARNING]\n` +
+                `> Please review the feedback above, update this same branch, and keep the PR focused on the linked issue.\n\n` +
+                `Once you push your updates, the review flow will continue automatically on this same PR.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+              await createOrUpdateComment(marker, body);
+            }
+
+            // 7. Update voiceforge/mentor-approved status check
+            const reviewingMentors = MENTORS.filter(m => {
+              const state = latestReviewByUser[m.toLowerCase()];
+              return state === 'APPROVED' || state === 'COMMENTED' || state === 'CHANGES_REQUESTED';
+            });
+            
+            if (reviewingMentors.length > 0) {
+              const names = reviewingMentors.join(', ');
+              await setStatus('success', `Reviewed by mentor(s): ${names} — eligible to merge.`);
+            } else {
+              await setStatus('failure', `No mentor has reviewed this PR yet — waiting for mentor review (approve/comment/request changes) before merging.`);
+            }

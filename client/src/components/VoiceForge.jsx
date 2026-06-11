@@ -4,7 +4,7 @@ import React, {
   useState,
   useEffect,
 } from "react";
-import { Copy, Eraser, Mic2 } from "lucide-react";
+import { Copy, Eraser, Mic2, History, X } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
@@ -17,6 +17,8 @@ const MAX_CHARS = 500;
 export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const drawerRef = useRef(null);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -116,6 +118,13 @@ export default function VoiceForge() {
   
   const hasAnnouncedRef = useRef(false);
 
+  // Move focus into the history drawer when it opens (a11y)
+  useEffect(() => {
+    if (historyOpen && drawerRef.current) {
+      drawerRef.current.focus();
+    }
+  }, [historyOpen]);
+
   useEffect(() => {
     if (charsLeft < 50 && !hasAnnouncedRef.current) {
       hasAnnouncedRef.current = true;
@@ -141,24 +150,55 @@ export default function VoiceForge() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white font-sans antialiased dark:bg-black">
-      <SpeechHistory
-        history={history}
-        favorites={favorites}
-        onReuse={handleReuse}
-        onReplay={handleReplay}
-        onToggleFav={toggleFavorite}
-        onDelete={removeMessage}
-        onClearHistory={clearHistory}
-        onCopy={handleCopy}
-      />
+    <div className="relative flex h-[calc(100vh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100vh-65px)]">
+      {/* Mobile history drawer overlay */}
+      {historyOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          onClick={() => setHistoryOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar: always visible on lg+, drawer on mobile */}
+      <div
+        ref={drawerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal={historyOpen}
+        aria-label="Speech history"
+        className={[
+          "absolute inset-y-0 left-0 z-30 flex flex-col transition-transform duration-200 focus:outline-none",
+          "lg:static lg:z-auto lg:translate-x-0 lg:flex",
+          historyOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <SpeechHistory
+          history={history}
+          favorites={favorites}
+          onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
+          onReplay={handleReplay}
+          onToggleFav={toggleFavorite}
+          onDelete={removeMessage}
+          onClearHistory={clearHistory}
+          onCopy={handleCopy}
+        />
+      </div>
 
       <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
-        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-5 py-3.5 dark:border-border dark:bg-black">
+        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
+          {/* Mobile: history toggle */}
+          <button
+            className="mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 text-neutral-500 transition hover:bg-neutral-100 lg:hidden dark:border-border dark:text-neutral-400"
+            onClick={() => setHistoryOpen((o) => !o)}
+            aria-label={historyOpen ? "Close history" : "Open history"}
+          >
+            {historyOpen ? <X size={15} aria-hidden="true" /> : <History size={15} aria-hidden="true" />}
+          </button>
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
-          <span className="text-sm text-neutral-400 dark:text-neutral-500">
+          <span className="text-xs text-neutral-400 dark:text-neutral-500 sm:text-sm">
             Speech Composer
           </span>
           {isSpeaking && (
@@ -236,12 +276,12 @@ export default function VoiceForge() {
 
           <VoiceQuickSettings />
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleCopy(inputText)}
               disabled={!inputText.trim()}
               aria-label="Copy message to clipboard"
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
+              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
             >
               <Copy size={15} aria-hidden="true" />
               Copy
@@ -251,7 +291,7 @@ export default function VoiceForge() {
               onClick={() => setInputText("")}
               disabled={!inputText}
               aria-label="Clear compose area"
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
+              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
             >
               <Eraser size={15} aria-hidden="true" />
               Clear
@@ -262,7 +302,7 @@ export default function VoiceForge() {
               disabled={!inputText.trim() || isSpeaking}
               aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
               className={[
-                "ml-auto flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium text-white transition",
+                "ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-black",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 isSpeaking ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",

@@ -1,8 +1,14 @@
 // Lets users save their ElevenLabs API key for the current session and manage browser-stored voice profiles.
 import React from "react";
 import { getApiKey, setApiKey, migrateFromLocalStorage } from "../utils/apiKeyStorage.js";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  persistVoiceSettings,
+} from "../utils/voiceSettings.js";
 
 import { ExternalLink, Trash2, CircleAlert } from "lucide-react";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
@@ -32,6 +38,7 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const { toasts, showToast } = useToast();
   const [migratedNotice, setMigratedNotice] = React.useState(false);
   const [apiKey, setApiKeyInput] = React.useState(() => {
     try {
@@ -63,28 +70,19 @@ export default function Settings() {
   }, []);
 
 
-  const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
-  const [voiceSettings, setVoiceSettings] = React.useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("voiceforge:voiceSettings")) || defaultSettings;
-    } catch {
-      return defaultSettings;
-    }
-  });
+  const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
 
   function saveApiKey() {
     setApiKey(apiKey);
+    showToast("API key saved", "success");
   }
 
 
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
-    try {
-      localStorage.setItem("voiceforge:voiceSettings", JSON.stringify(newSettings));
-    } catch {
-      // Storage unavailable
-    }
+    persistVoiceSettings(newSettings);
   }
 
   async function removeProfile(voiceId) {
@@ -92,8 +90,10 @@ export default function Settings() {
       const next = await deleteVoiceProfile(voiceId);
       setProfiles(next);
       setDbError("");
+      showToast("Voice profile deleted", "success");
     } catch (err) {
       setDbError(err?.message || String(err));
+      showToast("Failed to delete profile", "error");
     }
   }
 
@@ -228,6 +228,49 @@ export default function Settings() {
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
           </div>
+
+          {/* ── Speaker Boost toggle ── */}
+          <div className="flex items-center justify-between rounded-lg border border-ink/10 p-4 dark:border-border">
+            <div>
+              <p className="text-sm font-bold text-ink dark:text-neutral-200">
+                Speaker Boost
+              </p>
+              <p
+                id="settings-speaker-boost-desc"
+                className="mt-0.5 text-xs text-ink/55 dark:text-muted"
+              >
+                Boosts similarity to the reference speaker. Disable if you hear metallic artifacts.
+              </p>
+            </div>
+            <button
+              id="settings-speaker-boost"
+              type="button"
+              role="switch"
+              aria-checked={voiceSettings.use_speaker_boost}
+              aria-describedby="settings-speaker-boost-desc"
+              onClick={() =>
+                saveVoiceSettings({
+                  ...voiceSettings,
+                  use_speaker_boost: !voiceSettings.use_speaker_boost,
+                })
+              }
+              className={[
+                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+                "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-moss focus:ring-offset-2 dark:focus:ring-glow dark:focus:ring-offset-black",
+                voiceSettings.use_speaker_boost
+                  ? "bg-moss dark:bg-glow"
+                  : "bg-neutral-300 dark:bg-neutral-600",
+              ].join(" ")}
+              aria-label="Toggle Speaker Boost"
+            >
+              <span
+                className={[
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                  voiceSettings.use_speaker_boost ? "translate-x-5" : "translate-x-0",
+                ].join(" ")}
+              />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -264,6 +307,7 @@ export default function Settings() {
           ))}
         </div>
       </section>
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

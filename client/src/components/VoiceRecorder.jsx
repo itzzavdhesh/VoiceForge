@@ -11,6 +11,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
   const streamRef = React.useRef(null);
+  const isMountedRef = React.useRef(true);
   const [barHeights, setBarHeights] = React.useState([18, 30, 42, 30, 18]);
   const analyserRef = React.useRef(null);
   const audioCtxRef = React.useRef(null);
@@ -48,6 +49,11 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       };
       recorder.onstop = () => {
         window.clearInterval(timerRef.current);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
         setIsRecording(false);
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         const url = URL.createObjectURL(blob);
@@ -89,6 +95,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
 
   React.useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       window.clearInterval(timerRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
