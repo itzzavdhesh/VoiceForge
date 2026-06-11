@@ -98,6 +98,15 @@ export default function VoiceForge() {
       });
   }, [inputText, showToast]);
 
+  const handleClearHistory = useCallback(() => {
+    const isConfirmed = window.confirm("Are you sure you want to clear your entire speech history?");
+    if (isConfirmed) {
+      clearHistory();
+      showToast("History cleared successfully", "success");
+    }
+  }, [clearHistory, showToast]);
+
+
   const handleQuickReply = useCallback((phrase) => {
     setInputText(phrase);
     textareaRef.current?.focus();
@@ -149,7 +158,7 @@ export default function VoiceForge() {
         onReplay={handleReplay}
         onToggleFav={toggleFavorite}
         onDelete={removeMessage}
-        onClearHistory={clearHistory}
+        onClearHistory={handleClearHistory}
         onCopy={handleCopy}
       />
 
