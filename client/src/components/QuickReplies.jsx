@@ -79,6 +79,16 @@ export function QuickReplies({ onSelect }) {
   };
   const handleEdit = (oldPhrase) => {
   const cleanPhrase = editedValue.trim();
+  const isDuplicate = replies.some(
+  (reply) =>
+    reply.phrase.toLowerCase() === cleanPhrase.toLowerCase() &&
+    reply.phrase !== oldPhrase
+);
+
+if (isDuplicate) {
+  showToast("This quick reply already exists", "error");
+  return;
+}
 
   if (!cleanPhrase) {
     showToast("Phrase cannot be empty", "error");
