@@ -102,13 +102,13 @@ export default function App() {
             onClick={toggleTheme}
             aria-pressed={theme === "dark"}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink transition hover:border-moss dark:border-border dark:bg-black dark:text-neutral-200 lg:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink transition hover:border-moss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:focus-visible:ring-glow sm:hidden"
           >
             {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
           </button>
 
           {/* Desktop nav + theme toggle */}
-          <div className="hidden items-center gap-2 lg:flex">
+          <div className="hidden items-center gap-2 sm:flex">
             <nav className="flex gap-2" aria-label="VoiceForge pages">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -163,7 +163,7 @@ export default function App() {
 
       {/* Mobile Bottom Navigation Bar */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-ink/10 bg-white pb-safe lg:hidden dark:border-border dark:bg-surface"
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-ink/10 bg-white pb-safe sm:hidden dark:border-border dark:bg-surface"
         aria-label="VoiceForge mobile navigation"
       >
         {tabs.map((tab) => {
@@ -175,7 +175,7 @@ export default function App() {
               type="button"
               onClick={() => selectTab(tab.id)}
               aria-current={selected ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors ${
+              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
                 selected
                   ? "text-moss dark:text-glow"
                   : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
@@ -189,7 +189,7 @@ export default function App() {
       </nav>
 
       {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
-      <div className="h-16 lg:hidden" aria-hidden="true" />
+      <div className="h-16 sm:hidden" aria-hidden="true" />
 
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
