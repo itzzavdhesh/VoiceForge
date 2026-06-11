@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Plus, X, Check } from "lucide-react";
 import { useToast, ToastContainer } from "./useToast.jsx";
+import { Plus, X, Check, Pencil } from "lucide-react";
 
 const DEFAULT_QUICK_REPLIES = [
   { label: "Hello", phrase: "Hello" },
@@ -35,6 +35,8 @@ export function QuickReplies({ onSelect }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newPhrase, setNewPhrase] = useState("");
+  const [editingPhrase, setEditingPhrase] = useState(null);
+  const [editedValue, setEditedValue] = useState("");
 
   const { toasts, showToast } = useToast();
 
@@ -75,6 +77,30 @@ export function QuickReplies({ onSelect }) {
     setReplies((prev) => prev.filter((r) => r.phrase !== phraseToDelete));
     showToast("Quick reply deleted", "success");
   };
+  const handleEdit = (oldPhrase) => {
+  const cleanPhrase = editedValue.trim();
+
+  if (!cleanPhrase) {
+    showToast("Phrase cannot be empty", "error");
+    return;
+  }
+
+  setReplies((prev) =>
+    prev.map((reply) =>
+      reply.phrase === oldPhrase
+        ? {
+            ...reply,
+            phrase: cleanPhrase,
+            label: cleanPhrase,
+          }
+        : reply
+    )
+  );
+
+  setEditingPhrase(null);
+  setEditedValue("");
+  showToast("Quick reply updated", "success");
+};
 
   return (
     <section
@@ -124,14 +150,44 @@ export function QuickReplies({ onSelect }) {
                   "text-sm text-neutral-700 dark:border-border dark:bg-surface dark:text-neutral-300",
                 ].join(" ")}
               >
-                <span className="truncate max-w-[150px]">{label}</span>
-                <button
-                  onClick={() => handleDelete(phrase)}
-                  aria-label={`Delete quick reply: ${phrase}`}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
+              {editingPhrase === phrase ? (
+  <>
+    <input
+      value={editedValue}
+      onChange={(e) => setEditedValue(e.target.value)}
+      className="bg-transparent text-sm outline-none"
+      autoFocus
+    />
+
+    <button
+      onClick={() => handleEdit(phrase)}
+      aria-label="Save quick reply"
+    >
+      <Check size={12} />
+    </button>
+  </>
+) : (
+  <>
+    <span className="truncate max-w-[150px]">{label}</span>
+
+    <button
+      onClick={() => {
+        setEditingPhrase(phrase);
+        setEditedValue(label);
+      }}
+      aria-label="Edit quick reply"
+    >
+      <Pencil size={12} />
+    </button>
+
+    <button
+      onClick={() => handleDelete(phrase)}
+      aria-label={`Delete quick reply: ${phrase}`}
+    >
+      <X size={12} />
+    </button>
+  </>
+)}
               </div>
             );
           }
