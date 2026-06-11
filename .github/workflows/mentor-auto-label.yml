@@ -22,10 +22,10 @@ jobs:
       - name: Apply mentor label (and ready-for-review on approval) when a mentor reviews
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.MENTOR_LABEL_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const reviewer     = context.payload.review.user.login;
-            const reviewState  = context.payload.review.state;   // APPROVED | CHANGES_REQUESTED | COMMENTED
+            const reviewState  = context.payload.review.state.toLowerCase();   // Normalize to lowercase: approved | changes_requested | commented
             const pr           = context.payload.pull_request;
             const owner        = context.repo.owner;
             const repo         = context.repo.repo;
@@ -40,6 +40,8 @@ jobs:
               'Anushreebasics': 'mentor:Anushreebasics',
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
+              'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
+              'vedhapprakashni':  'mentor:vedhapprakashni',
               'joyprakashk':    'mentor:joyprakashk',
               'rushi-k12':      'mentor:rushi-k12'
             };

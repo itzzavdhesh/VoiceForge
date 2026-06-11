@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useDeferredValue } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2 } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 
@@ -15,17 +15,18 @@ export function SpeechHistory({
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
 
   const visible = useMemo(() => {
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
 
-    if (search.trim()) {
-      const query = search.toLowerCase();
+    if (deferredSearch.trim()) {
+      const query = deferredSearch.toLowerCase();
       messages = messages.filter((message) => message.text.toLowerCase().includes(query));
     }
 
     return messages;
-  }, [history, favorites, tab, search]);
+  }, [history, favorites, tab, deferredSearch]);
 
   const tabs = ["all", "pinned"];
 
@@ -48,8 +49,8 @@ export function SpeechHistory({
     <aside
       className={[
         "flex flex-shrink-0 flex-col border-r border-neutral-200 bg-neutral-50",
-        "transition-all duration-200 dark:border-border dark:bg-black",
-        collapsed ? "w-12" : "w-80",
+        "h-full transition-all duration-200 dark:border-border dark:bg-black",
+        collapsed ? "w-12" : "w-[min(80vw,320px)]",
       ].join(" ")}
       aria-label="Speech history"
     >
@@ -136,7 +137,7 @@ export function SpeechHistory({
             tabIndex={0}
           >
             {visible.length === 0 ? (
-              <EmptyState tab={tab} hasSearch={Boolean(search.trim())} />
+              <EmptyState tab={tab} hasSearch={Boolean(deferredSearch.trim())} />
             ) : (
               <ul className="space-y-2" aria-label="Message list">
                 {visible.map((message) => (

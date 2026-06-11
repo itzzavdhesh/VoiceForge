@@ -169,22 +169,10 @@ jobs:
               return;
             }
 
-            if (context.eventName === 'pull_request_review' && context.payload.review?.state === 'changes_requested') {
-              await addLabels(['needs revision']);
-              await removeLabel('ready for review');
-              const marker = '<!-- voiceforge-pr-needs-revision -->';
-              const body =
-                `${marker}\n` +
-                `## 🔄 Changes Requested\n\n` +
-                `Hey @${username}! 👋 A mentor has reviewed your PR and requested some changes.\n\n` +
-                `> [!WARNING]\n` +
-                `> Please review the feedback above, update this same branch, and keep the PR focused on the linked issue.\n\n` +
-                `Once you push your updates, the review flow will continue automatically on this same PR.\n\n` +
-                `---\n` +
-                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
-              await createOrUpdateComment(marker, body);
-              return;
-            }
+            // 'needs revision' label and changes-requested comment are handled
+            // exclusively by pr-review-handler.yml (workflow_run trigger) which
+            // always has full write access even for fork PRs.
+            if (context.eventName === 'pull_request_review') return;
 
             if (!normalizedLabels.includes('invalid-pr')) return;
 

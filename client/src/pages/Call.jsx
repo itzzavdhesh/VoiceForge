@@ -7,14 +7,48 @@ import VirtualCamera from "../components/VirtualCamera.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
   const [cameraError, setCameraError] = React.useState("");
+  const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
+  const [language, setLanguage] = React.useState(() => {
+  try {
+    const savedLanguage = localStorage.getItem("voiceforge:language");
+
+    const legacyToCode = {
+      English: "en",
+      Hindi: "hi",
+      Spanish: "es",
+      French: "fr",
+      German: "de",
+      Portuguese: "pt",
+      Japanese: "ja",
+    };
+
+    const normalizedLanguage =
+      legacyToCode[savedLanguage] || savedLanguage;
+
+    return ["en", "hi", "es", "fr", "de", "pt", "ja"].includes(normalizedLanguage)
+      ? normalizedLanguage
+      : "en";
+  } catch {
+    return "en";
+  }
+});
+
+React.useEffect(() => {
+  try {
+    localStorage.setItem("voiceforge:language", language);
+  } catch {
+    // storage unavailable
+  }
+}, [language]);
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
@@ -108,20 +142,26 @@ export default function Call() {
         setCameraError("");
       } catch (webcamError) {
         setCameraError(webcamError?.message || String(webcamError));
+        showToast("Camera access failed", "error");
       }
     }
     openCamera();
     return () => {
       activeStream?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [showToast]);
 
   async function handleSpeak(text) {
     if (!activeProfile?.voice_id) return;
     try {
-      await speak({ text, voiceId: activeProfile.voice_id });
+      await speak({
+  text,
+  voiceId: activeProfile.voice_id,
+  language_code: language,
+});
     } catch (err) {
       console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
   }
 
@@ -187,7 +227,7 @@ export default function Call() {
             <p className="text-sm text-ink/65 mb-4">
               Calibrate the animated fallback mouth position and size overlay to align with your camera.
             </p>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
@@ -263,7 +303,29 @@ export default function Call() {
           </div>
         )}
       </section>
+      <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface">
+  <label
+  htmlFor="output-language"
+  className="mb-2 block text-sm font-bold dark:text-neutral-100"
+>
+  Output Language
+</label>
 
+<select
+  id="output-language"
+  value={language}
+  onChange={(e) => setLanguage(e.target.value)}
+  className="w-full rounded-md border border-ink/15 bg-cloud p-3 dark:border-border dark:bg-black dark:text-neutral-100"
+>
+   <option value="en">English</option>
+<option value="hi">Hindi</option>
+<option value="es">Spanish</option>
+<option value="fr">French</option>
+<option value="de">German</option>
+<option value="pt">Portuguese</option>
+<option value="ja">Japanese</option>
+  </select>
+</section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -321,6 +383,7 @@ export default function Call() {
           {error}
         </p>
       )}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

@@ -4,12 +4,12 @@ const Footer = ({ onNavigate, tabs }) => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="w-full mx-auto max-w-7xl px-4 pb-6 pt-2">
+    <footer className="w-full mx-auto max-w-7xl px-3 pb-6 pt-2 sm:px-4">
       {/* The Styled Black Box */}
-      <div className="w-full bg-black text-white border border-ink/20 rounded-xl px-8 py-8 flex flex-col gap-8 shadow-md dark:bg-surface dark:border-border">
+      <div className="w-full bg-black text-white border border-ink/20 rounded-xl px-5 py-6 flex flex-col gap-6 shadow-md dark:bg-surface dark:border-border md:px-8 md:py-8 md:gap-8">
 
         {/* Top Section: 3 Columns */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10 w-full">
 
           {/* Column 1: Brand */}
           <div className="flex flex-col gap-4">

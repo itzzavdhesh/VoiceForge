@@ -36,7 +36,7 @@ export function FavoriteMessages({ history, favorites, onReuse, onUnpin }) {
           >
             <button
               onClick={() => onReuse(message.text)}
-              className="max-w-[180px] truncate text-left focus:outline-none focus:underline"
+              className="max-w-[150px] truncate text-left focus:outline-none focus:underline sm:max-w-[180px]"
               aria-label={`Load pinned phrase: ${message.text}`}
               title={message.text}
             >
