@@ -1,91 +1,97 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
-import React, { useRef, useEffect } from "react";
-import { CheckCircle2, Loader2, CircleAlert, ArrowRight } from "lucide-react";
+import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { hasApiKey } from "../utils/apiKeyStorage.js";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  persistVoiceSettings,
+} from "../utils/voiceSettings.js";
 
 export default function Onboarding({ onReady }) {
-  const [recording, setRecording] = React.useState(null);
-  const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
-  const [successProfile, setSuccessProfile] = React.useState(null);
+  const [recording, setRecording] = useState(null);
+  const [voiceName, setVoiceName] = useState("VoiceForge Voice");
+  const [successProfile, setSuccessProfile] = useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
+  const [serverStatus, setServerStatus] = useState({ isMock: false, hasServerKey: false });
+  const { showToast } = useToast();
 
   // Track the highest milestone step the user is allowed to navigate to
-  const [maxUnlockedStep, setMaxUnlockedStep] = React.useState(() => {
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => {
     const savedMax = localStorage.getItem("voiceforge:maxUnlockedStep");
     return savedMax ? parseInt(savedMax, 10) : 1;
   });
 
   // Track the active onboarding step interface (1, 2, or 3) restored from storage
-  const [activeStep, setActiveStep] = React.useState(() => {
+  const [activeStep, setActiveStep] = useState(() => {
     const savedStep = localStorage.getItem("voiceforge:onboardingStep");
     const savedMax = localStorage.getItem("voiceforge:maxUnlockedStep");
     
     const parsedStep = savedStep ? parseInt(savedStep, 10) : 1;
     const parsedMax = savedMax ? parseInt(savedMax, 10) : 1;
     
-    // Clamp initialization target securely underneath the highest unlocked milestone
     return Math.min(parsedStep, parsedMax);
   });
 
-  // Refs for auto-focus (mutable objects)
+  // Refs for auto-focus
   const voiceNameInputRef = useRef(null);
   const step2FirstInputRef = useRef(null);
   const step3FirstInputRef = useRef(null);
 
-  React.useEffect(() => {
+  // Voice settings state
+  const [voiceSettings, setVoiceSettings] = useState(() => loadVoiceSettings());
+
+  useEffect(() => {
     fetch("/api/voice/status")
       .then((res) => res.json())
       .then((data) => setServerStatus(data))
       .catch((err) => console.error("Failed to fetch server status:", err));
   }, []);
 
-  const hasKey = React.useMemo(() => {
+  const hasKey = useMemo(() => {
     return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
   }, [serverStatus]);
 
-  // Auto-focus helper function with retry mechanism for async rendering
-  const setFocusWithRetry = React.useCallback((element) => {
+  // Auto-focus helper function with retry mechanism
+  const setFocusWithRetry = useCallback((element) => {
     if (!element) return;
     
     const attemptFocus = (attempt = 0) => {
-      if (attempt > 5) return; // Max 5 attempts
+      if (attempt > 5) return;
       
       try {
         element.focus();
-        if (document.activeElement === element) return; // Focus successful
+        if (document.activeElement === element) return;
       } catch (e) {
-        // Ignore focus errors (e.g., element not focusable)
+        // Ignore focus errors
       }
       
-      // Retry with increasing delay
       setTimeout(() => attemptFocus(attempt + 1), 50 * (attempt + 1));
     };
     
     attemptFocus();
   }, []);
 
-  // Callback refs for Step 1
-  const setVoiceNameRef = React.useCallback((element) => {
+  // Callback refs for each step
+  const setVoiceNameRef = useCallback((element) => {
     voiceNameInputRef.current = element;
     if (activeStep === 1 && element) {
       setFocusWithRetry(element);
     }
   }, [activeStep, setFocusWithRetry]);
 
-  // Callback ref for Step 2
-  const setStep2Ref = React.useCallback((element) => {
+  const setStep2Ref = useCallback((element) => {
     step2FirstInputRef.current = element;
     if (activeStep === 2 && element) {
       setFocusWithRetry(element);
     }
   }, [activeStep, setFocusWithRetry]);
 
-  // Callback ref for Step 3
-  const setStep3Ref = React.useCallback((element) => {
+  const setStep3Ref = useCallback((element) => {
     step3FirstInputRef.current = element;
     if (activeStep === 3 && element) {
       setFocusWithRetry(element);
@@ -106,7 +112,20 @@ export default function Onboarding({ onReady }) {
     }
   }, [activeStep, setFocusWithRetry]);
 
-  // Dynamic content dictionary for the header banner based on activeStep
+  // Handle voice settings change
+  const handleSettingsChange = (newSettings) => {
+    setVoiceSettings(newSettings);
+    persistVoiceSettings(newSettings);
+    showToast("Voice settings saved", "success");
+  };
+
+  // Reset settings to default
+  const handleResetSettings = () => {
+    setVoiceSettings(DEFAULT_VOICE_SETTINGS);
+    persistVoiceSettings(DEFAULT_VOICE_SETTINGS);
+    showToast("Voice settings reset to default", "info");
+  };
+
   const stepContent = {
     1: {
       title: "Create your voice profile",
@@ -125,30 +144,26 @@ export default function Onboarding({ onReady }) {
     }
   };
 
-  // Persist values to localStorage on step changes
-  React.useEffect(() => {
+  useEffect(() => {
     localStorage.setItem("voiceforge:onboardingStep", activeStep.toString());
   }, [activeStep]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     localStorage.setItem("voiceforge:maxUnlockedStep", maxUnlockedStep.toString());
   }, [maxUnlockedStep]);
 
   async function handleClone() {
-    // 1. Strict validation guards: Don't run without API key or a recorded sample
     if (!hasKey || !recording) return;
     
     try {
-      // 2. Perform real API call without overlapping mock declarations
       const profile = await cloneVoice(recording, voiceName);
       if (profile) {
         setSuccessProfile(profile);
         setMaxUnlockedStep(2);
-        setActiveStep(2); // Move user to Step 2 instantly upon real success
+        setActiveStep(2);
       }
     } catch (err) {
       console.error("Voice cloning process failed:", err);
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
     }
   }
 
@@ -160,7 +175,9 @@ export default function Onboarding({ onReady }) {
 
   return (
     <div className="space-y-6">
-      {/* GLOBAL ONBOARDING HEADER BANNER VIEW */}
+      <ToastContainer />
+      
+      {/* HEADER BANNER */}
       <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -175,7 +192,7 @@ export default function Onboarding({ onReady }) {
             </p>
           </div>
           
-          {/* STEP PROGRESS INDICATORS COMPONENT GRID */}
+          {/* PROGRESS INDICATORS */}
           <div className="grid w-full max-w-sm grid-cols-3 gap-2" aria-label="Onboarding progress indicators">
             {stepContent[activeStep].labels.map((label, index) => {
               let isBarFilled = false;
@@ -203,7 +220,7 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-      {/* REFACTORED ACCESSIBLE INTERACTIVE NAVIGATION STEP DOT TRACKS */}
+      {/* STEP NAVIGATION DOTS */}
       <div className="flex items-center justify-center gap-3" role="tablist" aria-label="Onboarding step navigation">
         {[1, 2, 3].map((stepNum) => {
           const isAccessible = stepNum <= maxUnlockedStep;
@@ -227,7 +244,7 @@ export default function Onboarding({ onReady }) {
         })}
       </div>
 
-      {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
+      {/* STEP 1 */}
       {activeStep === 1 && (
         <>
           {!hasKey && (
@@ -266,7 +283,6 @@ export default function Onboarding({ onReady }) {
               </button>
             </div>
 
-            {/* Render actual API errors transparently instead of swallowing failures */}
             {apiError && (
               <p className="mt-3 text-sm font-semibold text-coral flex items-center gap-1.5" role="alert">
                 <CircleAlert size={16} />
@@ -294,7 +310,7 @@ export default function Onboarding({ onReady }) {
         </>
       )}
 
-      {/* STEP 2: WORKSPACE PROPERTIES CONTROLS */}
+      {/* STEP 2 */}
       {activeStep === 2 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
           <button
@@ -306,11 +322,90 @@ export default function Onboarding({ onReady }) {
           >
             Step 2 ready for configuration - Press Tab to navigate through options
           </button>
-          <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Voice Workspace Parameters</h3>
-          <p className="mt-2 text-sm text-neutral-500">Configure the engine settings for your voice identity.</p>
-          <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
-            Configuration fields will render inside this block.
+          
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Voice Workspace Parameters</h3>
+            <button
+              onClick={handleResetSettings}
+              className="inline-flex items-center gap-2 text-sm text-ink/60 hover:text-coral transition-colors"
+              aria-label="Reset to default settings"
+            >
+              <RotateCcw size={14} />
+              Reset to default
+            </button>
           </div>
+          
+          <p className="mt-2 text-sm text-neutral-500">Configure the engine settings for your voice identity.</p>
+          
+          <div className="my-6 space-y-4">
+            {/* Stability Slider */}
+            <div>
+              <label className="block text-sm font-medium text-ink dark:text-neutral-300 mb-1">
+                Stability: {voiceSettings.stability}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={voiceSettings.stability}
+                onChange={(e) => handleSettingsChange({ ...voiceSettings, stability: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+            </div>
+            
+            {/* Clarity/Similarity Slider */}
+            <div>
+              <label className="block text-sm font-medium text-ink dark:text-neutral-300 mb-1">
+                Clarity: {voiceSettings.similarity_boost}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={voiceSettings.similarity_boost}
+                onChange={(e) => handleSettingsChange({ ...voiceSettings, similarity_boost: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+            </div>
+            
+            {/* Style Exaggeration Slider */}
+            <div>
+              <label className="block text-sm font-medium text-ink dark:text-neutral-300 mb-1">
+                Style: {voiceSettings.style}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={voiceSettings.style}
+                onChange={(e) => handleSettingsChange({ ...voiceSettings, style: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+            </div>
+            
+            {/* Speaker Boost Toggle */}
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-ink dark:text-neutral-300">
+                Speaker Boost
+              </label>
+              <button
+                onClick={() => handleSettingsChange({ ...voiceSettings, use_speaker_boost: !voiceSettings.use_speaker_boost })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  voiceSettings.use_speaker_boost ? "bg-coral" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    voiceSettings.use_speaker_boost ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+          
           <div className="flex justify-between items-center border-t pt-4">
             <button type="button" onClick={() => setActiveStep(1)} className="text-sm font-bold text-ink dark:text-neutral-300 hover:underline">
               ← Back to Profile
@@ -326,7 +421,7 @@ export default function Onboarding({ onReady }) {
         </section>
       )}
 
-      {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
+      {/* STEP 3 */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
           <button
@@ -338,11 +433,21 @@ export default function Onboarding({ onReady }) {
           >
             Step 3 ready for activation - Press Tab to navigate through options
           </button>
+          
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
           <p className="mt-2 text-sm text-neutral-500">Your custom voice template setup is complete.</p>
-          <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
-            Pipeline deployment status diagnostics verify operational conditions are ideal.
+          
+          <div className="my-6 p-6 border border-ink/10 rounded-md bg-mint/10">
+            <h4 className="font-bold mb-2">Configuration Summary</h4>
+            <ul className="space-y-1 text-sm">
+              <li>✓ Voice Profile: <strong>{voiceName}</strong></li>
+              <li>✓ Stability: <strong>{voiceSettings.stability}</strong></li>
+              <li>✓ Clarity: <strong>{voiceSettings.similarity_boost}</strong></li>
+              <li>✓ Style Exaggeration: <strong>{voiceSettings.style}</strong></li>
+              <li>✓ Speaker Boost: <strong>{voiceSettings.use_speaker_boost ? "Enabled" : "Disabled"}</strong></li>
+            </ul>
           </div>
+          
           <div className="flex justify-between items-center border-t pt-4">
             <button type="button" onClick={() => setActiveStep(2)} className="text-sm font-bold text-ink dark:text-neutral-300 hover:underline">
               ← Back to Settings
