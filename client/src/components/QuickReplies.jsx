@@ -158,6 +158,8 @@ if (isDuplicate) {
               setIsEditing(!isEditing);
               setIsAdding(false);
               setNewPhrase("");
+              setEditingPhrase(null);
+              setEditedValue("");
             }}
             className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
             aria-label={isEditing ? "Done customizing quick replies" : "Customize quick replies"}
