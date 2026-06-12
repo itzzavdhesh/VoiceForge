@@ -58,6 +58,7 @@ export function QuickReplies({ onSelect }) {
   const handleAdd = (e) => {
     e.preventDefault();
     const cleanPhrase = newPhrase.trim();
+    
 
     if (cleanPhrase.length > 120) {
       showToast("Phrase is too long (max 120 characters)", "error");
@@ -98,13 +99,18 @@ export function QuickReplies({ onSelect }) {
     reply.phrase !== oldPhrase
 );
 
-if (isDuplicate) {
-  showToast("This quick reply already exists", "error");
-  return;
-}
+
 
   if (!cleanPhrase) {
     showToast("Phrase cannot be empty", "error");
+    return;
+  }
+  if (cleanPhrase.length > 120) {
+    showToast("Phrase is too long (max 120 characters)", "error");
+    return;
+  }
+  if (isDuplicate) {
+    showToast("This quick reply already exists", "error");
     return;
   }
 
@@ -123,6 +129,16 @@ if (isDuplicate) {
   setEditingPhrase(null);
   setEditedValue("");
   showToast("Quick reply updated", "success");
+};
+const handleEditKeyDown = (e, oldPhrase) => {
+  if (e.key === "Enter") {
+    handleEdit(oldPhrase);
+  }
+
+  if (e.key === "Escape") {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }
 };
 
   const filteredReplies = replies.filter((reply) => {
@@ -209,6 +225,7 @@ if (isDuplicate) {
     <input
       value={editedValue}
       onChange={(e) => setEditedValue(e.target.value)}
+      onKeyDown={(e) => handleEditKeyDown(e, phrase)}
       className="bg-transparent text-sm outline-none"
       autoFocus
     />
@@ -219,6 +236,15 @@ if (isDuplicate) {
     >
       <Check size={12} />
     </button>
+    <button
+  onClick={() => {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }}
+  aria-label="Cancel edit"
+>
+  <X size={12} />
+</button>
   </>
 ) : (
   <>
