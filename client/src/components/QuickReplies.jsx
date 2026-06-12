@@ -93,11 +93,12 @@ export function QuickReplies({ onSelect }) {
   };
   const handleEdit = (oldPhrase) => {
   const cleanPhrase = editedValue.trim();
+  const normalizedOldPhrase = oldPhrase.toLowerCase();
   const isDuplicate = replies.some(
-  (reply) =>
-    reply.phrase.toLowerCase() === cleanPhrase.toLowerCase() &&
-    reply.phrase !== oldPhrase
-);
+    (reply) =>
+      reply.phrase.toLowerCase() === cleanPhrase.toLowerCase() &&
+    reply.phrase.toLowerCase() !== normalizedOldPhrase
+  );
 
 
 
