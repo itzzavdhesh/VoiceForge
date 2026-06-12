@@ -4,6 +4,15 @@ import { getIsMock } from "../utils/mock.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
+const MOCK_AUDIO_MP3 = Buffer.from(
+  "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
+  "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
+  "AAABAAAB/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "base64"
+);
+
 const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
   console.warn(
     "[VoiceForge] STREAM_SECRET not set — using ephemeral key. " +
@@ -204,6 +213,15 @@ export async function streamSpeech(request, response, next) {
       return;
     }
     const { text, voiceId, apiKey, language_code, voice_settings } = decryptToken(token);
+
+    // --- mock mode: stream the bundled silent MP3 fixture ---
+    if (getIsMock()) {
+      console.warn("[VoiceForge] MOCK_ELEVENLABS: streaming mock audio");
+      response.setHeader("Content-Type", "audio/mpeg");
+      response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
+      response.end(MOCK_AUDIO_MP3);
+      return;
+    }
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
       method: "POST",

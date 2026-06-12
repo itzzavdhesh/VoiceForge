@@ -6,6 +6,7 @@ on:
       - "Mentor Auto Label on Review"
       - "Mentor Merge Eligibility Check"
     types:
+      - requested
       - completed
 
 permissions:
@@ -22,6 +23,15 @@ jobs:
   handle-review:
     runs-on: ubuntu-latest
     steps:
+      - name: Download PR number
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: pr_number
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: pr
+
       - name: Process PR reviews
         uses: actions/github-script@v7
         with:
@@ -30,11 +40,37 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const runId = context.payload.workflow_run.id;
-            
             const headSha = context.payload.workflow_run.head_sha;
 
+            const fs = require('fs');
+            const path = require('path');
+
+            let pr;
+            let issue_number;
+
+            // Step 0: Try reading the PR number from downloaded artifact
+            const prFilePath = path.join(process.env.GITHUB_WORKSPACE || '.', 'pr', 'NR');
+            if (fs.existsSync(prFilePath)) {
+              try {
+                const content = fs.readFileSync(prFilePath, 'utf8').trim();
+                const num = parseInt(content, 10);
+                if (!isNaN(num)) {
+                  issue_number = num;
+                  core.info(`Found PR number #${issue_number} in artifact. Fetching PR details...`);
+                  const { data } = await github.rest.pulls.get({
+                    owner, repo, pull_number: issue_number
+                  });
+                  pr = data;
+                }
+              } catch (err) {
+                core.warning(`Failed to fetch PR details using artifact: ${err.message}`);
+              }
+            }
+
             // Step 1: payload pull_requests array (works for same-repo PRs)
-            let pr = context.payload.workflow_run.pull_requests?.[0];
+            if (!pr) {
+              pr = context.payload.workflow_run.pull_requests?.[0];
+            }
 
             // Step 2: re-fetch workflow run in case payload was trimmed
             if (!pr) {
@@ -87,7 +123,7 @@ jobs:
               return;
             }
             
-            const issue_number = pr.number;
+            issue_number = pr.number;
             const prHeadSha = pr.head?.sha || headSha;
             
             core.info(`Processing review state for PR #${issue_number} (SHA: ${headSha})`);
@@ -101,9 +137,10 @@ jobs:
               'itsdakshjain',
               'snehkris',
               'Mrigakshi-Rathore',
-              'vedhapprakashni',
               'joyprakashk',
-              'rushi-k12'
+              'rushi-k12',
+              'itzzavdheshh',
+              'vedhapprakashni'
             ];
             const mentorLabelMap = {
               'sabeenaviklar':  'mentor:sabeenaviklar',
@@ -111,9 +148,10 @@ jobs:
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
               'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
-              'vedhapprakashni':  'mentor:vedhapprakashni',
               'joyprakashk':    'mentor:joyprakashk',
-              'rushi-k12':      'mentor:rushi-k12'
+              'rushi-k12':      'mentor:rushi-k12',
+              'itzzavdheshh':    'mentor:itzzavdheshh',
+              'vedhapprakashni': 'mentor:vedhapprakashni'
             };
             const ADMINS = ['itzzavdhesh'];
             const STATUS_CONTEXT = 'voiceforge/mentor-approved';

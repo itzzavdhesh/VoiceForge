@@ -3,6 +3,8 @@ import React from "react";
 import { getAllProfiles, saveProfile, deleteProfile } from "../utils/db.js";
 import { getApiKey } from "../utils/apiKeyStorage.js";
 
+// Fix (Issue 2): must match the server-side Multer limit in server/middleware/upload.js.
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
 
 const ACTIVE_KEY = "voiceforge:activeVoiceId";
 
@@ -48,6 +50,24 @@ export default function useVoiceClone() {
     setError("");
 
     try {
+      // Fix (Issue 2): validate client-side before any network request so the
+      // user gets instant, clear feedback instead of waiting for the full
+      // upload to complete before Multer rejects it on the server.
+      if (!audioBlob) {
+        throw new Error("No audio recording found. Please record your voice first.");
+      }
+      if (!audioBlob.type.startsWith("audio/")) {
+        throw new Error(
+          `Unsupported file type "${audioBlob.type}". Please upload an audio recording.`
+        );
+      }
+      if (audioBlob.size > MAX_UPLOAD_BYTES) {
+        const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+        throw new Error(
+          `Recording is ${sizeMB} MB — the maximum allowed size is 12 MB. Please record a shorter clip.`
+        );
+      }
+
       const formData = new FormData();
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
@@ -86,4 +106,3 @@ export default function useVoiceClone() {
 
   return { cloneVoice, status, error };
 }
-

@@ -1,6 +1,7 @@
 // Draws the webcam and MVP lip-sync animation onto a canvas preview.
 import React from "react";
 import { useTheme } from "./ThemeContext";
+import { useEffect, useRef } from "react";
 
 export default React.forwardRef(function VideoPreview({
   webcamStream,
@@ -12,6 +13,7 @@ export default React.forwardRef(function VideoPreview({
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
+  const audioRef = useRef(null);   
   const [modelStatus, setModelStatus] = React.useState(
     "Fallback animation ready",
   );
@@ -27,6 +29,16 @@ export default React.forwardRef(function VideoPreview({
   React.useEffect(() => {
     isCalibratingRef.current = isCalibrating;
   }, [isCalibrating]);
+
+  useEffect(() => {
+  return () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    onSpeakingChange?.(false);
+  };
+}, [onSpeakingChange]);
 
   React.useEffect(() => {
     async function loadModel() {
@@ -150,6 +162,7 @@ export default React.forwardRef(function VideoPreview({
       />
       {audioUrl && (
         <audio
+          ref={audioRef}
           key={audioUrl}
           className="mt-4 w-full"
           controls

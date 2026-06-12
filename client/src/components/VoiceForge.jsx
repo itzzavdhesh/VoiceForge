@@ -17,6 +17,7 @@ const MAX_CHARS = 500;
 export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [language, setLanguage] = useState(() => localStorage.getItem("voiceforge:compose-language") || "en");
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
 
@@ -44,6 +45,7 @@ export default function VoiceForge() {
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language;
     utterance.rate = 0.95;
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -52,7 +54,7 @@ export default function VoiceForge() {
       showToast("Speech playback failed", "error");
     };
     window.speechSynthesis.speak(utterance);
-  }, [showToast]);
+  }, [showToast, language]);
 
   const handleSpeak = useCallback(() => {
     const text = inputText.trim();
@@ -134,6 +136,9 @@ export default function VoiceForge() {
       setAnnouncement("");
     }
   }, [charsLeft]);
+  useEffect(() => {
+    localStorage.setItem("voiceforge:compose-language", language);
+  }, [language]);
 
   function getCounterColor() {
     if (charsLeft < 50)  return "text-red-500";
@@ -275,6 +280,24 @@ export default function VoiceForge() {
           </p>
 
           <VoiceQuickSettings />
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="vf-language" className="text-sm font-medium text-neutral-600 dark:text-neutral-300">Language:</label>
+            <select
+              id="vf-language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 dark:border-border dark:bg-black dark:text-neutral-100"
+            >
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="pt">Portuguese</option>
+              <option value="ja">Japanese</option>
+            </select>
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button

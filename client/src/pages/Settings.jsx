@@ -7,12 +7,13 @@ import {
   persistVoiceSettings,
 } from "../utils/voiceSettings.js";
 
-import { ExternalLink, Trash2, CircleAlert } from "lucide-react";
+import { ExternalLink, Trash2, CircleAlert, Download, Upload } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
 } from "../hooks/useVoiceClone.js";
+import { saveProfile } from "../utils/db.js";
 
 
 function AudioPlayback({ blob }) {
@@ -84,6 +85,153 @@ export default function Settings() {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
   }
+
+  const handleExport = async () => {
+    try {
+      const storageData = {
+        history: localStorage.getItem("vf_history"),
+        favorites: localStorage.getItem("vf_favorites"),
+        quick_replies: localStorage.getItem("vf_quick_replies"),
+        voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
+        calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
+        calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+      };
+
+      const rawProfiles = await getSavedProfiles();
+      const profilesData = await Promise.all(
+        rawProfiles.map(async (p) => {
+          let base64Audio = null;
+          if (p.audioBlob) {
+            base64Audio = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(p.audioBlob);
+            });
+          }
+          return {
+            voice_id: p.voice_id,
+            name: p.name,
+            createdAt: p.createdAt,
+            audioDataUrl: base64Audio,
+          };
+        })
+      );
+
+      const backup = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        storage: storageData,
+        profiles: profilesData,
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `voiceforge-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("Data exported successfully", "success");
+    } catch (err) {
+      showToast("Export failed: " + (err.message || String(err)), "error");
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // 1. File size check (15MB limit to prevent browser freezing)
+      const MAX_FILE_SIZE = 15 * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("File is too large. Maximum size allowed is 15MB.");
+      }
+
+      // 2. Overwrite confirmation
+      const confirmOverwrite = window.confirm(
+        "Importing this backup will overwrite your current settings, speech history, and voice profiles. Do you want to continue?"
+      );
+      if (!confirmOverwrite) {
+        event.target.value = "";
+        return;
+      }
+
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      if (!backup || backup.version !== 1 || !backup.storage || !Array.isArray(backup.profiles)) {
+        throw new Error("Invalid backup file format.");
+      }
+
+      const { storage, profiles: importedProfiles } = backup;
+
+      // 3. Process voice profiles first - if any fail, we don't modify localStorage
+      const profilesToSave = [];
+      for (const p of importedProfiles) {
+        let audioBlob = null;
+        if (p.audioDataUrl) {
+          const arr = p.audioDataUrl.split(",");
+          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          audioBlob = new Blob([u8arr], { type: mime });
+        }
+
+        profilesToSave.push({
+          id: p.voice_id,
+          voice_id: p.voice_id,
+          name: p.name,
+          createdAt: p.createdAt || new Date().toISOString(),
+          audioBlob,
+        });
+      }
+
+      // Commit profiles to IndexedDB
+      for (const profileData of profilesToSave) {
+        await saveProfile(profileData);
+      }
+
+      // 4. Update localStorage keys (faithfully reproducing empty/null values)
+      const keysMap = {
+        history: "vf_history",
+        favorites: "vf_favorites",
+        quick_replies: "vf_quick_replies",
+        voiceSettings: "voiceforge:voiceSettings",
+        calibrationXOffset: "voiceforge:calibrationXOffset",
+        calibrationYOffset: "voiceforge:calibrationYOffset",
+        calibrationScale: "voiceforge:calibrationScale",
+      };
+
+      for (const [backupKey, storageKey] of Object.entries(keysMap)) {
+        if (backupKey in storage) {
+          const val = storage[backupKey];
+          if (val === null || val === undefined) {
+            localStorage.removeItem(storageKey);
+          } else {
+            localStorage.setItem(storageKey, val);
+          }
+        }
+      }
+
+      showToast("Data imported successfully", "success");
+      const loaded = await getSavedProfiles();
+      setProfiles(loaded);
+      setVoiceSettings(loadVoiceSettings());
+      event.target.value = "";
+    } catch (err) {
+      showToast("Import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
 
   async function removeProfile(voiceId) {
     try {
@@ -271,6 +419,39 @@ export default function Settings() {
               />
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Backup & Restore</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Save your speech history, custom quick replies, and calibration settings to a file, or restore them.
+        </p>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-5 font-bold text-white transition hover:bg-moss/90"
+          >
+            <Download size={18} aria-hidden="true" />
+            Export Configuration
+          </button>
+
+          <label
+            htmlFor="import-config-file"
+            className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-5 font-bold text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+          >
+            <Upload size={18} aria-hidden="true" />
+            Import Configuration
+            <input
+              id="import-config-file"
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="sr-only"
+            />
+          </label>
         </div>
       </section>
 

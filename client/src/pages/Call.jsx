@@ -128,28 +128,50 @@ React.useEffect(() => {
     localStorage.setItem("voiceforge:calibrationScale", "1.0");
   };
 
-  React.useEffect(() => {
-    let activeStream = null;
-    async function openCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        activeStream = stream;
-        setWebcamStream(stream);
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        setCameraError("");
-      } catch (webcamError) {
-        setCameraError(webcamError?.message || String(webcamError));
-        showToast("Camera access failed", "error");
+ React.useEffect(() => {
+  let activeStream = null;
+  let isMounted = true;
+
+  async function openCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+
+      // Prevent webcam resource leak if component unmounts
+      // before getUserMedia resolves.
+      if (!isMounted) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+
+      activeStream = stream;
+      setWebcamStream(stream);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      setCameraError("");
+    } catch (webcamError) {
+      if (!isMounted) return;
+
+      setCameraError(webcamError?.message || String(webcamError));
+      showToast("Camera access failed", "error");
     }
-    openCamera();
-    return () => {
-      activeStream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [showToast]);
+  }
+
+  openCamera();
+
+  return () => {
+    isMounted = false;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+    }
+  };
+}, [showToast]);
 
   async function handleSpeak(text) {
     if (!activeProfile?.voice_id) return;

@@ -88,7 +88,7 @@ jobs:
 
             function getProgramReviewerMentions(programLabel) {
               const reviewersByProgram = {
-                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@Mrigakshi-Rathore', '@vedhapprakashni'],
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
                 nsoc26: ['@joyprakashk', '@rushi-k12'],
                 SSoC26: ['@joyprakashk', '@rushi-k12'],
                 ELUSOC: ['@joyprakashk', '@rushi-k12']
@@ -115,10 +115,10 @@ jobs:
             }
 
             const programs = [
-              { name: 'GSSoC', label: 'gssoc26', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
-              { name: 'NSOC', label: 'nsoc26', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
-              { name: 'SSOC', label: 'SSoC26', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
-              { name: 'ELUSOC', label: 'ELUSOC', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
+              { name: 'GSSoC', label: 'gssoc26', template: 'gssoc', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
+              { name: 'NSOC', label: 'nsoc26', template: 'nsoc', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'SSOC', label: 'SSoC26', template: 'ssoc', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'ELUSOC', label: 'ELUSOC', template: 'elusoc', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
             ];
 
             function hasHeading(name) {
@@ -324,7 +324,7 @@ jobs:
 
             if (templateProblems.includes('no-template')) {
               const noTemplateHowToFix = matchedProgram
-                ? `Use your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md) — do not file a blank issue`
+                ? `Use your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.template}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.template}_feature_request.md) — do not file a blank issue`
                 : `Use a template: [pick a template](${baseUrl}/choose) — select your program and issue type, and please do not file a blank issue again`;
               problemLines.push(`| 📝 | **Template not used** | ${noTemplateHowToFix} |`);
             }
@@ -334,7 +334,7 @@ jobs:
             }
 
             const templateTip = matchedProgram
-              ? `or start fresh with your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md)`
+              ? `or start fresh with your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.template}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.template}_feature_request.md)`
               : `or [start fresh with the right template](${baseUrl}/choose)`;
 
             const problemCount = problemLines.length;

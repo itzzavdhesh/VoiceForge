@@ -120,7 +120,7 @@ test("MOCK_ELEVENLABS: streamSpeech responds with audio/mpeg and a non-empty bod
   const { speechId } = speakRes.jsonBody;
 
   // 2. Stream it back — entirely local, no ElevenLabs call.
-  const streamReq = createRequest({ params: { speechId } });
+  const streamReq = createRequest({ query: { t: speechId } });
   const streamRes = createResponse();
   const err = await invoke(streamSpeech, streamReq, streamRes);
 
@@ -129,14 +129,15 @@ test("MOCK_ELEVENLABS: streamSpeech responds with audio/mpeg and a non-empty bod
   assert.ok(streamRes.ended, "response must be ended after streaming mock audio");
 });
 
-test("MOCK_ELEVENLABS: streamSpeech returns 404 for an unknown speechId", async (t) => {
+test("MOCK_ELEVENLABS: streamSpeech returns 400 for an invalid speechId", async (t) => {
   const restore = withEnv({ MOCK_ELEVENLABS: "true", NODE_ENV: "development" });
   t.after(restore);
 
-  const request = createRequest({ params: { speechId: "does-not-exist" } });
+  const request = createRequest({ query: { t: "does-not-exist" } });
   const response = createResponse();
-  await invoke(streamSpeech, request, response);
-  assert.equal(response.statusCode, 404);
+  const err = await invoke(streamSpeech, request, response);
+  assert.ok(err, "should call next with an error for invalid token");
+  assert.equal(err.status, 400);
 });
 
 // ---------------------------------------------------------------------------

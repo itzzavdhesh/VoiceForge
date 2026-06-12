@@ -22,7 +22,7 @@ jobs:
       - name: Apply mentor label (and ready-for-review on approval) when a mentor reviews
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.MENTOR_LABEL_PAT || secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const reviewer     = context.payload.review.user.login;
             const reviewState  = context.payload.review.state.toLowerCase();   // Normalize to lowercase: approved | changes_requested | commented
@@ -41,9 +41,10 @@ jobs:
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
               'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
-              'vedhapprakashni':  'mentor:vedhapprakashni',
               'joyprakashk':    'mentor:joyprakashk',
-              'rushi-k12':      'mentor:rushi-k12'
+              'rushi-k12':      'mentor:rushi-k12',
+              'itzzavdheshh':    'mentor:itzzavdheshh',
+              'vedhapprakashni': 'mentor:vedhapprakashni'
             };
             // Admin list — bypass guard (can always apply labels freely)
             const ADMINS = ['itzzavdhesh'];
@@ -144,3 +145,17 @@ jobs:
             if (reviewState === 'approved') {
               await removeLabel('needs revision');
             }
+
+      - name: Save PR number
+        if: always()
+        run: |
+          mkdir -p pr
+          echo "${{ github.event.pull_request.number }}" > pr/NR
+
+      - name: Upload PR number
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr_number
+          path: pr/
+          retention-days: 1

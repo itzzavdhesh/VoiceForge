@@ -41,9 +41,10 @@ jobs:
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
               'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
-              'vedhapprakashni':  'mentor:vedhapprakashni',
               'joyprakashk':    'mentor:joyprakashk',
-              'rushi-k12':      'mentor:rushi-k12'
+              'rushi-k12':      'mentor:rushi-k12',
+              'itzzavdheshh':    'mentor:itzzavdheshh',
+              'vedhapprakashni': 'mentor:vedhapprakashni'
             };
             const ADMINS = ['itzzavdhesh'];
             // ─────────────────────────────────────────────────────────────
