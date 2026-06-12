@@ -87,6 +87,13 @@ export default function useVoiceClone() {
       const payload = await response.json();
 
       if (!response.ok) {
+        // Handle duplicate request error specifically.
+        // 429 (Too Many Requests) indicates a clone is already in progress.
+        if (response.status === 429) {
+          throw new Error(
+            payload.error || "A voice clone request is already in progress. Please wait for it to complete before requesting another clone."
+          );
+        }
         throw new Error(payload.error || "Voice cloning failed.");
       }
 

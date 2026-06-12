@@ -4,6 +4,12 @@ import { getIsMock } from "../utils/mock.js"; // adjust path to actual location
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
+// In-memory store to prevent duplicate voice clone requests during network latency.
+// Maps session/user IDs to their active clone request state.
+// This prevents duplicate API calls when users retry or interact multiple times
+// before the UI reflects the cloning state (e.g., in slow network conditions).
+const activeCloneRequests = new Map();
+
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
   "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
@@ -120,7 +126,44 @@ function sanitizeUploadFileName(originalName) {
   return cleaned || "reference.webm";
 }
 
+// Generate a unique identifier for request locking.
+// Uses session ID if available (authenticated requests), otherwise uses IP + timestamp.
+function getRequestLockId(request) {
+  if (request.session?.id) {
+    return `session:${request.session.id}`;
+  }
+  const ip = request.ip || request.socket?.remoteAddress || "unknown";
+  return `ip:${ip}`;
+}
+
+// Check if a clone request is already in progress for this user/session.
+// Returns true if a request is locked, false otherwise.
+function isCloneRequestLocked(lockId) {
+  const lockData = activeCloneRequests.get(lockId);
+  if (!lockData) return false;
+
+  // Clean up expired locks (older than 5 minutes)
+  if (Date.now() - lockData.timestamp > 300000) {
+    activeCloneRequests.delete(lockId);
+    return false;
+  }
+
+  return true;
+}
+
+// Acquire a lock for a clone request.
+function acquireCloneLock(lockId) {
+  activeCloneRequests.set(lockId, { timestamp: Date.now() });
+}
+
+// Release a lock for a clone request.
+function releaseCloneLock(lockId) {
+  activeCloneRequests.delete(lockId);
+}
+
 export async function cloneVoice(request, response, next) {
+  const lockId = getRequestLockId(request);
+
   try {
     const audioFile = request.file;
 
@@ -129,9 +172,22 @@ export async function cloneVoice(request, response, next) {
       return;
     }
 
+    // Prevent duplicate clone requests during slow network conditions.
+    // If a clone request is already in progress, reject the duplicate with 429.
+    if (isCloneRequestLocked(lockId)) {
+      response.status(429).json({
+        error: "A voice clone request is already in progress. Please wait for it to complete before requesting another clone."
+      });
+      return;
+    }
+
+    // Acquire lock for this clone request.
+    acquireCloneLock(lockId);
+
     // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_ELEVENLABS: skipping real voice clone, returning fixture.");
+      releaseCloneLock(lockId);
       response.json({
         voice_id: "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
@@ -164,11 +220,13 @@ export async function cloneVoice(request, response, next) {
     }
 
     const payload = await elevenResponse.json();
+    releaseCloneLock(lockId);
     response.json({
       voice_id: payload.voice_id,
       name: request.body.name || "VoiceForge Voice"
     });
   } catch (error) {
+    releaseCloneLock(lockId);
     next(error);
   }
 }
