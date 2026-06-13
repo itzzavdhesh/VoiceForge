@@ -74,42 +74,39 @@ export function useSpeechHistory() {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
- * Adds a message to speech history.
- *
- * Behavior:
- * - trims whitespace
- * - prevents empty messages
- * - preserves existing IDs for duplicates
- * - moves duplicate entries to top
- * - enforces MAX_HISTORY limit
- *
- * @param {string} text - Message text to store
- */
-const addMessage = useCallback((text) => {
-  const trimmed = text.trim();
+   * Adds a message to speech history.
+   *
+   * Behavior:
+   * - trims whitespace
+   * - prevents empty messages
+   * - preserves existing IDs for duplicates
+   * - moves duplicate entries to top with updated timestamp
+   * - enforces MAX_HISTORY limit
+   *
+   * @param {string} text - Message text to store
+   */
+  const addMessage = useCallback((text) => {
+    const trimmed = text.trim();
 
-  if (!trimmed) return;
+    if (!trimmed) return;
 
-  setHistory((prev) => {
-    // Check existing message
-    const existing = prev.find((m) => m.text === trimmed);
+    setHistory((prev) => {
+      // Check existing message
+      const existing = prev.find((m) => m.text === trimmed);
 
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      timestamp: Date.now(),
-    };
+      const entry = existing
+        ? { ...existing, timestamp: Date.now() }
+        : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
 
-    // Move duplicate to top instead of recreating
-    const updated = [
-      entry,
-      ...prev.filter((m) => m.id !== entry.id),
-    ];
+      // Move duplicate to top instead of recreating
+      const updated = [
+        entry,
+        ...prev.filter((m) => m.id !== entry.id),
+      ];
 
-    return updated.slice(0, MAX_HISTORY);
-  });
-}, []);
+      return updated.slice(0, MAX_HISTORY);
+    });
+  }, []);
 
   /**
    * Removes a message by id and also removes it from favorites.
