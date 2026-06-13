@@ -11,6 +11,7 @@ import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
 import ScrollToBottomButton from "./components/ScrollToBottomButton.jsx";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -72,6 +73,26 @@ export default function App() {
     saveActiveTab(tab);
     setActiveTab(tab);
   }
+
+  // Support navigation to non-tab routes such as the privacy policy.
+  function navigateTo(route) {
+    if (route === "privacy-policy") {
+      setActiveTab("privacy-policy");
+      return;
+    }
+    selectTab(route);
+  }
+
+  // On initial load, honor direct links to /privacy-policy
+  React.useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && window.location?.pathname === "/privacy-policy") {
+        setActiveTab("privacy-policy");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
@@ -157,6 +178,10 @@ export default function App() {
             {activeTab === "settings"   && <Settings />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
+            {activeTab === "privacy-policy" && (<PrivacyPolicy
+              onBackHome={() => selectTab("onboarding")}
+             />
+            )}
           </div>
         )}
       </main>
@@ -190,10 +215,11 @@ export default function App() {
 
       {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
       <div className="h-16 sm:hidden" aria-hidden="true" />
-
+      
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
-      <Footer onNavigate={selectTab} tabs={tabs} />
+      <Footer onNavigate={navigateTo} tabs={tabs} />
+
 
     </div>
   );

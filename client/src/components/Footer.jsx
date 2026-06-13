@@ -118,9 +118,12 @@ const Footer = ({ onNavigate, tabs }) => {
                 Report a Bug
               </a>
               {/* /privacy and /terms routes to be implemented in a follow-up */}
-              <a href="#" className="hover:text-white transition-colors duration-150">
+              <button
+                onClick={() => onNavigate?.("privacy-policy")}
+                className="text-left hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+              >
                 Privacy Policy
-              </a>
+              </button>
               <a href="#" className="hover:text-white transition-colors duration-150">
                 Terms of Service
               </a>
