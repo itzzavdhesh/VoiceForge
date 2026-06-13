@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 export default function PrivacyPolicy({ onBackHome }) {
 
-  const lastUpdated = new Date().toLocaleDateString();
+  const lastUpdated = "June 13, 2026"; // Update this when the policy text changes
 
   useEffect(() => {
     window.scrollTo({
@@ -15,7 +15,7 @@ export default function PrivacyPolicy({ onBackHome }) {
     <div className="min-h-screen bg-background text-foreground">
         <div className="max-w-4xl mx-auto px-6 py-16">
 
-      <section className="mb-10 rounded-xl border border-style: groove bg-card p-6">
+      <section className="mb-10 rounded-xl border border-border bg-card p-6">
         <div className="border-b border-border pb-6 mb-10"></div>
         <h1 className="text-4xl font-bold mb-2">Privacy Policy</h1>
         <p className="text-sm text-muted-foreground">Last updated: {lastUpdated}</p>
@@ -109,8 +109,7 @@ export default function PrivacyPolicy({ onBackHome }) {
       </section>
       <button
         onClick={() => {
-        console.log("button clicked");
-        onBackHome?.();
+         onBackHome?.();
         }}
         className="
         inline-flex items-center
