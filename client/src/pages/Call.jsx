@@ -1,6 +1,12 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
+import {
+  Camera,
+  CircleAlert,
+  Sliders,
+  ChevronDown,
+  RotateCcw,
+} from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
@@ -25,7 +31,7 @@ export default function Call() {
     persistLanguage(language);
   }, [language]);
   const [dbError, setDbError] = React.useState("");
-  const { speak, status, error, audioUrl } = useTTS();
+  const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
 
   React.useEffect(() => {
@@ -43,57 +49,59 @@ export default function Call() {
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);
   const [calibration, setCalibration] = React.useState(() => {
-  try {
-    const savedX     = localStorage.getItem("voiceforge:calibrationXOffset");
-    const savedY     = localStorage.getItem("voiceforge:calibrationYOffset");
-    const savedScale = localStorage.getItem("voiceforge:calibrationScale");
+    try {
+      const savedX = localStorage.getItem("voiceforge:calibrationXOffset");
+      const savedY = localStorage.getItem("voiceforge:calibrationYOffset");
+      const savedScale = localStorage.getItem("voiceforge:calibrationScale");
 
-    let x = savedX !== null ? parseInt(savedX, 10) : 0;
-    let y = savedY !== null ? parseInt(savedY, 10) : 0;
-    let scale = savedScale !== null ? parseFloat(savedScale) : 1.0;
+      let x = savedX !== null ? parseInt(savedX, 10) : 0;
+      let y = savedY !== null ? parseInt(savedY, 10) : 0;
+      let scale = savedScale !== null ? parseFloat(savedScale) : 1.0;
 
-    // Sanitize and clamp values to default limits
-    if (isNaN(x)) {
-      x = 0;
-    } else {
-      x = Math.max(-400, Math.min(400, x));
+      // Sanitize and clamp values to default limits
+      if (isNaN(x)) {
+        x = 0;
+      } else {
+        x = Math.max(-400, Math.min(400, x));
+      }
+
+      if (isNaN(y)) {
+        y = 0;
+      } else {
+        y = Math.max(-250, Math.min(150, y));
+      }
+
+      if (isNaN(scale)) {
+        scale = 1.0;
+      } else {
+        scale = Math.max(0.5, Math.min(2.5, scale));
+      }
+
+      return {
+        xOffset: x,
+        yOffset: y,
+        scale,
+      };
+    } catch {
+      return { xOffset: 0, yOffset: 0, scale: 1.0 };
     }
-
-    if (isNaN(y)) {
-      y = 0;
-    } else {
-      y = Math.max(-250, Math.min(150, y));
-    }
-
-    if (isNaN(scale)) {
-      scale = 1.0;
-    } else {
-      scale = Math.max(0.5, Math.min(2.5, scale));
-    }
-
-    return {
-      xOffset: x,
-      yOffset: y,
-      scale
-    };
-  } catch {
-    return { xOffset: 0, yOffset: 0, scale: 1.0 };
-  }
-});
+  });
 
   const handleCalibrationChange = (key, value) => {
-  if (typeof value !== "number" || isNaN(value)) return;
-  setCalibration((prev) => {
-    const updated = { ...prev, [key]: value };
-    try {
-      localStorage.setItem(
-        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-        value.toString()
-      );
-    } catch { /* storage unavailable – continue without persisting */ }
-    return updated;
-  });
-};
+    if (typeof value !== "number" || isNaN(value)) return;
+    setCalibration((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem(
+          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+          value.toString(),
+        );
+      } catch {
+        /* storage unavailable – continue without persisting */
+      }
+      return updated;
+    });
+  };
 
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
@@ -103,59 +111,63 @@ export default function Call() {
     localStorage.setItem("voiceforge:calibrationScale", "1.0");
   };
 
- React.useEffect(() => {
-  let activeStream = null;
-  let isMounted = true;
+  React.useEffect(() => {
+    let activeStream = null;
+    let isMounted = true;
 
-  async function openCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
+    async function openCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
 
-      // Prevent webcam resource leak if component unmounts
-      // before getUserMedia resolves.
-      if (!isMounted) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
+        // Prevent webcam resource leak if component unmounts
+        // before getUserMedia resolves.
+        if (!isMounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        activeStream = stream;
+        setWebcamStream(stream);
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        setCameraError("");
+      } catch (webcamError) {
+        if (!isMounted) return;
+
+        setCameraError(webcamError?.message || String(webcamError));
+        showToast("Camera access failed", "error");
       }
+    }
 
-      activeStream = stream;
-      setWebcamStream(stream);
+    openCamera();
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
+    return () => {
+      isMounted = false;
+
+      if (activeStream) {
+        activeStream.getTracks().forEach((track) => track.stop());
       }
-
-      setCameraError("");
-    } catch (webcamError) {
-      if (!isMounted) return;
-
-      setCameraError(webcamError?.message || String(webcamError));
-      showToast("Camera access failed", "error");
-    }
-  }
-
-  openCamera();
-
-  return () => {
-    isMounted = false;
-
-    if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
-    }
-  };
-}, [showToast]);
+    };
+  }, [showToast]);
 
   async function handleSpeak(text) {
     if (!activeProfile?.voice_id) return;
     try {
-      await speak({
-  text,
-  voiceId: activeProfile.voice_id,
-  language_code: language,
-});
+      const result = await speak({
+        text,
+        voiceId: activeProfile.voice_id,
+        language_code: language,
+      });
+
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+      }
     } catch (err) {
       console.error("TTS streaming error:", err);
       showToast("Speech generation failed", "error");
@@ -164,6 +176,12 @@ export default function Call() {
 
   return (
     <div className="space-y-5">
+      {engine === "browser" && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+          Using Browser Voice (Offline Mode)
+        </div>
+      )}
+
       {/* ── Header card ───────────────────────────────────────────────────── */}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -189,7 +207,10 @@ export default function Call() {
       {dbError && (
         <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
           <CircleAlert size={18} aria-hidden="true" />
-          <span>Database Error: {dbError}. Please ensure IndexedDB is enabled and not blocked.</span>
+          <span>
+            Database Error: {dbError}. Please ensure IndexedDB is enabled and
+            not blocked.
+          </span>
         </div>
       )}
 
@@ -222,16 +243,23 @@ export default function Call() {
         {isCalibrationOpen && (
           <div className="mt-4 border-t border-ink/10 pt-4">
             <p className="text-sm text-ink/65 mb-4">
-              Calibrate the animated fallback mouth position and size overlay to align with your camera.
+              Calibrate the animated fallback mouth position and size overlay to
+              align with your camera.
             </p>
             <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-x-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Horizontal Position (X Offset)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
-                    {calibration.xOffset > 0 ? `+${calibration.xOffset}` : calibration.xOffset}px
+                    {calibration.xOffset > 0
+                      ? `+${calibration.xOffset}`
+                      : calibration.xOffset}
+                    px
                   </span>
                 </div>
                 <input
@@ -241,17 +269,28 @@ export default function Call() {
                   max="400"
                   step="1"
                   value={calibration.xOffset}
-                  onChange={(e) => handleCalibrationChange("xOffset", parseInt(e.target.value, 10))}
+                  onChange={(e) =>
+                    handleCalibrationChange(
+                      "xOffset",
+                      parseInt(e.target.value, 10),
+                    )
+                  }
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-y-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-y-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Vertical Position (Y Offset)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
-                    {calibration.yOffset > 0 ? `+${calibration.yOffset}` : calibration.yOffset}px
+                    {calibration.yOffset > 0
+                      ? `+${calibration.yOffset}`
+                      : calibration.yOffset}
+                    px
                   </span>
                 </div>
                 <input
@@ -261,13 +300,21 @@ export default function Call() {
                   max="150"
                   step="1"
                   value={calibration.yOffset}
-                  onChange={(e) => handleCalibrationChange("yOffset", parseInt(e.target.value, 10))}
+                  onChange={(e) =>
+                    handleCalibrationChange(
+                      "yOffset",
+                      parseInt(e.target.value, 10),
+                    )
+                  }
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-scale-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-scale-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Mouth Size (Scale)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
@@ -281,7 +328,9 @@ export default function Call() {
                   max="2.5"
                   step="0.1"
                   value={calibration.scale}
-                  onChange={(e) => handleCalibrationChange("scale", parseFloat(e.target.value))}
+                  onChange={(e) =>
+                    handleCalibrationChange("scale", parseFloat(e.target.value))
+                  }
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
