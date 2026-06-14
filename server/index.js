@@ -36,6 +36,7 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.use("/api/voice", voiceRoutes);
+app.use("/api/voices", voiceRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
