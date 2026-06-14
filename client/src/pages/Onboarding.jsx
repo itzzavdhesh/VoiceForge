@@ -342,7 +342,7 @@ export default function Onboarding({ onReady }) {
   return (
     <div className="space-y-6">
       {/* GLOBAL ONBOARDING HEADER BANNER VIEW */}
-      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section className="rounded-lg border border-ink/10 bg-white p-6 text-ink shadow-soft dark:border-border dark:bg-surface dark:text-white dark:shadow-soft-dk">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
@@ -351,7 +351,7 @@ export default function Onboarding({ onReady }) {
             <h2 className="mt-2 text-3xl font-bold">
               {stepContent[activeStep].title}
             </h2>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-white/75">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-ink/75 dark:text-white/75">
               {stepContent[activeStep].description}
             </p>
           </div>
@@ -375,7 +375,7 @@ export default function Onboarding({ onReady }) {
               return (
                 <div
                   key={label}
-                  className={`h-2 rounded-full transition-all duration-300 ${isBarFilled ? "bg-coral" : "bg-white/25"}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${isBarFilled ? "bg-coral" : "bg-ink/15 dark:bg-white/25"}`}
                   title={label}
                 />
               );
