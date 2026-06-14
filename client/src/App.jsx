@@ -218,10 +218,9 @@ export default function App() {
       
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
-      <Footer onNavigate={navigateTo} tabs={tabs} />
+      <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
 
 
     </div>
   );
 }
-

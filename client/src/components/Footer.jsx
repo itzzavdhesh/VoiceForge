@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Footer = ({ onNavigate, tabs }) => {
+const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
   const currentYear = new Date().getFullYear();
 
   return (
@@ -127,6 +127,15 @@ const Footer = ({ onNavigate, tabs }) => {
               <a href="#" className="hover:text-white transition-colors duration-150">
                 Terms of Service
               </a>
+              {onOpenShortcuts && (
+                <button
+                  type="button"
+                  onClick={onOpenShortcuts}
+                  className="text-left hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+                >
+                  Keyboard Shortcuts
+                </button>
+              )}
             </nav>
           </div>
 
