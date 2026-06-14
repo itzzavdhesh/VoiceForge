@@ -211,6 +211,18 @@ export default function Settings() {
       }
 
       // 4. Update localStorage keys (faithfully reproducing empty/null values)
+      function sanitizeCalibrationValue(key, raw) {
+        if (raw === null || raw === undefined) return raw;
+        const num = parseFloat(raw);
+        if (isNaN(num)) return null;
+        switch (key) {
+          case "calibrationXOffset": return Math.max(-400, Math.min(400, Math.round(num))).toString();
+          case "calibrationYOffset": return Math.max(-250, Math.min(150, Math.round(num))).toString();
+          case "calibrationScale": return Math.max(0.5, Math.min(2.5, num)).toString();
+          default: return raw;
+        }
+      }
+
       const keysMap = {
         history: "vf_history",
         favorites: "vf_favorites",
@@ -224,7 +236,7 @@ export default function Settings() {
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
         if (backupKey in storage) {
-          const val = storage[backupKey];
+          const val = sanitizeCalibrationValue(backupKey, storage[backupKey]);
           if (val === null || val === undefined) {
             localStorage.removeItem(storageKey);
           } else {
