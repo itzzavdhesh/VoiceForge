@@ -9,7 +9,11 @@ export default React.forwardRef(function VideoPreview({
   isSpeaking,
   onSpeakingChange,
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
-  isCalibrating = false
+  isCalibrating = false,
+  captionText = "",
+  captionEnabled = true,
+  captionPosition = "bottom",
+  captionFontSize = "medium",
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
@@ -121,12 +125,84 @@ export default React.forwardRef(function VideoPreview({
         context.restore();
       }
 
+      // Draw live captions
+      if (captionEnabled && captionText && captionText.trim()) {
+        const fontSizeMap = { small: 20, medium: 28, large: 36 };
+        const fs = fontSizeMap[captionFontSize] || 28;
+        context.font = `bold ${fs}px Inter, sans-serif`;
+        context.textAlign = "center";
+
+        const maxWidth = canvas.width - 60;
+        const words = captionText.trim().split(" ");
+        const lines = [];
+        let currentLine = "";
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          if (context.measureText(testLine).width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+
+        const lineHeight = fs + 8;
+        const totalHeight = lines.length * lineHeight + 20;
+        const paddingX = 20;
+
+        let startY;
+        if (captionPosition === "top") {
+          startY = 30;
+        } else if (captionPosition === "middle") {
+          startY = (canvas.height - totalHeight) / 2;
+        } else {
+          startY = canvas.height - totalHeight - 20;
+        }
+
+        // Background bar
+        context.fillStyle = "rgba(0, 0, 0, 0.6)";
+        context.beginPath();
+        context.roundRect(
+          paddingX,
+          startY - 4,
+          canvas.width - paddingX * 2,
+          totalHeight,
+          8
+        );
+        context.fill();
+
+        // Caption text
+        context.fillStyle = isSpeaking ? "#86efac" : "#ffffff";
+        lines.forEach((line, i) => {
+          context.fillText(
+            line,
+            canvas.width / 2,
+            startY + fs + i * lineHeight
+          );
+        });
+
+        // Speaking indicator dot
+        if (isSpeaking) {
+          context.beginPath();
+          context.arc(
+            canvas.width - paddingX - 10,
+            startY + totalHeight / 2,
+            6,
+            0,
+            Math.PI * 2
+          );
+          context.fillStyle = "#86efac";
+          context.fill();
+        }
+      }
+
       animationRef.current = requestAnimationFrame(draw);
     }
 
     animationRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animationRef.current);
-  }, [ref, isSpeaking, theme]);
+  }, [ref, isSpeaking, theme, captionText, captionEnabled, captionPosition, captionFontSize]);
 
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
