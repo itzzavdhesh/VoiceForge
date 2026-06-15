@@ -1,13 +1,26 @@
 // Lets users save their ElevenLabs API key for the current session and manage browser-stored voice profiles.
 import React from "react";
 import { getApiKey, setApiKey, migrateFromLocalStorage } from "../utils/apiKeyStorage.js";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  persistVoiceSettings,
+} from "../utils/voiceSettings.js";
+import {
+  loadLanguage,
+  persistLanguage,
+  getLanguageByCode,
+  LANGUAGE_STORAGE_KEY,
+} from "../utils/languages.js";
 
-import { ExternalLink, Trash2, CircleAlert } from "lucide-react";
+import { ExternalLink, Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
 } from "../hooks/useVoiceClone.js";
-
+import { saveProfile } from "../utils/db.js";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -32,6 +45,7 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const { toasts, showToast } = useToast();
   const [migratedNotice, setMigratedNotice] = React.useState(false);
   const [apiKey, setApiKeyInput] = React.useState(() => {
     try {
@@ -63,37 +77,182 @@ export default function Settings() {
   }, []);
 
 
-  const defaultSettings = { stability: 0.45, similarity_boost: 0.8, style: 0.2 };
-  const [voiceSettings, setVoiceSettings] = React.useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("voiceforge:voiceSettings")) || defaultSettings;
-    } catch {
-      return defaultSettings;
-    }
-  });
+  const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
+  const [language, setLanguage] = React.useState(loadLanguage);
+  const selectedLangObj = getLanguageByCode(language);
 
   function saveApiKey() {
     setApiKey(apiKey);
+    showToast("API key saved for this session");
   }
 
 
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
-    try {
-      localStorage.setItem("voiceforge:voiceSettings", JSON.stringify(newSettings));
-    } catch {
-      // Storage unavailable
-    }
+    persistVoiceSettings(newSettings);
   }
+
+  const handleExport = async () => {
+    try {
+      const storageData = {
+        history: localStorage.getItem("vf_history"),
+        favorites: localStorage.getItem("vf_favorites"),
+        quick_replies: localStorage.getItem("vf_quick_replies"),
+        voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
+        calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
+        calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
+        calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+      };
+
+      const rawProfiles = await getSavedProfiles();
+      const profilesData = await Promise.all(
+        rawProfiles.map(async (p) => {
+          let base64Audio = null;
+          if (p.audioBlob) {
+            base64Audio = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(p.audioBlob);
+            });
+          }
+          return {
+            voice_id: p.voice_id,
+            name: p.name,
+            createdAt: p.createdAt,
+            audioDataUrl: base64Audio,
+          };
+        })
+      );
+
+      const backup = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        storage: storageData,
+        profiles: profilesData,
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `voiceforge-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("Data exported successfully", "success");
+    } catch (err) {
+      showToast("Export failed: " + (err.message || String(err)), "error");
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // 1. File size check (15MB limit to prevent browser freezing)
+      const MAX_FILE_SIZE = 15 * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("File is too large. Maximum size allowed is 15MB.");
+      }
+
+      // 2. Overwrite confirmation
+      const confirmOverwrite = window.confirm(
+        "Importing this backup will overwrite your current settings, speech history, and voice profiles. Do you want to continue?"
+      );
+      if (!confirmOverwrite) {
+        event.target.value = "";
+        return;
+      }
+
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      if (!backup || backup.version !== 1 || !backup.storage || !Array.isArray(backup.profiles)) {
+        throw new Error("Invalid backup file format.");
+      }
+
+      const { storage, profiles: importedProfiles } = backup;
+
+      // 3. Process voice profiles first - if any fail, we don't modify localStorage
+      const profilesToSave = [];
+      for (const p of importedProfiles) {
+        let audioBlob = null;
+        if (p.audioDataUrl) {
+          const arr = p.audioDataUrl.split(",");
+          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          audioBlob = new Blob([u8arr], { type: mime });
+        }
+
+        profilesToSave.push({
+          id: p.voice_id,
+          voice_id: p.voice_id,
+          name: p.name,
+          createdAt: p.createdAt || new Date().toISOString(),
+          audioBlob,
+        });
+      }
+
+      // Commit profiles to IndexedDB
+      for (const profileData of profilesToSave) {
+        await saveProfile(profileData);
+      }
+
+      // 4. Update localStorage keys (faithfully reproducing empty/null values)
+      const keysMap = {
+        history: "vf_history",
+        favorites: "vf_favorites",
+        quick_replies: "vf_quick_replies",
+        voiceSettings: "voiceforge:voiceSettings",
+        language: LANGUAGE_STORAGE_KEY,
+        calibrationXOffset: "voiceforge:calibrationXOffset",
+        calibrationYOffset: "voiceforge:calibrationYOffset",
+        calibrationScale: "voiceforge:calibrationScale",
+      };
+
+      for (const [backupKey, storageKey] of Object.entries(keysMap)) {
+        if (backupKey in storage) {
+          const val = storage[backupKey];
+          if (val === null || val === undefined) {
+            localStorage.removeItem(storageKey);
+          } else {
+            localStorage.setItem(storageKey, val);
+          }
+        }
+      }
+
+      showToast("Data imported successfully", "success");
+      const loaded = await getSavedProfiles();
+      setProfiles(loaded);
+      setVoiceSettings(loadVoiceSettings());
+      setLanguage(loadLanguage());
+      event.target.value = "";
+    } catch (err) {
+      showToast("Import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
 
   async function removeProfile(voiceId) {
     try {
       const next = await deleteVoiceProfile(voiceId);
       setProfiles(next);
       setDbError("");
+      showToast("Voice profile deleted", "success");
     } catch (err) {
       setDbError(err?.message || String(err));
+      showToast("Failed to delete profile", "error");
     }
   }
 
@@ -145,7 +304,7 @@ export default function Settings() {
 
               onChange={(event) => setApiKeyInput(event.target.value)}
               className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
-
+              onKeyDown={(e) => { if (e.key === "Enter") saveApiKey(); }}
 
               placeholder="sk_..."
             />
@@ -228,6 +387,137 @@ export default function Settings() {
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
           </div>
+
+          {/* ── Speaker Boost toggle ── */}
+          <div className="flex items-center justify-between rounded-lg border border-ink/10 p-4 dark:border-border">
+            <div>
+              <p className="text-sm font-bold text-ink dark:text-neutral-200">
+                Speaker Boost
+              </p>
+              <p
+                id="settings-speaker-boost-desc"
+                className="mt-0.5 text-xs text-ink/55 dark:text-muted"
+              >
+                Boosts similarity to the reference speaker. Disable if you hear metallic artifacts.
+              </p>
+            </div>
+            <button
+              id="settings-speaker-boost"
+              type="button"
+              role="switch"
+              aria-checked={voiceSettings.use_speaker_boost}
+              aria-describedby="settings-speaker-boost-desc"
+              onClick={() =>
+                saveVoiceSettings({
+                  ...voiceSettings,
+                  use_speaker_boost: !voiceSettings.use_speaker_boost,
+                })
+              }
+              className={[
+                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+                "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-moss focus:ring-offset-2 dark:focus:ring-glow dark:focus:ring-offset-black",
+                voiceSettings.use_speaker_boost
+                  ? "bg-moss dark:bg-glow"
+                  : "bg-neutral-300 dark:bg-neutral-600",
+              ].join(" ")}
+              aria-label="Toggle Speaker Boost"
+            >
+              <span
+                className={[
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                  voiceSettings.use_speaker_boost ? "translate-x-5" : "translate-x-0",
+                ].join(" ")}
+              />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Language & Region ─────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center gap-2 mb-1">
+          <Globe size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <h2 className="text-xl font-bold">Language &amp; Region</h2>
+        </div>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Choose the default output language for ElevenLabs voice synthesis.
+          This applies across the Call and Compose pages.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label
+              htmlFor="settings-language"
+              className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+            >
+              Default Language
+            </label>
+            <LanguageSelector
+              id="settings-language"
+              value={language}
+              onChange={(code) => {
+                setLanguage(code);
+                persistLanguage(code);
+                showToast(
+                  code
+                    ? `Language set to ${getLanguageByCode(code)?.name || code}`
+                    : "Language set to Auto-detect",
+                  "success"
+                );
+              }}
+            />
+          </div>
+          {selectedLangObj && (
+            <div className="flex items-center gap-2 rounded-lg border border-ink/10 px-4 py-3 dark:border-border">
+              <span className="text-2xl" aria-hidden="true">{selectedLangObj.flag}</span>
+              <div>
+                <p className="text-sm font-bold text-ink dark:text-neutral-200">
+                  {selectedLangObj.name}
+                </p>
+                <p className="text-xs text-ink/55 dark:text-muted">
+                  {selectedLangObj.nativeName} · <code className="font-mono">{selectedLangObj.code}</code>
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="mt-3 text-xs text-ink/50 dark:text-muted">
+          Powered by ElevenLabs <code className="font-mono">eleven_multilingual_v2</code> — supports 29 languages.
+          Choose &ldquo;Auto-detect&rdquo; to let the AI infer the language from your text.
+        </p>
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Backup & Restore</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Save your speech history, custom quick replies, and calibration settings to a file, or restore them.
+        </p>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-5 font-bold text-white transition hover:bg-moss/90"
+          >
+            <Download size={18} aria-hidden="true" />
+            Export Configuration
+          </button>
+
+          <label
+            htmlFor="import-config-file"
+            className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-5 font-bold text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+          >
+            <Upload size={18} aria-hidden="true" />
+            Import Configuration
+            <input
+              id="import-config-file"
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="sr-only"
+            />
+          </label>
         </div>
       </section>
 
@@ -264,6 +554,7 @@ export default function Settings() {
           ))}
         </div>
       </section>
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

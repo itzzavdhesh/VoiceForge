@@ -4,3 +4,7 @@ dist
 .env
 .DS_Store
 npm-debug.log*
+
+# Playwright
+playwright-report/
+test-results/

@@ -37,13 +37,15 @@ jobs:
             // ─────────────────────────────────────────────────────────────
             const mentorLabelMap = {
               'sabeenaviklar':  'mentor:sabeenaviklar',
-              '1754riya':       'mentor:1754riya',
               'Anushreebasics': 'mentor:Anushreebasics',
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
-              'leonagoel':      'mentor:leonagoel',
+              '1754riya':       'mentor:1754riya',
+              'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
               'joyprakashk':    'mentor:joyprakashk',
-              'rushi-k12':      'mentor:rushi-k12'
+              'rushi-k12':      'mentor:rushi-k12',
+              'itzzavdheshh':    'mentor:itzzavdheshh',
+              'vedhapprakashni': 'mentor:vedhapprakashni'
             };
             const ADMINS = ['itzzavdhesh'];
             // ─────────────────────────────────────────────────────────────
@@ -127,13 +129,12 @@ jobs:
 
             try {
               if (existing) {
-                if (existing.body.trim() !== msgBody.trim()) {
-                  await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: msgBody });
-                }
-              } else {
-                await github.rest.issues.createComment({ owner, repo, issue_number, body: msgBody });
+                core.info(`Deleting older warning comment (ID: ${existing.id})...`);
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: existing.id });
               }
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: msgBody });
+              core.info(`Posted fresh warning comment.`);
             } catch (err) {
-              if (err.status === 403) core.warning(`Could not post guard comment: ${err.message}`);
+              if (err.status === 403) core.warning(`Could not manage warning comment: ${err.message}`);
               else throw err;
             }

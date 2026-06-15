@@ -54,13 +54,15 @@ jobs:
             // ─────────────────────────────────────────────────────────────
             const MENTORS = [
               'sabeenaviklar',
-              '1754riya',
               'Anushreebasics',
               'itsdakshjain',
               'snehkris',
-              'leonagoel',
+              '1754riya',
+              'Mrigakshi-Rathore',
               'joyprakashk',
-              'rushi-k12'
+              'rushi-k12',
+              'itzzavdheshh',
+              'vedhapprakashni'
             ];
             const ADMINS = ['itzzavdhesh'];
 
@@ -133,4 +135,18 @@ jobs:
               );
               core.info(`PR #${issue_number} is not eligible to merge: no mentor reviews found.`);
             }
+
+      - name: Save PR number
+        if: always()
+        run: |
+          mkdir -p pr
+          echo "${{ github.event.pull_request.number }}" > pr/NR
+
+      - name: Upload PR number
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr_number
+          path: pr/
+          retention-days: 1
 
