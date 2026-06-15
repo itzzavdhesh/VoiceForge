@@ -159,13 +159,14 @@ export default function Call() {
   };
 }, [showToast]);
 
-  async function handleSpeak(text) {
+  async function handleSpeak(text, voice_settings_override) {
     if (!activeProfile?.voice_id) return;
     try {
       await speak({
   text,
   voiceId: activeProfile.voice_id,
   language_code: language,
+  voice_settings_override,
 });
     } catch (err) {
       console.error("TTS streaming error:", err);
