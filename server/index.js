@@ -1,6 +1,6 @@
 // Starts the local Express API that proxies VoiceForge requests to ElevenLabs.
+import "dotenv/config";
 import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
 import voiceRoutes from "./routes/voice.js";
 
@@ -8,7 +8,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 if (process.env.NODE_ENV === "production" && !process.env.STREAM_SECRET?.trim()) {
   console.error(
@@ -33,8 +32,6 @@ const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
 // Enable trust proxy so rate limiters can identify real client IPs
-// behind reverse proxies (e.g., load balancers, CDNs).
-// Set to 1 for single-hop proxies; adjust based on your deployment topology.
 app.set("trust proxy", 1);
 
 app.use(cors({ origin: clientUrl, credentials: true }));
