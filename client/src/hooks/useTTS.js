@@ -31,75 +31,62 @@ export default function useTTS() {
   }
 
   async function speak({ text, voiceId, language_code }) {
-    setError("");
-    setStatus("speaking");
+  setError("");
+  setStatus("speaking");
 
+  try {
+    const voiceSettings = loadVoiceSettings();
+
+    const apiKey = getApiKey();
+    const response = await fetch("/api/voice/speak", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-ElevenLabs-Api-Key": apiKey,
+      },
+      body: JSON.stringify({
+        text,
+        voice_id: voiceId,
+        language_code,
+        voice_settings: voiceSettings,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Speech generation failed.");
+    }
+
+    const payload = await response.json();
+    const nextAudioUrl = payload.audioUrl;
+
+    setEngine("elevenlabs");
+    setAudioUrl(nextAudioUrl);
+    setStatus("ready");
+
+    return {
+      audioUrl: nextAudioUrl,
+      engine: "elevenlabs",
+    };
+  } catch (ttsError) {
     try {
-      if (!navigator.onLine) {
-        await browserSpeak(text, language_code);
+      await browserSpeak(text, language_code);
 
-        setEngine("browser");
-        setAudioUrl("");
-        setStatus("ready");
-
-        return {
-          fallback: true,
-          engine: "browser",
-        };
-      }
-
-      const voiceSettings = loadVoiceSettings();
-      const apiKey = getApiKey();
-
-      const response = await fetch("/api/voice/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-ElevenLabs-Api-Key": apiKey,
-        },
-        body: JSON.stringify({
-          text,
-          voice_id: voiceId,
-          language_code,
-          voice_settings: voiceSettings,
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || "Speech generation failed.");
-      }
-
-      const payload = await response.json();
-      const nextAudioUrl = payload.audioUrl;
-
-      setEngine("elevenlabs");
-      setAudioUrl(nextAudioUrl);
+      setEngine("browser");
+      setAudioUrl("");
       setStatus("ready");
 
       return {
-        audioUrl: nextAudioUrl,
-        engine: "elevenlabs",
+        fallback: true,
+        engine: "browser",
       };
-    } catch (ttsError) {
-      try {
-        await browserSpeak(text, language_code);
-
-        setEngine("browser");
-        setAudioUrl("");
-        setStatus("ready");
-
-        return {
-          fallback: true,
-          engine: "browser",
-        };
-      } catch {
-        setError(ttsError?.message || String(ttsError));
-        setStatus("error");
-        throw ttsError;
-      }
+    } catch {
+      setError(ttsError?.message || String(ttsError));
+      setStatus("error");
+      throw ttsError;
     }
   }
+}
 
   return {
     speak,
