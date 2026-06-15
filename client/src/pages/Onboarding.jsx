@@ -246,7 +246,7 @@ export default function Onboarding({ onReady }) {
   const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
 
   React.useEffect(() => {
-  fetch("/api/voice/status")
+  fetch(`${import.meta.env.VITE_API_URL}/api/voice/status`)
     .then(async (res) => {
       // Check if request succeeded
       if (!res.ok) {
