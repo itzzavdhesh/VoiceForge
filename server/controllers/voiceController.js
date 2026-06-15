@@ -27,6 +27,8 @@ const ENCRYPTION_KEY = crypto.scryptSync(STREAM_SECRET, "voiceforge-stream-salt"
 const IV_LENGTH = 12;
 const ALGORITHM = "aes-256-gcm";
 
+const usedStreamTokens = new Set();
+
 function encryptToken(payload) {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
@@ -101,7 +103,11 @@ async function readElevenLabsError(response) {
   const text = await response.text();
   try {
     const payload = JSON.parse(text);
-    return payload.detail?.message || payload.detail || payload.error || text;
+    const errorData = payload.detail?.message || payload.detail || payload.error;
+    if (typeof errorData === "object" && errorData !== null) {
+      return JSON.stringify(errorData);
+    }
+    return errorData || text;
   } catch {
     return text || `ElevenLabs request failed with status ${response.status}.`;
   }
@@ -203,6 +209,10 @@ export async function speak(request, response, next) {
       response.status(400).json({ error: "voice_id is required and must not be blank." });
       return;
     }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedVoiceId)) {
+      response.status(400).json({ error: "Invalid voice_id format." });
+      return;
+    }
     if (trimmedText.length > 500) {
       response.status(400).json({ error: "Text too long; maximum 500 characters for streaming." });
       return;
@@ -233,7 +243,30 @@ export async function streamSpeech(request, response, next) {
       response.status(400).json({ error: "Missing stream token." });
       return;
     }
-    const { text, voiceId, apiKey, language_code, voice_settings } = decryptToken(token);
+
+    if (usedStreamTokens.has(token)) {
+      response.status(403).json({ error: "Stream token has already been used." });
+      return;
+    }
+    usedStreamTokens.add(token);
+
+    const { text, voiceId, apiKey, language_code, voice_settings, expiresAt } = decryptToken(token);
+
+    if (expiresAt) {
+      const timeToLive = expiresAt - Date.now();
+      if (timeToLive > 0) {
+        setTimeout(() => usedStreamTokens.delete(token), timeToLive);
+      } else {
+        usedStreamTokens.delete(token);
+      }
+    } else {
+      setTimeout(() => usedStreamTokens.delete(token), 60000);
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(voiceId)) {
+      response.status(400).json({ error: "Invalid voice_id format." });
+      return;
+    }
 
     // --- mock mode: stream the bundled silent MP3 fixture ---
     if (getIsMock()) {
@@ -274,12 +307,21 @@ export async function streamSpeech(request, response, next) {
       reader.cancel().catch((err) => console.error("Error cancelling ElevenLabs reader:", err));
     });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      response.write(value);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        response.write(value);
+      }
+      response.end();
+    } catch (streamError) {
+      console.error("Stream reading error:", streamError);
+      if (!response.headersSent) {
+        next(streamError);
+      } else {
+        response.end();
+      }
     }
-    response.end();
   } catch (error) {
     next(error);
   }

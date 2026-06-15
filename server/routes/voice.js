@@ -26,7 +26,7 @@ const speakRateLimit = rateLimit({
 
 router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
 router.post("/speak", speakRateLimit, speak);
-router.get("/speak/stream", streamSpeech);
+router.get("/speak/stream", speakRateLimit, streamSpeech);
 router.get("/status", getStatus);
 
 // Handle multer and upload errors with structured JSON responses.
