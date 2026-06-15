@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Plus, X, Check } from "lucide-react";
 import { useToast, ToastContainer } from "./useToast.jsx";
+import { Plus, X, Check, Pencil } from "lucide-react";
 
 const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
 
@@ -40,6 +40,8 @@ export function QuickReplies({ onSelect }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newPhrase, setNewPhrase] = useState("");
+  const [editingPhrase, setEditingPhrase] = useState(null);
+  const [editedValue, setEditedValue] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [newCategory, setNewCategory] = useState("General");
 
@@ -56,6 +58,7 @@ export function QuickReplies({ onSelect }) {
   const handleAdd = (e) => {
     e.preventDefault();
     const cleanPhrase = newPhrase.trim();
+    
 
     if (cleanPhrase.length > 120) {
       showToast("Phrase is too long (max 120 characters)", "error");
@@ -88,6 +91,56 @@ export function QuickReplies({ onSelect }) {
     setReplies((prev) => prev.filter((r) => r.phrase !== phraseToDelete));
     showToast("Quick reply deleted", "success");
   };
+  const handleEdit = (oldPhrase) => {
+  const cleanPhrase = editedValue.trim();
+  const normalizedOldPhrase = oldPhrase.toLowerCase();
+  const isDuplicate = replies.some(
+    (reply) =>
+      reply.phrase.toLowerCase() === cleanPhrase.toLowerCase() &&
+    reply.phrase.toLowerCase() !== normalizedOldPhrase
+  );
+
+
+
+  if (!cleanPhrase) {
+    showToast("Phrase cannot be empty", "error");
+    return;
+  }
+  if (cleanPhrase.length > 120) {
+    showToast("Phrase is too long (max 120 characters)", "error");
+    return;
+  }
+  if (isDuplicate) {
+    showToast("This quick reply already exists", "error");
+    return;
+  }
+
+  setReplies((prev) =>
+    prev.map((reply) =>
+      reply.phrase === oldPhrase
+        ? {
+            ...reply,
+            phrase: cleanPhrase,
+            label: cleanPhrase,
+          }
+        : reply
+    )
+  );
+
+  setEditingPhrase(null);
+  setEditedValue("");
+  showToast("Quick reply updated", "success");
+};
+const handleEditKeyDown = (e, oldPhrase) => {
+  if (e.key === "Enter") {
+    handleEdit(oldPhrase);
+  }
+
+  if (e.key === "Escape") {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }
+};
 
   const filteredReplies = replies.filter((reply) => {
     if (selectedCategoryTab === "All") return true;
@@ -122,6 +175,8 @@ export function QuickReplies({ onSelect }) {
               setIsEditing(!isEditing);
               setIsAdding(false);
               setNewPhrase("");
+              setEditingPhrase(null);
+              setEditedValue("");
             }}
             className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
             aria-label={isEditing ? "Done customizing quick replies" : "Customize quick replies"}
@@ -166,14 +221,54 @@ export function QuickReplies({ onSelect }) {
                   "text-sm text-neutral-700 dark:border-border dark:bg-surface dark:text-neutral-300",
                 ].join(" ")}
               >
-                <span className="truncate max-w-[150px]">{label}</span>
-                <button
-                  onClick={() => handleDelete(phrase)}
-                  aria-label={`Delete quick reply: ${phrase}`}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
+              {editingPhrase === phrase ? (
+  <>
+    <input
+      value={editedValue}
+      onChange={(e) => setEditedValue(e.target.value)}
+      onKeyDown={(e) => handleEditKeyDown(e, phrase)}
+      className="bg-transparent text-sm outline-none"
+      autoFocus
+    />
+
+    <button
+      onClick={() => handleEdit(phrase)}
+      aria-label="Save quick reply"
+    >
+      <Check size={12} />
+    </button>
+    <button
+  onClick={() => {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }}
+  aria-label="Cancel edit"
+>
+  <X size={12} />
+</button>
+  </>
+) : (
+  <>
+    <span className="truncate max-w-[150px]">{label}</span>
+
+    <button
+      onClick={() => {
+        setEditingPhrase(phrase);
+        setEditedValue(label);
+      }}
+      aria-label="Edit quick reply"
+    >
+      <Pencil size={12} />
+    </button>
+
+    <button
+      onClick={() => handleDelete(phrase)}
+      aria-label={`Delete quick reply: ${phrase}`}
+    >
+      <X size={12} />
+    </button>
+  </>
+)}
               </div>
             );
           }
