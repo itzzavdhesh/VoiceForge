@@ -205,10 +205,6 @@ export async function speak(request, response, next) {
       });
       return;
     }
-    if (!getIsMock()) {
-      // Only require a real API key when not in mock mode.
-      requireApiKey(request);
-    }
     const apiKey = getIsMock() ? null : requireApiKey(request);
 
     // Fix (Issue 1): trim both fields before checking so whitespace-only
