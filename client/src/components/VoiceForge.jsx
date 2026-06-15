@@ -105,9 +105,10 @@ export default function VoiceForge() {
 
   const handleQuickReply = useCallback((phrase) => {
     setInputText(phrase);
-    textareaRef.current?.focus();
-    showToast("Quick reply loaded", "success");
-  }, [showToast]);
+    speak(phrase);
+    addMessage(phrase);
+    showToast("Quick reply sent", "success");
+  }, [speak, addMessage, showToast]);
 
   const handleKeyDown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {

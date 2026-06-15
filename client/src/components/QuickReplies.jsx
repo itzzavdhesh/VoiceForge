@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, X, Check } from "lucide-react";
+import { Plus, X, Check, Pencil } from "lucide-react";
 import { useToast, ToastContainer } from "./useToast.jsx";
 
 const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
@@ -39,6 +39,7 @@ export function QuickReplies({ onSelect }) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingReplyData, setEditingReplyData] = useState(null);
   const [newPhrase, setNewPhrase] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [newCategory, setNewCategory] = useState("General");
@@ -89,6 +90,40 @@ export function QuickReplies({ onSelect }) {
     showToast("Quick reply deleted", "success");
   };
 
+  const handleEditSave = (e) => {
+    e.preventDefault();
+    if (!editingReplyData) return;
+
+    const cleanPhrase = editingReplyData.phrase.trim();
+    if (cleanPhrase.length > 120) {
+      showToast("Phrase is too long (max 120 characters)", "error");
+      return;
+    }
+    if (!cleanPhrase) {
+      showToast("Phrase cannot be empty", "error");
+      return;
+    }
+
+    const isDuplicate = replies.some(
+      (r) => r.phrase.toLowerCase() === cleanPhrase.toLowerCase() && r.phrase !== editingReplyData.originalPhrase
+    );
+
+    if (isDuplicate) {
+      showToast("This quick reply already exists", "error");
+      return;
+    }
+
+    setReplies((prev) => prev.map(r => {
+      if (r.phrase === editingReplyData.originalPhrase) {
+        return { ...r, label: cleanPhrase, phrase: cleanPhrase, category: editingReplyData.category };
+      }
+      return r;
+    }));
+    
+    setEditingReplyData(null);
+    showToast("Quick reply updated", "success");
+  };
+
   const filteredReplies = replies.filter((reply) => {
     if (selectedCategoryTab === "All") return true;
     return reply.category === selectedCategoryTab;
@@ -121,6 +156,7 @@ export function QuickReplies({ onSelect }) {
             onClick={() => {
               setIsEditing(!isEditing);
               setIsAdding(false);
+              setEditingReplyData(null);
               setNewPhrase("");
             }}
             className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
@@ -156,8 +192,54 @@ export function QuickReplies({ onSelect }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
-        {filteredReplies.map(({ label, phrase }) => {
+        {filteredReplies.map(({ label, phrase, category }) => {
           if (isEditing) {
+            if (editingReplyData && editingReplyData.originalPhrase === phrase) {
+              return (
+                <form
+                  key={`edit-${phrase}`}
+                  onSubmit={handleEditSave}
+                  className="flex items-center gap-1.5 rounded-full border border-blue-400 bg-white pl-3 pr-2 py-1 dark:border-blue-500 dark:bg-neutral-900"
+                >
+                  <input
+                    type="text"
+                    value={editingReplyData.phrase}
+                    onChange={(e) => setEditingReplyData({ ...editingReplyData, phrase: e.target.value })}
+                    maxLength={120}
+                    autoFocus
+                    className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                  />
+                  <select
+                    value={editingReplyData.category}
+                    onChange={(e) => setEditingReplyData({ ...editingReplyData, category: e.target.value })}
+                    aria-label="Category"
+                    className="bg-transparent text-xs text-neutral-500 dark:text-neutral-400 focus:outline-none border-l border-neutral-200 dark:border-neutral-700 pl-1.5 mr-1 cursor-pointer"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="dark:bg-neutral-900 dark:text-neutral-100">
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    aria-label="Save changes"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+                  >
+                    <Check size={12} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingReplyData(null)}
+                    aria-label="Cancel"
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </form>
+              );
+            }
+
             return (
               <div
                 key={phrase}
@@ -168,9 +250,16 @@ export function QuickReplies({ onSelect }) {
               >
                 <span className="truncate max-w-[150px]">{label}</span>
                 <button
+                  onClick={() => setEditingReplyData({ originalPhrase: phrase, phrase, category: category || "General" })}
+                  aria-label={`Edit quick reply: ${phrase}`}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-blue-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-blue-400 transition-colors"
+                >
+                  <Pencil size={12} aria-hidden="true" />
+                </button>
+                <button
                   onClick={() => handleDelete(phrase)}
                   aria-label={`Delete quick reply: ${phrase}`}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-red-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-red-400 transition-colors"
                 >
                   <X size={12} aria-hidden="true" />
                 </button>
