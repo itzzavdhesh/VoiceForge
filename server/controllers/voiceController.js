@@ -284,9 +284,8 @@ export async function speak(request, response, next) {
     }, PENDING_STREAM_TTL_MS);
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
-
-    const apiKey = getIsMock() ? null : requireApiKey(request);
-    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, timeout });
+    
+    pendingStreams.set(speechId, { text: trimmedText, voiceId: trimmedVoiceId, apiKey, mergedSettings, timeout });
 
     if (getIsMock()) {
       console.warn(`[VoiceForge] MOCK_ELEVENLABS: speak enqueued mock stream for speechId=${speechId}`);
