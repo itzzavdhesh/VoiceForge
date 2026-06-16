@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState, useDeferredValue } from "react";
+import React, { useMemo, useState, useDeferredValue } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
@@ -98,31 +98,6 @@ export function SpeechHistory({
     alert(`Conversation Analytics Summary:\n\n- Active Session Word Count: ${wordCount} words\n- Sentences summary: "${summary}"\n- Sentiment Trend: Neutral/Informative`);
   }
 
-
-  function handleExportCSV() {
-    if (!sessionTranscript || sessionTranscript.length === 0) return;
-    const headers = ["Timestamp", "Text"];
-    const rows = sessionTranscript.map(item => [
-      new Date(item.timestamp).toLocaleString(),
-      `"${item.text.replace(/"/g, '""')}"`
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.href = encodedUri;
-    link.download = `voiceforge_transcript_${Date.now()}.csv`;
-    link.click();
-  }
-
-  function handleExportJSON() {
-    if (!sessionTranscript || sessionTranscript.length === 0) return;
-    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
-    const link = document.createElement("a");
-    link.href = jsonStr;
-    link.download = `voiceforge_transcript_${Date.now()}.json`;
-    link.click();
-  }
   return (
     <aside
       className={[
@@ -237,7 +212,7 @@ export function SpeechHistory({
 
           {history.length > 0 && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-                            {sessionTranscript && sessionTranscript.length > 0 && (
+              {sessionTranscript && sessionTranscript.length > 0 && (
                 <div className="space-y-1.5 w-full">
                   <button
                     onClick={handleExportTranscript}
@@ -260,6 +235,12 @@ export function SpeechHistory({
                       Export JSON
                     </button>
                   </div>
+                  <button
+                    onClick={handleSummarize}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-moss bg-moss text-white px-3 py-1.5 text-xs font-bold hover:bg-moss/90 dark:border-glow dark:bg-glow dark:text-black"
+                  >
+                    Summarize Session
+                  </button>
                 </div>
               )}
               <button
@@ -290,31 +271,6 @@ function EmptyState({ tab, hasSearch }) {
       ? "Pin a message to keep it here."
       : "Speak a message to get started.";
 
-
-  function handleExportCSV() {
-    if (!sessionTranscript || sessionTranscript.length === 0) return;
-    const headers = ["Timestamp", "Text"];
-    const rows = sessionTranscript.map(item => [
-      new Date(item.timestamp).toLocaleString(),
-      `"${item.text.replace(/"/g, '""')}"`
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.href = encodedUri;
-    link.download = `voiceforge_transcript_${Date.now()}.csv`;
-    link.click();
-  }
-
-  function handleExportJSON() {
-    if (!sessionTranscript || sessionTranscript.length === 0) return;
-    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
-    const link = document.createElement("a");
-    link.href = jsonStr;
-    link.download = `voiceforge_transcript_${Date.now()}.json`;
-    link.click();
-  }
   return (
     <div className="flex flex-col items-center py-10 text-center text-sm text-neutral-400">
       <Icon size={28} aria-hidden="true" className="mb-2" />
