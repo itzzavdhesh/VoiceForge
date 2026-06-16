@@ -150,10 +150,30 @@ export default function Healthcare() {
         </div>
       )}
 
-            {/* AAC Symbol Board Placeholder for Phase 9 */}
-      <div className="rounded-lg border border-dashed border-ink/20 p-5 text-center dark:border-border">
-        <p className="text-sm text-ink/40 dark:text-muted">AAC Symbol Board will be available in Phase 9.</p>
-      </div>
+      {/* AAC Symbol Board (Phase 9) */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface space-y-4">
+        <h3 className="text-lg font-bold flex items-center gap-2 dark:text-neutral-100">
+          <Volume2 className="text-moss dark:text-glow" size={18} />
+          AAC Symbol Board (Augmentative and Alternative Communication)
+        </h3>
+        <p className="text-sm text-ink/60 dark:text-muted">
+          Click or press Enter on any tile to immediately speak the phrase using the active voice.
+        </p>
+
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {aacTiles.map((tile, idx) => (
+            <button
+              key={idx}
+              onClick={() => speak(tile.text)}
+              className="flex flex-col items-center justify-center border border-ink/10 rounded-xl p-4 hover:border-moss hover:bg-cloud dark:border-border dark:hover:border-glow dark:hover:bg-black transition-all"
+              aria-label={`Speak need: ${tile.label}. Phrase: ${tile.text}`}
+            >
+              <span className="text-4xl mb-2" role="img" aria-hidden="true">{tile.emoji}</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-ink/85 dark:text-neutral-300">{tile.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Patient Presets (Phase 8) */}
