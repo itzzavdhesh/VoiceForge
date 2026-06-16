@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { getAllCollections, saveCollection, deleteCollection, getAllProfiles } from "../utils/db.js";
 import { Folder, FolderPlus, Trash2, Cpu, Globe, Share2 } from "lucide-react";
 
@@ -195,9 +195,30 @@ export default function Library() {
           </div>
         </div>
 
-                {/* Right column placeholder for Phase 7 */}
-        <div className="rounded-lg border border-dashed border-ink/20 p-5 text-center flex flex-col items-center justify-center min-h-[300px] dark:border-border">
-          <p className="text-sm text-ink/40 dark:text-muted">Local ONNX Model Loader will be available in Phase 7.</p>
+        {/* Right: ONNX Inference Platform mockup */}
+        <div className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface space-y-4">
+          <h3 className="text-lg font-bold flex items-center gap-2 dark:text-neutral-100">
+            <Cpu className="text-moss dark:text-glow" size={18} />
+            ONNX AI Inference Engine (Phase 16)
+          </h3>
+          <p className="text-sm text-ink/65 dark:text-muted leading-relaxed">
+            Expose local browser-based neural speech synthesis weights. Accelerate speech tasks without calling the network.
+          </p>
+
+          <div className="rounded-md border border-ink/10 bg-cloud p-4 dark:border-border dark:bg-black text-center space-y-2">
+            <span className="text-xs font-semibold text-ink/50 dark:text-neutral-400 uppercase tracking-widest block">Status</span>
+            <span className={`text-base font-bold block ${onnxLoaded ? "text-moss dark:text-glow" : "text-ink/60 dark:text-muted"}`}>
+              {onnxLoaded ? "Local Model Active" : "No Weights Loaded"}
+            </span>
+          </div>
+
+          <button
+            onClick={handleLoadOnnx}
+            disabled={onnxLoading || onnxLoaded}
+            className="w-full rounded-md bg-moss text-white font-bold py-2 text-sm hover:bg-moss/95 disabled:opacity-50 dark:bg-glow dark:text-black"
+          >
+            {onnxLoading ? "Loading model weights (12MB)..." : onnxLoaded ? "Weights cached locally" : "Load Local tiny-vocoder model"}
+          </button>
         </div>
       </div>
     </div>
