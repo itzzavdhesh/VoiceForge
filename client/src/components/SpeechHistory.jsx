@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useDeferredValue } from "react";
+﻿import React, { useMemo, useState, useDeferredValue } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
@@ -62,6 +62,8 @@ export function SpeechHistory({
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  
 
   return (
     <aside
@@ -177,7 +179,7 @@ export function SpeechHistory({
 
           {history.length > 0 && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-              {sessionTranscript && sessionTranscript.length > 0 && (
+                            {sessionTranscript && sessionTranscript.length > 0 && (
                 <button
                   onClick={handleExportTranscript}
                   className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
