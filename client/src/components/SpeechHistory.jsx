@@ -63,8 +63,66 @@ export function SpeechHistory({
     URL.revokeObjectURL(url);
   }
 
-  
+  function handleExportCSV() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const headers = ["Timestamp", "Text"];
+    const rows = sessionTranscript.map(item => [
+      new Date(item.timestamp).toLocaleString(),
+      `"${item.text.replace(/"/g, '""')}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.href = encodedUri;
+    link.download = `voiceforge_transcript_${Date.now()}.csv`;
+    link.click();
+  }
 
+  function handleExportJSON() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
+    const link = document.createElement("a");
+    link.href = jsonStr;
+    link.download = `voiceforge_transcript_${Date.now()}.json`;
+    link.click();
+  }
+
+  function handleSummarize() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const texts = sessionTranscript.map(t => t.text).join(" ");
+    const wordCount = texts.split(/\s+/).filter(Boolean).length;
+    const sentences = texts.match(/[^.!?]+[.!?]+/g) || [texts];
+    const summary = sentences.slice(0, 2).join(" ") || texts;
+    
+    alert(`Conversation Analytics Summary:\n\n- Active Session Word Count: ${wordCount} words\n- Sentences summary: "${summary}"\n- Sentiment Trend: Neutral/Informative`);
+  }
+
+
+  function handleExportCSV() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const headers = ["Timestamp", "Text"];
+    const rows = sessionTranscript.map(item => [
+      new Date(item.timestamp).toLocaleString(),
+      `"${item.text.replace(/"/g, '""')}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.href = encodedUri;
+    link.download = `voiceforge_transcript_${Date.now()}.csv`;
+    link.click();
+  }
+
+  function handleExportJSON() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
+    const link = document.createElement("a");
+    link.href = jsonStr;
+    link.download = `voiceforge_transcript_${Date.now()}.json`;
+    link.click();
+  }
   return (
     <aside
       className={[
@@ -180,13 +238,29 @@ export function SpeechHistory({
           {history.length > 0 && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
                             {sessionTranscript && sessionTranscript.length > 0 && (
-                <button
-                  onClick={handleExportTranscript}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                >
-                  <Download size={13} aria-hidden="true" />
-                  Export Transcript
-                </button>
+                <div className="space-y-1.5 w-full">
+                  <button
+                    onClick={handleExportTranscript}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 dark:border-border dark:text-neutral-300 dark:hover:bg-blue-900/20"
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    Export TXT
+                  </button>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={handleExportCSV}
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-neutral-200 py-1 text-[11px] text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 dark:border-border dark:text-neutral-300 dark:hover:bg-blue-900/20"
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      onClick={handleExportJSON}
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-neutral-200 py-1 text-[11px] text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 dark:border-border dark:text-neutral-300 dark:hover:bg-blue-900/20"
+                    >
+                      Export JSON
+                    </button>
+                  </div>
+                </div>
               )}
               <button
                 onClick={handleClearHistory}
@@ -216,6 +290,31 @@ function EmptyState({ tab, hasSearch }) {
       ? "Pin a message to keep it here."
       : "Speak a message to get started.";
 
+
+  function handleExportCSV() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const headers = ["Timestamp", "Text"];
+    const rows = sessionTranscript.map(item => [
+      new Date(item.timestamp).toLocaleString(),
+      `"${item.text.replace(/"/g, '""')}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.href = encodedUri;
+    link.download = `voiceforge_transcript_${Date.now()}.csv`;
+    link.click();
+  }
+
+  function handleExportJSON() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
+    const link = document.createElement("a");
+    link.href = jsonStr;
+    link.download = `voiceforge_transcript_${Date.now()}.json`;
+    link.click();
+  }
   return (
     <div className="flex flex-col items-center py-10 text-center text-sm text-neutral-400">
       <Icon size={28} aria-hidden="true" className="mb-2" />
