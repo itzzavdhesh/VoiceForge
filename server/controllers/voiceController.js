@@ -4,6 +4,13 @@ import { getIsMock } from "../utils/mock.js"; // adjust path to actual location
 import { isValidLanguageCode } from "../utils/languages.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
+const PENDING_STREAMS_MAX = Number(
+  process.env.PENDING_STREAMS_MAX ?? 1000
+);
+
+const PENDING_STREAM_TTL_MS = Number(
+  process.env.PENDING_STREAM_TTL_MS ?? 60_000
+);
 
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
@@ -277,7 +284,7 @@ export async function speak(request, response, next) {
     // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
     // cannot be reproduced from a seed or enumerated by a co-located process,
     // so the stored API key cannot be retrieved by guessing the stream key.
-    const speechId = randomUUID();
+    const speechId = crypto.randomUUID();
 
     const timeout = setTimeout(() => {
       deletePendingStream(speechId);
