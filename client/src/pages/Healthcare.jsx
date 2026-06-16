@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { dbRecovery } from "../utils/db.js";
 import { Heart, Shield, RefreshCw, Lock, Unlock, Volume2 } from "lucide-react";
 
@@ -218,10 +218,40 @@ export default function Healthcare() {
             Voice Governance & PIN Lock
           </h3>
           
-                    {/* PIN Lock placeholder for Phase 10 */}
-          <div className="border border-ink/10 rounded-md p-4 bg-cloud dark:border-border dark:bg-black text-center">
-            <span className="text-xs text-ink/40 dark:text-muted">Caregiver PIN Governance Mode will be available in Phase 10.</span>
-          </div>
+          {/* PIN Lock Status & Toggle */}
+          <div className="border border-ink/10 rounded-md p-4 bg-cloud dark:border-border dark:bg-black space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold flex items-center gap-1.5 dark:text-neutral-200">
+                {isLocked ? (
+                  <>
+                    <Lock size={15} className="text-red-500" /> Caregiver Mode Locked
+                  </>
+                ) : (
+                  <>
+                    <Unlock size={15} className="text-moss dark:text-glow" /> Caregiver Mode Unlocked
+                  </>
+                )}
+              </span>
+              {savedHash && isLocked && (
+                <form onSubmit={handleUnlock} className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="Enter PIN"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    className="w-20 px-2 py-1 text-xs border rounded bg-white dark:bg-surface dark:border-border dark:text-neutral-100"
+                  />
+                  <button type="submit" className="bg-moss px-2 py-1 text-[11px] font-bold text-white rounded dark:bg-glow dark:text-black">
+                    Unlock
+                  </button>
+                </form>
+              )}
+              {savedHash && !isLocked && (
+                <button onClick={handleLock} className="bg-red-500 px-3 py-1 text-xs font-bold text-white rounded hover:bg-red-600">
+                  Lock Presets
+                </button>
+              )}
+            </div>
 
             {showSetup && (
               <form onSubmit={handleSetupPin} className="border-t border-ink/10 pt-3 mt-2 space-y-2">
