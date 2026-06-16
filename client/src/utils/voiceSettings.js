@@ -18,6 +18,8 @@ export const DEFAULT_VOICE_SETTINGS = {
   similarity_boost: 0.8,
   style: 0.2,
   use_speaker_boost: true,
+  speed: 1.0,
+  pitch: 0.5,
 };
 
 /**
@@ -54,6 +56,8 @@ export function loadVoiceSettings() {
       const coerced = parsed[key] == null ? NaN : Number(parsed[key]);
       if (Number.isNaN(coerced)) {
         result[key] = defaultVal;
+      } else if (key === "speed") {
+        result[key] = Math.min(2.0, Math.max(0.5, coerced));
       } else if (defaultVal >= 0 && defaultVal <= 1) {
         // Slider range: clamp to [0, 1].
         result[key] = Math.min(1, Math.max(0, coerced));
