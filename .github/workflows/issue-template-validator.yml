@@ -88,7 +88,7 @@ jobs:
 
             function getProgramReviewerMentions(programLabel) {
               const reviewersByProgram = {
-                gssoc26: ['@sabeenaviklar', '@1754riya', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@leonagoel'],
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@1754riya', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
                 nsoc26: ['@joyprakashk', '@rushi-k12'],
                 SSoC26: ['@joyprakashk', '@rushi-k12'],
                 ELUSOC: ['@joyprakashk', '@rushi-k12']
@@ -115,10 +115,10 @@ jobs:
             }
 
             const programs = [
-              { name: 'GSSoC', label: 'gssoc26', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
-              { name: 'NSOC', label: 'nsoc26', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
-              { name: 'SSOC', label: 'SSoC26', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
-              { name: 'ELUSOC', label: 'ELUSOC', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
+              { name: 'GSSoC', label: 'gssoc26', template: 'gssoc', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
+              { name: 'NSOC', label: 'nsoc26', template: 'nsoc', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'SSOC', label: 'SSoC26', template: 'ssoc', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'ELUSOC', label: 'ELUSOC', template: 'elusoc', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
             ];
 
             function hasHeading(name) {
@@ -127,11 +127,12 @@ jobs:
             }
             function getHeadingSection(name) {
               const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const sectionMatch = body.match(new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b.*$`, 'im'));
+              const sectionMatch = body.match(new RegExp(`^\\s*(#{1,6})\\s*.*${escapedName}\\b.*$`, 'im'));
               if (!sectionMatch || typeof sectionMatch.index !== 'number') return '';
 
+              const level = sectionMatch[1].length;
               const sectionStart = sectionMatch.index + sectionMatch[0].length;
-              const nextHeadingMatch = body.slice(sectionStart).match(/^\s*#{1,6}\s+.+$/m);
+              const nextHeadingMatch = body.slice(sectionStart).match(new RegExp(`^\\s*#{1,${level}}\\s+.+$`, 'm'));
               const sectionEnd = nextHeadingMatch && typeof nextHeadingMatch.index === 'number'
                 ? sectionStart + nextHeadingMatch.index
                 : body.length;
@@ -268,7 +269,7 @@ jobs:
                   `Hey @${username}! 👋 Your **${matchedProgram.name} ${issueType}** cleared all checks — ${appliedLabels} applied.\n\n` +
                   `⚠️ Contributors must **not** start until the issue is assigned.\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation ·<em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               } else if (reviewerMentions.length > 0) {
                 successBody =
                   `${marker}\n` +
@@ -280,7 +281,7 @@ jobs:
                   `⚠️ **Do not start work until the issue is approved _and_ assigned to you.**\n\n` +
                   `📣 ${reviewerMentions.join(' ')} — **${matchedProgram.name}** issue ready for your review! 👀\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               } else {
                 successBody =
                   `${marker}\n` +
@@ -291,7 +292,7 @@ jobs:
                   `A maintainer will evaluate scope and apply: \`go ahead\` · \`duplicate\` · \`not needed\` · \`out of scope\`.\n` +
                   `🙋 You'll be notified when it's open to claim. ⚠️ Please wait for an explicit assignment before starting work.\n\n` +
                   `---\n` +
-                  `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+                  `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
               }
 
               if (existing) {
@@ -324,7 +325,7 @@ jobs:
 
             if (templateProblems.includes('no-template')) {
               const noTemplateHowToFix = matchedProgram
-                ? `Use your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md) — do not file a blank issue`
+                ? `Use your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.template}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.template}_feature_request.md) — do not file a blank issue`
                 : `Use a template: [pick a template](${baseUrl}/choose) — select your program and issue type, and please do not file a blank issue again`;
               problemLines.push(`| 📝 | **Template not used** | ${noTemplateHowToFix} |`);
             }
@@ -334,7 +335,7 @@ jobs:
             }
 
             const templateTip = matchedProgram
-              ? `or start fresh with your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.label}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.label}_feature_request.md)`
+              ? `or start fresh with your ${matchedProgram.name} template: [📋 Bug Report](${baseUrl}?template=${matchedProgram.template}_bug_report.md) · [✨ Feature Request](${baseUrl}?template=${matchedProgram.template}_feature_request.md)`
               : `or [start fresh with the right template](${baseUrl}/choose)`;
 
             const problemCount = problemLines.length;
@@ -351,7 +352,7 @@ jobs:
               `**To run the checks again:** edit the issue body → save. This comment updates automatically ✅\n` +
               `> 💡 **Tip:** You can edit this issue directly — ${templateTip}.\n\n` +
               `---\n` +
-              `<sub>🤖 VoiceForge Automation · <em>Updates automatically on edits</em></sub>`;
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
 
             if (existing) {
               await github.rest.issues.updateComment({

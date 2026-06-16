@@ -1,6 +1,7 @@
 // Draws the webcam and MVP lip-sync animation onto a canvas preview.
 import React from "react";
 import { useTheme } from "./ThemeContext";
+import { useEffect, useRef } from "react";
 
 export default React.forwardRef(function VideoPreview({
   webcamStream,
@@ -12,6 +13,7 @@ export default React.forwardRef(function VideoPreview({
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
+  const audioRef = useRef(null);   
   const [modelStatus, setModelStatus] = React.useState(
     "Fallback animation ready",
   );
@@ -27,6 +29,16 @@ export default React.forwardRef(function VideoPreview({
   React.useEffect(() => {
     isCalibratingRef.current = isCalibrating;
   }, [isCalibrating]);
+
+  useEffect(() => {
+  return () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    onSpeakingChange?.(false);
+  };
+}, [onSpeakingChange]);
 
   React.useEffect(() => {
     async function loadModel() {
@@ -96,10 +108,10 @@ export default React.forwardRef(function VideoPreview({
           ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
           : 1.0;
 
-        const centerX = canvas.width / 2 + xOffset;
-        const centerY = canvas.height * 0.63 + yOffset;
-        const radiusX = 56 * scale;
-        const radiusY = mouthOpen * scale;
+        const centerX = Math.max(0, Math.min(canvas.width, canvas.width / 2 + xOffset));
+        const centerY = Math.max(0, Math.min(canvas.height, canvas.height * 0.63 + yOffset));
+        const radiusX = Math.max(0.01, 56 * scale);
+        const radiusY = Math.max(0.01, mouthOpen * scale);
 
         context.save();
         context.fillStyle = mouthColor;
@@ -150,6 +162,7 @@ export default React.forwardRef(function VideoPreview({
       />
       {audioUrl && (
         <audio
+          ref={audioRef}
           key={audioUrl}
           className="mt-4 w-full"
           controls

@@ -4,17 +4,26 @@ import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-rea
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
+import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { loadLanguage, persistLanguage } from "../utils/languages.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
   const [cameraError, setCameraError] = React.useState("");
+  const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
+  const [language, setLanguage] = React.useState(loadLanguage);
+
+  React.useEffect(() => {
+    persistLanguage(language);
+  }, [language]);
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
@@ -73,18 +82,29 @@ export default function Call() {
 });
 
   const handleCalibrationChange = (key, value) => {
-  if (typeof value !== "number" || isNaN(value)) return;
-  setCalibration((prev) => {
-    const updated = { ...prev, [key]: value };
-    try {
-      localStorage.setItem(
-        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-        value.toString()
-      );
-    } catch { /* storage unavailable – continue without persisting */ }
-    return updated;
-  });
-};
+    let parsedValue = typeof value === "string" ? parseFloat(value) : value;
+    if (typeof parsedValue !== "number" || isNaN(parsedValue)) return;
+
+    // Apply strict clamping matching the slider limits based on the key
+    if (key === "xOffset") {
+      parsedValue = Math.max(-400, Math.min(400, Math.round(parsedValue)));
+    } else if (key === "yOffset") {
+      parsedValue = Math.max(-250, Math.min(150, Math.round(parsedValue)));
+    } else if (key === "scale") {
+      parsedValue = Math.max(0.5, Math.min(2.5, parsedValue));
+    }
+
+    setCalibration((prev) => {
+      const updated = { ...prev, [key]: parsedValue };
+      try {
+        localStorage.setItem(
+          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+          parsedValue.toString()
+        );
+      } catch { /* storage unavailable – continue without persisting */ }
+      return updated;
+    });
+  };
 
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
@@ -94,34 +114,62 @@ export default function Call() {
     localStorage.setItem("voiceforge:calibrationScale", "1.0");
   };
 
-  React.useEffect(() => {
-    let activeStream = null;
-    async function openCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        activeStream = stream;
-        setWebcamStream(stream);
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        setCameraError("");
-      } catch (webcamError) {
-        setCameraError(webcamError?.message || String(webcamError));
+ React.useEffect(() => {
+  let activeStream = null;
+  let isMounted = true;
+
+  async function openCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+
+      // Prevent webcam resource leak if component unmounts
+      // before getUserMedia resolves.
+      if (!isMounted) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+
+      activeStream = stream;
+      setWebcamStream(stream);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      setCameraError("");
+    } catch (webcamError) {
+      if (!isMounted) return;
+
+      setCameraError(webcamError?.message || String(webcamError));
+      showToast("Camera access failed", "error");
     }
-    openCamera();
-    return () => {
-      activeStream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
+  }
+
+  openCamera();
+
+  return () => {
+    isMounted = false;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+    }
+  };
+}, [showToast]);
 
   async function handleSpeak(text) {
     if (!activeProfile?.voice_id) return;
     try {
-      await speak({ text, voiceId: activeProfile.voice_id });
+      await speak({
+  text,
+  voiceId: activeProfile.voice_id,
+  language_code: language,
+});
     } catch (err) {
       console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
   }
 
@@ -187,7 +235,7 @@ export default function Call() {
             <p className="text-sm text-ink/65 mb-4">
               Calibrate the animated fallback mouth position and size overlay to align with your camera.
             </p>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
@@ -263,7 +311,19 @@ export default function Call() {
           </div>
         )}
       </section>
-
+      <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface">
+        <label
+          htmlFor="output-language"
+          className="mb-3 block text-sm font-bold dark:text-neutral-100"
+        >
+          Output Language
+        </label>
+        <LanguageSelector
+          id="output-language"
+          value={language}
+          onChange={setLanguage}
+        />
+      </section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -321,6 +381,7 @@ export default function Call() {
           {error}
         </p>
       )}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

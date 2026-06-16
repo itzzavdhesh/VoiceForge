@@ -1,6 +1,15 @@
 // Configures Multer for in-memory reference audio uploads sent to ElevenLabs.
 import multer from "multer";
 
+const ALLOWED_MIME_TYPES = [
+  "audio/webm",
+  "audio/wav",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/flac"
+];
+
 // Known magic-byte signatures for audio formats accepted by ElevenLabs.
 // Each entry is { offset, bytes } where bytes is a Buffer to match at that
 // position in the uploaded file.
@@ -26,14 +35,6 @@ const AUDIO_SIGNATURES = [
   { offset: 4, bytes: Buffer.from("ftyp", "ascii") },
 ];
 
-/**
- * Returns true when the buffer starts with a recognised audio signature.
- * The check is performed after Multer has buffered the full file so the
- * complete header is available.
- *
- * @param {Buffer} buf
- * @returns {boolean}
- */
 export function isValidAudioBuffer(buf) {
   if (!buf || buf.length < 12) return false;
   return AUDIO_SIGNATURES.some(({ offset, bytes }) => {
@@ -45,12 +46,18 @@ export function isValidAudioBuffer(buf) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 12 * 1024 * 1024
+    fileSize: 12 * 1024 * 1024,
+    files: 1,
+    fields: 5,
+    parts: 6
   },
   fileFilter: (_request, file, callback) => {
-    // First gate: reject obviously wrong MIME types before buffering the body.
-    if (!file.mimetype.startsWith("audio/")) {
-      callback(new Error("Please upload an audio recording."));
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      callback(
+        new Error(
+          "Invalid audio format. Allowed types: webm, wav, mp3, mp4, ogg, flac."
+        )
+      );
       return;
     }
     callback(null, true);

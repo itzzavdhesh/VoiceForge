@@ -1,21 +1,12 @@
 // Implements ElevenLabs voice cloning and text-to-speech proxy handlers.
+import crypto from "crypto";
 import { randomUUID } from "node:crypto";
 import { isValidAudioBuffer } from "../middleware/upload.js";
+import { getIsMock } from "../utils/mock.js";
+import { isValidLanguageCode } from "../utils/languages.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
 
-// ---------------------------------------------------------------------------
-// Dev/CI mock mode
-// ---------------------------------------------------------------------------
-// Set MOCK_ELEVENLABS=true in .env to skip real ElevenLabs network calls.
-// The mock is evaluated dynamically at request time to ensure dotenv has loaded.
-// ---------------------------------------------------------------------------
-const getIsMock = () =>
-  process.env.MOCK_ELEVENLABS === "true" &&
-  process.env.NODE_ENV !== "production";
-
-// A minimal valid MP3 frame (ID3v2 + one silent MPEG frame) so the browser
-// Audio element can actually decode and play the mock response.
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
   "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
@@ -25,20 +16,74 @@ const MOCK_AUDIO_MP3 = Buffer.from(
   "base64"
 );
 
-// ElevenLabs bills by character count. This cap prevents a single request
-// from consuming a large share of the monthly quota. Configurable via the
-// SPEAK_TEXT_MAX_LENGTH environment variable; defaults to 2000 characters.
-const SPEAK_TEXT_MAX_LENGTH = parseInt(process.env.SPEAK_TEXT_MAX_LENGTH, 10) || 2000;
+const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
+  console.warn(
+    "[VoiceForge] STREAM_SECRET not set — using ephemeral key. " +
+    "All speech tokens will be invalidated on server restart. " +
+    "Set STREAM_SECRET in .env for stability."
+  );
+  return crypto.randomBytes(32).toString("hex");
+})();
 
-// Each pending stream holds a caller-supplied ElevenLabs API key in memory
-// until the audio is streamed or the entry expires. Cap the number of
-// concurrent entries so a burst of /speak calls cannot grow the Map without
-// bound and exhaust process memory. Configurable via PENDING_STREAMS_MAX;
-// defaults to 1000 entries.
-const PENDING_STREAMS_MAX = parseInt(process.env.PENDING_STREAMS_MAX, 10) || 1000;
+const ENCRYPTION_KEY = crypto.scryptSync(STREAM_SECRET, "voiceforge-stream-salt", 32);
+const IV_LENGTH = 12;
+const ALGORITHM = "aes-256-gcm";
 
-// A pending stream is discarded if it is not consumed within this window.
-const PENDING_STREAM_TTL_MS = parseInt(process.env.PENDING_STREAM_TTL_MS, 10) || 60000;
+function encryptToken(payload) {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+
+  let encrypted = cipher.update(JSON.stringify(payload), "utf8", "base64");
+  encrypted += cipher.final("base64");
+
+  const authTag = cipher.getAuthTag().toString("base64");
+
+  const tokenData = {
+    iv: iv.toString("base64"),
+    tag: authTag,
+    data: encrypted
+  };
+
+  return Buffer.from(JSON.stringify(tokenData)).toString("base64url");
+}
+
+function decryptToken(token) {
+  try {
+    const rawJson = Buffer.from(token, "base64url").toString("utf8");
+    const { iv, tag, data } = JSON.parse(rawJson);
+
+    const decipher = crypto.createDecipheriv(
+      ALGORITHM,
+      ENCRYPTION_KEY,
+      Buffer.from(iv, "base64")
+    );
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+
+    let decrypted = decipher.update(data, "base64", "utf8");
+    decrypted += decipher.final("utf8");
+
+    const payload = JSON.parse(decrypted);
+
+    if (payload.expiresAt && Date.now() > payload.expiresAt) {
+      const error = new Error("Speech stream has expired.");
+      error.status = 403;
+      throw error;
+    }
+
+    return payload;
+  } catch (error) {
+    if (error.status === 403) {
+      throw error;
+    }
+    const err = new Error("Invalid or tampered speech token.");
+    err.status = 400;
+    throw err;
+  }
+}
+
+function getApiKey(request) {
+  return request.get("X-ElevenLabs-Api-Key") || process.env.ELEVENLABS_API_KEY;
+}
 
 // Read the key from the request header first (client-side override).
 // Fall back to the server's environment variable (ELEVENLABS_API_KEY) if not provided by the client.
@@ -62,6 +107,20 @@ async function readElevenLabsError(response) {
   } catch {
     return text || `ElevenLabs request failed with status ${response.status}.`;
   }
+}
+
+// Reduces a user-supplied upload filename to a safe value before it is sent
+// onward to ElevenLabs. Removes any directory components, then keeps only
+// alphanumerics, dot, hyphen, and underscore. Everything else, including null
+// bytes and path separators, is replaced with an underscore. Falls back to a
+// default name when the input is missing or sanitizes to an empty string.
+function sanitizeUploadFileName(originalName) {
+  const withoutPath = String(originalName || "").split(/[/\\]/).pop();
+  const cleaned = withoutPath
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/^\.+/, "")
+    .slice(0, 200);
+  return cleaned || "reference.webm";
 }
 
 export async function cloneVoice(request, response, next) {
@@ -96,7 +155,12 @@ export async function cloneVoice(request, response, next) {
     const formData = new FormData();
     formData.append("name", request.body.name || "VoiceForge Voice");
     formData.append("description", "Voice profile created locally by VoiceForge.");
-    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), audioFile.originalname || "reference.webm");
+    // Sanitize the client-supplied filename before forwarding it to ElevenLabs.
+    // originalname is derived from the Content-Disposition header and is fully
+    // user controlled. Strip directory separators and reduce the name to a safe
+    // character set so it cannot be used for path traversal or header injection.
+    const safeFileName = sanitizeUploadFileName(audioFile.originalname);
+    formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), safeFileName);
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
       method: "POST",
@@ -120,115 +184,52 @@ export async function cloneVoice(request, response, next) {
   }
 }
 
-// Maps speechId -> { text, voiceId, apiKey, mergedSettings, timeout }.
-// Keys are unguessable UUIDs (see speak) and entries are single-use.
-const pendingStreams = new Map();
-
-// Remove a pending stream and clear its expiry timer so timers do not pile up.
-function deletePendingStream(speechId) {
-  const entry = pendingStreams.get(speechId);
-  if (!entry) {
-    return undefined;
-  }
-  clearTimeout(entry.timeout);
-  pendingStreams.delete(speechId);
-  return entry;
-}
-
-// Drop the oldest entries until the store is below its configured cap. Map
-// preserves insertion order, so the first key is always the oldest.
-function evictOldestPendingStreams() {
-  while (pendingStreams.size >= PENDING_STREAMS_MAX) {
-    const oldestKey = pendingStreams.keys().next().value;
-    if (oldestKey === undefined) {
-      break;
-    }
-    deletePendingStream(oldestKey);
-  }
-}
-
 export async function speak(request, response, next) {
   try {
-    const { text, voice_id: voiceId, voice_settings } = request.body;
+    const {
+      text,
+      voice_id: voiceId,
+      language_code,
+      voice_settings
+    } = request.body;
 
-    if (!getIsMock()) {
-      // Only require a real API key when not in mock mode.
-      requireApiKey(request);
-    }
+    const apiKey = getIsMock() ? null : requireApiKey(request);
 
-    if (!text || !voiceId) {
+    // Fix (Issue 1): trim both fields before checking so whitespace-only
+    // strings ("   ") are treated the same as missing values and never reach
+    // encryptToken / the ElevenLabs URL interpolation.
+    const trimmedText = typeof text === "string" ? text.trim() : "";
+    const trimmedVoiceId = typeof voiceId === "string" ? voiceId.trim() : "";
+
+    if (!trimmedText && !trimmedVoiceId) {
       response.status(400).json({ error: "Both text and voice_id are required." });
       return;
     }
-
-    if (text.length > SPEAK_TEXT_MAX_LENGTH) {
+    if (!trimmedText) {
+      response.status(400).json({ error: "text is required and must not be blank." });
+      return;
+    }
+    if (!trimmedVoiceId) {
+      response.status(400).json({ error: "voice_id is required and must not be blank." });
+      return;
+    }
+    if (trimmedText.length > 500) {
+      response.status(400).json({ error: "Text too long; maximum 500 characters for streaming." });
+      return;
+    }
+    if (!isValidLanguageCode(language_code)) {
       response.status(400).json({
-        error: `Text must not exceed ${SPEAK_TEXT_MAX_LENGTH} characters. Received ${text.length}.`
+        error: `Unsupported language code "${language_code}". See ElevenLabs eleven_multilingual_v2 docs for supported codes.`
       });
       return;
     }
 
-    const defaultVoiceSettings = {
-      stability: 0.45,
-      similarity_boost: 0.8,
-      style: 0.2,
-      use_speaker_boost: true
-    };
-
-    const clamp01 = (v) => Math.min(1, Math.max(0, v));
-    const sanitizedSettings = {};
-    if (voice_settings && typeof voice_settings === "object") {
-      if (
-        typeof voice_settings.stability === "number" &&
-        Number.isFinite(voice_settings.stability)
-      ) {
-        sanitizedSettings.stability = clamp01(voice_settings.stability);
-      }
-      if (
-        typeof voice_settings.similarity_boost === "number" &&
-        Number.isFinite(voice_settings.similarity_boost)
-      ) {
-        sanitizedSettings.similarity_boost = clamp01(
-          voice_settings.similarity_boost
-        );
-      }
-      if (
-        typeof voice_settings.style === "number" &&
-        Number.isFinite(voice_settings.style)
-      ) {
-        sanitizedSettings.style = clamp01(voice_settings.style);
-      }
-      if (typeof voice_settings.use_speaker_boost === "boolean") {
-        sanitizedSettings.use_speaker_boost =
-          voice_settings.use_speaker_boost;
-      }
-    }
-
-    const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
-
-    // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
-    // cannot be reproduced from a seed or enumerated by a co-located process,
-    // so the stored API key cannot be retrieved by guessing the stream key.
-    const speechId = randomUUID();
-
-    evictOldestPendingStreams();
-
-    const timeout = setTimeout(() => {
-      deletePendingStream(speechId);
-    }, PENDING_STREAM_TTL_MS);
-    // Do not keep the event loop alive solely for this cleanup timer.
-    timeout.unref?.();
-
-    const apiKey = getIsMock() ? null : requireApiKey(request);
-    pendingStreams.set(speechId, { text, voiceId, apiKey, mergedSettings, timeout });
-
-    if (getIsMock()) {
-      console.warn(`[VoiceForge] MOCK_ELEVENLABS: speak enqueued mock stream for speechId=${speechId}`);
-    }
+    const expiresAt = Date.now() + 60000;
+    const token = encryptToken({ text: trimmedText, voiceId: trimmedVoiceId, apiKey, language_code, voice_settings, expiresAt });
 
     response.json({
-      speechId,
-      audioUrl: `/api/voice/speak/stream/${speechId}`
+      speechId: token,
+      audioUrl: `/api/voice/speak/stream?t=${token}`
     });
   } catch (error) {
     next(error);
@@ -237,27 +238,21 @@ export async function speak(request, response, next) {
 
 export async function streamSpeech(request, response, next) {
   try {
-    const { speechId } = request.params;
-    const streamData = pendingStreams.get(speechId);
-
-    if (!streamData) {
-      response.status(404).json({ error: "Speech stream not found or expired." });
+    const token = request.query.t;
+    if (!token) {
+      response.status(400).json({ error: "Missing stream token." });
       return;
     }
-
-    // Clean up immediately after retrieving parameters to prevent memory leaks
-    deletePendingStream(speechId);
+    const { text, voiceId, apiKey, language_code, voice_settings } = decryptToken(token);
 
     // --- mock mode: stream the bundled silent MP3 fixture ---
     if (getIsMock()) {
-      console.warn(`[VoiceForge] MOCK_ELEVENLABS: streaming mock audio for speechId=${speechId}`);
+      console.warn("[VoiceForge] MOCK_ELEVENLABS: streaming mock audio");
       response.setHeader("Content-Type", "audio/mpeg");
       response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
       response.end(MOCK_AUDIO_MP3);
       return;
     }
-
-    const { text, voiceId, apiKey, mergedSettings } = streamData;
 
     const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
       method: "POST",
@@ -269,7 +264,8 @@ export async function streamSpeech(request, response, next) {
       body: JSON.stringify({
         text,
         model_id: "eleven_multilingual_v2",
-        voice_settings: mergedSettings
+        language_code,
+        voice_settings: voice_settings
       })
     });
 
@@ -305,4 +301,3 @@ export function getStatus(request, response) {
     hasServerKey: Boolean(process.env.ELEVENLABS_API_KEY?.trim())
   });
 }
-

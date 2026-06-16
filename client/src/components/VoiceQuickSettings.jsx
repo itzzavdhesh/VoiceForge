@@ -1,37 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react";
-
-const STORAGE_KEY = "voiceforge:voiceSettings";
-
-const DEFAULT_SETTINGS = {
-  stability: 0.45,
-  similarity_boost: 0.8,
-  style: 0.2,
-};
-
-/**
- * Reads voice settings from localStorage.
- * Falls back to defaults if the key is missing or JSON is malformed.
- */
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-/**
- * Persists voice settings to localStorage.
- */
-function persistSettings(settings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Storage unavailable — fail silently
-  }
-}
+import {
+  VOICE_SETTINGS_KEY,
+  loadVoiceSettings,
+  persistVoiceSettings,
+} from "../utils/voiceSettings.js";
 
 /**
  * A single labelled range slider row.
@@ -85,13 +58,13 @@ function SliderRow({ id, label, description, value, onChange }) {
  */
 export function VoiceQuickSettings({ defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [settings, setSettings] = useState(loadSettings);
+  const [settings, setSettings] = useState(loadVoiceSettings);
 
   // Keep in sync when the Settings page changes localStorage from another tab/component.
   useEffect(() => {
     function handleStorage(event) {
-      if (event.key === STORAGE_KEY) {
-        setSettings(loadSettings());
+      if (event.key === VOICE_SETTINGS_KEY) {
+        setSettings(loadVoiceSettings());
       }
     }
     window.addEventListener("storage", handleStorage);
@@ -103,7 +76,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
       const val = parseFloat(event.target.value);
       setSettings((prev) => {
         const next = { ...prev, [key]: val };
-        persistSettings(next);
+        persistVoiceSettings(next);
         return next;
       });
     },
