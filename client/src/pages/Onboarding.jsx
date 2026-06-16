@@ -328,8 +328,9 @@ export default function Onboarding({ onReady }) {
       }
     } catch (err) {
       console.error("Voice cloning process failed:", err);
-      showToast("Voice cloning failed. Please try again.", "error");
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
+      // Show the specific error message from the hook (network failure,
+      // validation error, server error, etc.) rather than a generic fallback.
+      showToast(err?.message || "Voice cloning failed. Please try again.", "error");
     }
   }
 
