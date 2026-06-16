@@ -248,14 +248,17 @@ export async function streamSpeech(request, response, next) {
       response.status(403).json({ error: "Stream token has already been used." });
       return;
     }
-    usedStreamTokens.add(token);
 
     const { text, voiceId, apiKey, language_code, voice_settings, expiresAt } = decryptToken(token);
+
+    usedStreamTokens.add(token);
 
     if (expiresAt) {
       const timeToLive = expiresAt - Date.now();
       if (timeToLive > 0) {
-        setTimeout(() => usedStreamTokens.delete(token), timeToLive);
+        const MAX_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+        const delay = Math.min(timeToLive, MAX_TIMEOUT);
+        setTimeout(() => usedStreamTokens.delete(token), delay);
       } else {
         usedStreamTokens.delete(token);
       }
