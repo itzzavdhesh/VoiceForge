@@ -1,6 +1,5 @@
 // Implements ElevenLabs voice cloning and text-to-speech proxy handlers.
 import crypto from "crypto";
-import { randomUUID } from "node:crypto";
 import { isValidAudioBuffer } from "../middleware/upload.js";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode } from "../utils/languages.js";
