@@ -126,34 +126,31 @@ function sanitizeUploadFileName(originalName) {
   return cleaned || "reference.webm";
 }
 
-// Generate a unique identifier for request locking.
-// Uses session ID if available (authenticated requests), otherwise uses IP + timestamp.
+// Generate a stable identifier used to deduplicate clone requests.
+// Authenticated flows should pass a per-user ID via a real session/auth middleware;
+// without session middleware wired up we fall back to the client IP.
 function getRequestLockId(request) {
-  if (request.session?.id) {
-    return `session:${request.session.id}`;
-  }
   const ip = request.ip || request.socket?.remoteAddress || "unknown";
   return `ip:${ip}`;
 }
 
-// Check if a clone request is already in progress for this user/session.
-// Returns true if a request is locked, false otherwise.
-function isCloneRequestLocked(lockId) {
+// Atomically check and acquire the lock for a clone request.
+// Returns true if the lock was acquired (no request was in-flight),
+// false if a request is already in progress (duplicate - reject with 429).
+function tryAcquireCloneLock(lockId) {
   const lockData = activeCloneRequests.get(lockId);
-  if (!lockData) return false;
 
-  // Clean up expired locks (older than 5 minutes)
-  if (Date.now() - lockData.timestamp > 300000) {
-    activeCloneRequests.delete(lockId);
-    return false;
+  if (lockData) {
+    // Clean up expired locks (older than 5 minutes) and allow the request.
+    if (Date.now() - lockData.timestamp > 300000) {
+      activeCloneRequests.delete(lockId);
+    } else {
+      return false;
+    }
   }
 
-  return true;
-}
-
-// Acquire a lock for a clone request.
-function acquireCloneLock(lockId) {
   activeCloneRequests.set(lockId, { timestamp: Date.now() });
+  return true;
 }
 
 // Release a lock for a clone request.
@@ -173,16 +170,15 @@ export async function cloneVoice(request, response, next) {
     }
 
     // Prevent duplicate clone requests during slow network conditions.
-    // If a clone request is already in progress, reject the duplicate with 429.
-    if (isCloneRequestLocked(lockId)) {
+    // tryAcquireCloneLock atomically checks and acquires the lock so there is
+    // no window between the check and the acquire where a concurrent request
+    // could slip through.
+    if (!tryAcquireCloneLock(lockId)) {
       response.status(429).json({
         error: "A voice clone request is already in progress. Please wait for it to complete before requesting another clone."
       });
       return;
     }
-
-    // Acquire lock for this clone request.
-    acquireCloneLock(lockId);
 
     // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
