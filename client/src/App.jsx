@@ -13,6 +13,7 @@ import ScrollToTopButton from "./components/ScrollToTopButton";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import NotFound from "./pages/NotFound.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -41,6 +42,60 @@ function saveActiveTab(tab) {
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
+}
+
+// A minimal, self-contained router to avoid adding third-party dependencies.
+function Routes({ children }) {
+  const [currentPath, setCurrentPath] = React.useState(
+    typeof window !== "undefined" ? window.location.pathname : "/"
+  );
+
+  React.useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    
+    window.addEventListener("popstate", handleLocationChange);
+    
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    
+    window.history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      handleLocationChange();
+    };
+    
+    window.history.replaceState = function (...args) {
+      originalReplaceState.apply(this, args);
+      handleLocationChange();
+    };
+
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+    };
+  }, []);
+
+  let match = null;
+  let fallback = null;
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+    const isMainPath = (child.props.path === "/" && (currentPath === "/" || currentPath === "/index.html"));
+    
+    if (child.props.path === "*") {
+      fallback = child;
+    } else if (child.props.path === currentPath || isMainPath) {
+      match = child;
+    }
+  });
+
+  return match || fallback || null;
+}
+
+function Route({ element }) {
+  return element;
 }
 
 export default function App() {
@@ -73,26 +128,55 @@ export default function App() {
     if (!tabIds.has(tab)) return;
     saveActiveTab(tab);
     setActiveTab(tab);
+    if (window.location.pathname !== "/" && window.location.pathname !== "/index.html") {
+      window.history.pushState({}, "", "/");
+    }
   }
 
   // Support navigation to non-tab routes such as the privacy policy.
   function navigateTo(route) {
     if (route === "privacy-policy") {
-      setActiveTab("privacy-policy");
+      window.history.pushState({}, "", "/privacy-policy");
       return;
     }
     selectTab(route);
   }
 
-  // On initial load, honor direct links to /privacy-policy
+  // Sync tab state with current location path (initial load, browser navigation, or history updates)
   React.useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && window.location?.pathname === "/privacy-policy") {
+    const handleSync = () => {
+      const path = window.location.pathname;
+      if (path === "/privacy-policy") {
         setActiveTab("privacy-policy");
+      } else if (path === "/" || path === "/index.html") {
+        const saved = getSavedTab();
+        setActiveTab(saved);
+      } else {
+        setActiveTab("not-found");
       }
-    } catch {
-      // ignore
-    }
+    };
+    
+    handleSync();
+    
+    window.addEventListener("popstate", handleSync);
+    
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    
+    window.history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      handleSync();
+    };
+    window.history.replaceState = function (...args) {
+      originalReplaceState.apply(this, args);
+      handleSync();
+    };
+    
+    return () => {
+      window.removeEventListener("popstate", handleSync);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+    };
   }, []);
 
   return (
@@ -170,21 +254,36 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-grow">
-        {activeTab === "compose" && <VoiceForge />}
-
-        {activeTab !== "compose" && (
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
-            {activeTab === "call"       && <Call />}
-            {activeTab === "settings"   && <Settings />}
-            {activeTab === "contributors" && <Contributors />}
-            {activeTab === "about" && <About onNavigate={selectTab} />}
-            {activeTab === "privacy-policy" && (<PrivacyPolicy
-              onBackHome={() => selectTab("onboarding")}
-             />
-            )}
-          </div>
-        )}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              activeTab === "compose" ? (
+                <VoiceForge />
+              ) : (
+                <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                  {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
+                  {activeTab === "call"       && <Call />}
+                  {activeTab === "settings"   && <Settings />}
+                  {activeTab === "contributors" && <Contributors />}
+                  {activeTab === "about"       && <About onNavigate={selectTab} />}
+                </div>
+              )
+            }
+          />
+          <Route
+            path="/privacy-policy"
+            element={
+              <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <PrivacyPolicy onBackHome={() => selectTab("onboarding")} />
+              </div>
+            }
+          />
+          <Route
+            path="*"
+            element={<NotFound onBackHome={() => selectTab("onboarding")} />}
+          />
+        </Routes>
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
