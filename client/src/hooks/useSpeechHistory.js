@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { saveTranscript, clearAllTranscripts } from "../utils/db.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -120,7 +121,7 @@ export function useSpeechHistory() {
  *
  * @param {string} text - Message text to store
  */
-const addMessage = useCallback((text) => {
+const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
   const trimmed = text.trim();
 
   if (!trimmed) return;
@@ -132,23 +133,25 @@ const addMessage = useCallback((text) => {
     { text: trimmed, timestamp },
   ]);
 
+  // Save to IndexedDB transcripts store for Phase 3 & 4
+  saveTranscript({
+    text: trimmed,
+    voice_id: voiceId,
+    session_id: sessionId,
+    timestamp
+  }).then(() => {
+    window.dispatchEvent(new CustomEvent("vf-transcript-saved"));
+  }).catch((err) => console.error("Error saving transcript to IndexedDB:", err));
+
   setHistory((prev) => {
-    // Check existing message
     const existing = prev.find((m) => m.text === trimmed);
 
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      timestamp,
-    };
-    // Preserve existing ID if duplicate found, but update timestamp
-    // so re-spoken messages sort correctly after a page reload.
+    // Fixed duplicate declaration syntax error
+    const newId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
     const entry = existing
-      ? { ...existing, timestamp: Date.now() }
-      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
+      ? { ...existing, timestamp }
+      : { id: newId, text: trimmed, timestamp };
 
-    // Move duplicate to top instead of recreating
     const updated = [
       entry,
       ...prev.filter((m) => m.id !== entry.id),
@@ -188,6 +191,7 @@ const addMessage = useCallback((text) => {
     setHistory([]);
     setFavorites(new Set());
     setSessionTranscript([]);
+    clearAllTranscripts().catch((err) => console.error("Failed to clear transcripts from DB", err));
   }, []);
 
   return {
