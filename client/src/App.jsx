@@ -1,6 +1,6 @@
 // Coordinates top-level navigation, saved voice state, and page rendering for VoiceForge.
 import React from "react";
-import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info } from "lucide-react";
+import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2, FolderOpen, Heart } from "lucide-react";
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
@@ -13,11 +13,17 @@ import ScrollToTopButton from "./components/ScrollToTopButton";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Analytics from "./pages/Analytics.jsx";
+import Library from "./pages/Library.jsx";
+import Healthcare from "./pages/Healthcare.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
   { id: "call",         label: "Call",          icon: Camera },
   { id: "compose",      label: "Compose",       icon: MessageSquare },
+  { id: "analytics",    label: "Analytics",     icon: BarChart2 },
+  { id: "library",      label: "Library",       icon: FolderOpen },
+  { id: "healthcare",   label: "Healthcare",    icon: Heart },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "about", label: "About", icon: Info },
@@ -179,6 +185,9 @@ export default function App() {
             {activeTab === "settings"   && <Settings />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
+            {activeTab === "analytics" && <Analytics />}
+            {activeTab === "library" && <Library />}
+            {activeTab === "healthcare" && <Healthcare />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
               onBackHome={() => selectTab("onboarding")}
              />
