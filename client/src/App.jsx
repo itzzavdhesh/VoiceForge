@@ -101,12 +101,19 @@ export default function App() {
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo + Title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <img
-              src="/models/logo5.png"
-              alt="VoiceForge Logo"
-              className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
-            />
+            <div
+              className="flex items-center gap-3 min-w-0 cursor-pointer"
+              onClick={() => selectTab("onboarding")}
+              role="button"
+              tabIndex={0}
+              aria-label="Go to home"
+              onKeyDown={(e) => e.key === "Enter" && selectTab("onboarding")}
+            >
+              <img
+                src="/models/logo5.png"
+                alt="VoiceForge Logo"
+                className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
+              />
             <div className="min-w-0">
               <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow sm:block">
                 Open source assistive video
