@@ -74,13 +74,17 @@ export default function Healthcare() {
     { label: "Cold", emoji: "❄️", text: "I feel cold." }
   ];
 
-  // Helper for hash setup (Simple Salted Hash implementation)
-  const hashPin = (pin) => {
+  // Proper SHA-256 hash implementation using Web Crypto API
+  const hashPin = async (pin) => {
     const salt = "vf_salt_12345";
-    return btoa(salt + pin); // simple base64-based salted hash for client-side demo
+    const encoder = new TextEncoder();
+    const data = encoder.encode(salt + pin);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
   };
 
-  const handleSetupPin = (e) => {
+  const handleSetupPin = async (e) => {
     e.preventDefault();
     if (!newPin.match(/^\d{4,8}$/)) {
       alert("PIN must be 4 to 8 digits long.");
@@ -90,7 +94,7 @@ export default function Healthcare() {
       alert("PINs do not match.");
       return;
     }
-    const hashed = hashPin(newPin);
+    const hashed = await hashPin(newPin);
     localStorage.setItem("vf_hc_pin_hash", hashed);
     setSavedHash(hashed);
     setIsLocked(true);
@@ -100,14 +104,15 @@ export default function Healthcare() {
     alert("Caregiver PIN set successfully!");
   };
 
-  const handleUnlock = (e) => {
+  const handleUnlock = async (e) => {
     e.preventDefault();
     if (Date.now() < cooldownUntil) {
       const remaining = Math.ceil((cooldownUntil - Date.now()) / 1000);
       alert(`Too many failed attempts. Cooldown: ${remaining}s.`);
       return;
     }
-    if (hashPin(pinInput) === savedHash) {
+    const attemptHash = await hashPin(pinInput);
+    if (attemptHash === savedHash) {
       setIsLocked(false);
       setPinInput("");
       setFailedAttempts(0);

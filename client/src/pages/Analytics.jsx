@@ -53,6 +53,9 @@ export default function Analytics() {
       }
     }
     calculateStats();
+
+    window.addEventListener("vf-transcript-saved", calculateStats);
+    return () => window.removeEventListener("vf-transcript-saved", calculateStats);
   }, []);
 
   return (

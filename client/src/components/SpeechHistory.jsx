@@ -66,10 +66,18 @@ export function SpeechHistory({
   function handleExportCSV() {
     if (!sessionTranscript || sessionTranscript.length === 0) return;
     const headers = ["Timestamp", "Text"];
-    const rows = sessionTranscript.map(item => [
-      new Date(item.timestamp).toLocaleString(),
-      `"${item.text.replace(/"/g, '""')}"`
-    ]);
+    const rows = sessionTranscript.map(item => {
+      const ts = new Date(item.timestamp).toLocaleString();
+      let safeText = item.text;
+      // Prevent formula injection
+      if (/^[=+\-@]/.test(safeText)) {
+        safeText = "'" + safeText;
+      }
+      return [
+        `"${ts.replace(/"/g, '""')}"`,
+        `"${safeText.replace(/"/g, '""')}"`
+      ];
+    });
     const csvContent = "data:text/csv;charset=utf-8," 
       + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);

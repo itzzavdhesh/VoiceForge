@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { saveTranscript } from "../utils/db.js";
+import { saveTranscript, clearAllTranscripts } from "../utils/db.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -139,15 +139,18 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
     voice_id: voiceId,
     session_id: sessionId,
     timestamp
+  }).then(() => {
+    window.dispatchEvent(new CustomEvent("vf-transcript-saved"));
   }).catch((err) => console.error("Error saving transcript to IndexedDB:", err));
 
   setHistory((prev) => {
     const existing = prev.find((m) => m.text === trimmed);
 
     // Fixed duplicate declaration syntax error
+    const newId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
     const entry = existing
       ? { ...existing, timestamp }
-      : { id: crypto.randomUUID(), text: trimmed, timestamp };
+      : { id: newId, text: trimmed, timestamp };
 
     const updated = [
       entry,
@@ -188,6 +191,7 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
     setHistory([]);
     setFavorites(new Set());
     setSessionTranscript([]);
+    clearAllTranscripts().catch((err) => console.error("Failed to clear transcripts from DB", err));
   }, []);
 
   return {

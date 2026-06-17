@@ -237,18 +237,30 @@ export async function deleteCollection(id) {
   });
 }
 
+export async function clearAllTranscripts() {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(TRANSCRIPT_STORE, "readwrite");
+    const store = transaction.objectStore(TRANSCRIPT_STORE);
+    const request = store.clear();
+    request.onsuccess = () => resolve(true);
+    request.onerror = (event) => reject(new Error("Failed to clear transcripts: " + event.target.error?.message));
+  });
+}
+
 // DB Recovery function (Phase 23)
 export async function dbRecovery() {
   try {
     const db = await getDB();
     db.close();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const request = window.indexedDB.deleteDatabase(DB_NAME);
       request.onsuccess = () => {
         dbPromise = null;
         resolve(true);
       };
-      request.onerror = () => reject(false);
+      request.onerror = () => resolve(false);
+      request.onblocked = () => resolve(false);
     });
   } catch {
     return false;

@@ -14,6 +14,7 @@ export default function useTTS() {
 
     try {
       const voiceSettings = loadVoiceSettings();
+      const { pitch, ...validVoiceSettings } = voiceSettings;
 
       const apiKey = getApiKey();
       const response = await fetch("/api/voice/speak", {
@@ -26,7 +27,7 @@ export default function useTTS() {
   text,
   voice_id: voiceId,
   language_code,
-  voice_settings: voiceSettings
+  voice_settings: validVoiceSettings
 })
       });
 

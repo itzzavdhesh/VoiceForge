@@ -34,39 +34,43 @@ export default React.forwardRef(function VideoPreview({
     isCalibratingRef.current = isCalibrating;
   }, [isCalibrating]);
 
+  const onSpeakingChangeRef = React.useRef(onSpeakingChange);
+  React.useEffect(() => {
+    onSpeakingChangeRef.current = onSpeakingChange;
+  }, [onSpeakingChange]);
+
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = "";
       }
-      onSpeakingChange?.(false);
-    };
-  }, [onSpeakingChange]);
-
-  useEffect(() => {
-    if (!audioUrl || !audioRef.current) return;
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 32;
-      analyserRef.current = analyser;
-      
-      const source = ctx.createMediaElementSource(audioRef.current);
-      sourceRef.current = source;
-      source.connect(analyser);
-      analyser.connect(ctx.destination);
-    } catch (err) {
-      console.warn("Web Audio API binding failed:", err);
-    }
-
-    return () => {
+      onSpeakingChangeRef.current?.(false);
       if (audioCtxRef.current) {
         audioCtxRef.current.close().catch(() => {});
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (!audioUrl || !audioRef.current) return;
+    try {
+      if (!audioCtxRef.current) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        analyserRef.current = analyser;
+        
+        const source = ctx.createMediaElementSource(audioRef.current);
+        sourceRef.current = source;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+      }
+    } catch (err) {
+      console.warn("Web Audio API binding failed:", err);
+    }
   }, [audioUrl]);
 
   React.useEffect(() => {
