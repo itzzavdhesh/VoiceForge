@@ -31,7 +31,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 30000000 // 30 MB to allow ONNX wasm file
+        maximumFileSizeToCacheInBytes: 30000000, // 30 MB to allow ONNX wasm file
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,tflite,binarypb,data}']
       }
     })
   ],
