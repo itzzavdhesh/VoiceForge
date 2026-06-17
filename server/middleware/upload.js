@@ -22,7 +22,7 @@ const upload = multer({
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       callback(
         new Error(
-          "Invalid audio format. Allowed types: webm, wav, mp3, mp4, ogg, flac."
+        "Invalid audio format. Allowed types: webm, wav, mp3, mp4, ogg, flac."
         )
       );
       return;
