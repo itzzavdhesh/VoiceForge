@@ -82,18 +82,29 @@ export default function Call() {
 });
 
   const handleCalibrationChange = (key, value) => {
-  if (typeof value !== "number" || isNaN(value)) return;
-  setCalibration((prev) => {
-    const updated = { ...prev, [key]: value };
-    try {
-      localStorage.setItem(
-        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-        value.toString()
-      );
-    } catch { /* storage unavailable – continue without persisting */ }
-    return updated;
-  });
-};
+    let parsedValue = typeof value === "string" ? parseFloat(value) : value;
+    if (typeof parsedValue !== "number" || isNaN(parsedValue)) return;
+
+    // Apply strict clamping matching the slider limits based on the key
+    if (key === "xOffset") {
+      parsedValue = Math.max(-400, Math.min(400, Math.round(parsedValue)));
+    } else if (key === "yOffset") {
+      parsedValue = Math.max(-250, Math.min(150, Math.round(parsedValue)));
+    } else if (key === "scale") {
+      parsedValue = Math.max(0.5, Math.min(2.5, parsedValue));
+    }
+
+    setCalibration((prev) => {
+      const updated = { ...prev, [key]: parsedValue };
+      try {
+        localStorage.setItem(
+          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+          parsedValue.toString()
+        );
+      } catch { /* storage unavailable – continue without persisting */ }
+      return updated;
+    });
+  };
 
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };

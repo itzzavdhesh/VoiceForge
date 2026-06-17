@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
+const TRANSCRIPT_KEY = "vf_transcript";
 const MAX_HISTORY = 25;
 
 /**
@@ -17,6 +18,31 @@ const MAX_HISTORY = 25;
 function readStorage(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
+
+    if (!raw) {
+      return fallback;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    // Ensure correct structure
+    if (Array.isArray(fallback)) {
+      return Array.isArray(parsed) ? parsed : fallback;
+    }
+
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Safely reads a JSON value from sessionStorage.
+ * Returns `fallback` if the key is missing or the value is unparseable.
+ */
+function readSessionStorage(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
 
     if (!raw) {
       return fallback;
@@ -53,6 +79,7 @@ export function useSpeechHistory() {
   const [favorites, setFavorites] = useState(
     () => new Set(readStorage(FAVS_KEY, []))
   );
+  const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
 
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -62,6 +89,14 @@ export function useSpeechHistory() {
       /* storage quota exceeded — silently skip */
     }
   }, [history]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(sessionTranscript));
+    } catch {
+      /* storage quota exceeded — silently skip */
+    }
+  }, [sessionTranscript]);
 
   useEffect(() => {
     try {
@@ -90,6 +125,13 @@ const addMessage = useCallback((text) => {
 
   if (!trimmed) return;
 
+  const timestamp = Date.now();
+
+  setSessionTranscript((prev) => [
+    ...prev,
+    { text: trimmed, timestamp },
+  ]);
+
   setHistory((prev) => {
     // Check existing message
     const existing = prev.find((m) => m.text === trimmed);
@@ -98,8 +140,13 @@ const addMessage = useCallback((text) => {
     const entry = existing || {
       id: crypto.randomUUID(),
       text: trimmed,
-      timestamp: Date.now(),
+      timestamp,
     };
+    // Preserve existing ID if duplicate found, but update timestamp
+    // so re-spoken messages sort correctly after a page reload.
+    const entry = existing
+      ? { ...existing, timestamp: Date.now() }
+      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
 
     // Move duplicate to top instead of recreating
     const updated = [
@@ -140,11 +187,13 @@ const addMessage = useCallback((text) => {
   const clearHistory = useCallback(() => {
     setHistory([]);
     setFavorites(new Set());
+    setSessionTranscript([]);
   }, []);
 
   return {
     history,
     favorites,
+    sessionTranscript,
     addMessage,
     removeMessage,
     toggleFavorite,

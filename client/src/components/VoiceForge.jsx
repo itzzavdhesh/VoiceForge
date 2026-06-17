@@ -29,6 +29,7 @@ export default function VoiceForge() {
   const {
     history,
     favorites,
+    sessionTranscript,
     addMessage,
     removeMessage,
     toggleFavorite,
@@ -88,19 +89,20 @@ export default function VoiceForge() {
       return;
     }
 
-    // Guard against synchronous throws (e.g. navigator.clipboard is undefined
-    // in non-secure contexts or older browsers) as well as async Promise
-    // rejections — both must surface the same actionable error toast.
-    try {
-      navigator.clipboard
-        .writeText(target)
-        .then(() => showToast("Copied to clipboard", "success"))
-        .catch(() => {
-          showToast("Copy failed — please select the text and copy manually", "error");
-        });
-    } catch {
-      showToast("Copy failed — please select the text and copy manually", "error");
-    }
+    navigator.clipboard
+      .writeText(target)
+      .then(() => showToast("Copied to clipboard", "success"))
+      .catch(() => {
+        const ta = document.createElement("textarea");
+        ta.value = target;
+        ta.style.position = "absolute";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        showToast("Copied", "success");
+      });
   }, [inputText, showToast]);
 
   const handleQuickReply = useCallback((phrase) => {
@@ -182,6 +184,7 @@ export default function VoiceForge() {
         <SpeechHistory
           history={history}
           favorites={favorites}
+          sessionTranscript={sessionTranscript}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
           onToggleFav={toggleFavorite}

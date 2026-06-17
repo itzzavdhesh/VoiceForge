@@ -88,7 +88,7 @@ jobs:
 
             function getProgramReviewerMentions(programLabel) {
               const reviewersByProgram = {
-                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@1754riya', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
                 nsoc26: ['@joyprakashk', '@rushi-k12'],
                 SSoC26: ['@joyprakashk', '@rushi-k12'],
                 ELUSOC: ['@joyprakashk', '@rushi-k12']
@@ -127,11 +127,12 @@ jobs:
             }
             function getHeadingSection(name) {
               const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const sectionMatch = body.match(new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b.*$`, 'im'));
+              const sectionMatch = body.match(new RegExp(`^\\s*(#{1,6})\\s*.*${escapedName}\\b.*$`, 'im'));
               if (!sectionMatch || typeof sectionMatch.index !== 'number') return '';
 
+              const level = sectionMatch[1].length;
               const sectionStart = sectionMatch.index + sectionMatch[0].length;
-              const nextHeadingMatch = body.slice(sectionStart).match(/^\s*#{1,6}\s+.+$/m);
+              const nextHeadingMatch = body.slice(sectionStart).match(new RegExp(`^\\s*#{1,${level}}\\s+.+$`, 'm'));
               const sectionEnd = nextHeadingMatch && typeof nextHeadingMatch.index === 'number'
                 ? sectionStart + nextHeadingMatch.index
                 : body.length;

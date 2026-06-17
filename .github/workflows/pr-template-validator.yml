@@ -137,7 +137,7 @@ jobs:
 
             function getProgramReviewerMentions(programLabel) {
               const reviewersByProgram = {
-                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@1754riya', '@Mrigakshi-Rathore', '@itzzavdheshh', '@vedhapprakashni'],
                 nsoc26: ['@joyprakashk', '@rushi-k12'],
                 SSoC26: ['@joyprakashk', '@rushi-k12'],
                 ELUSOC: ['@joyprakashk', '@rushi-k12']
@@ -272,11 +272,12 @@ jobs:
             }
             function getHeadingSection(name) {
               const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const sectionMatch = body.match(new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b.*$`, 'im'));
+              const sectionMatch = body.match(new RegExp(`^\\s*(#{1,6})\\s*.*${escapedName}\\b.*$`, 'im'));
               if (!sectionMatch || typeof sectionMatch.index !== 'number') return '';
 
+              const level = sectionMatch[1].length;
               const sectionStart = sectionMatch.index + sectionMatch[0].length;
-              const nextHeadingMatch = body.slice(sectionStart).match(/^\s*#{1,6}\s+.+$/m);
+              const nextHeadingMatch = body.slice(sectionStart).match(new RegExp(`^\\s*#{1,${level}}\\s+.+$`, 'm'));
               const sectionEnd = nextHeadingMatch && typeof nextHeadingMatch.index === 'number'
                 ? sectionStart + nextHeadingMatch.index
                 : body.length;
@@ -319,7 +320,7 @@ jobs:
               }
 
               const typeOfChangeSection = getHeadingSection('Type of Change');
-              const hasCheckedTypeOfChange = /-\s*\[\s*[xX]\s*\]/.test(typeOfChangeSection);
+              const hasCheckedTypeOfChange = /[-*+]\s*\[\s*[xX]\s*\]/.test(typeOfChangeSection);
               if (!hasCheckedTypeOfChange) {
                 problems.push('Please select at least one option under the Type of Change section.');
                 needsLabelsToAdd.push('needs-template');
@@ -336,7 +337,7 @@ jobs:
               }
 
               const checklistSection = getHeadingSection('Checklist');
-              const hasChecklistItems = /-\s*\[\s*[ xX\s]\s*\]/i.test(checklistSection);
+              const hasChecklistItems = /[-*+]\s*\[\s*[ xX\s]\s*\]/i.test(checklistSection);
               if (!hasChecklistItems) {
                 problems.push('Please keep and complete the Checklist section.');
                 needsLabelsToAdd.push('needs-template');
@@ -425,15 +426,15 @@ jobs:
 
             const changedPaths = files.map(file => file.filename);
             const typeOfChangeSection = getHeadingSection('Type of Change');
-            const hasDocumentationChange = (typeOfChangeSection && /-\s*\[\s*[xX]\s*\]\s*.*(?:documentation|docs)/i.test(typeOfChangeSection)) || changedPaths.some(path => /\.md$/i.test(path));
+            const hasDocumentationChange = (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:documentation|docs)/i.test(typeOfChangeSection)) || changedPaths.some(path => /\.md$/i.test(path));
             if (changedPaths.some(path => path.startsWith('client/'))) neutralLabelsToAdd.push('client');
             if (changedPaths.some(path => path.startsWith('server/'))) neutralLabelsToAdd.push('server');
             if (changedPaths.some(path => path.startsWith('.github/'))) neutralLabelsToAdd.push('ci');
             if (hasDocumentationChange) neutralLabelsToAdd.push('documentation');
-            if (typeOfChangeSection && /-\s*\[\s*[xX]\s*\]\s*.*(?:accessibility|a11y)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('accessibility');
-            if (typeOfChangeSection && /-\s*\[\s*[xX]\s*\]\s*.*bug/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('bug');
-            if (typeOfChangeSection && /-\s*\[\s*[xX]\s*\]\s*.*(?:new feature|enhancement)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('enhancement');
-            if (typeOfChangeSection && /-\s*\[\s*[xX]\s*\]\s*.*(?:refactor|cleanup)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('refactor');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:accessibility|a11y)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('accessibility');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*bug/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('bug');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:new feature|enhancement)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('enhancement');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:refactor|cleanup)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('refactor');
 
             if (problems.length === 0) {
               statusLabelsToAdd.push(
