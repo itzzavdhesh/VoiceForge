@@ -9,6 +9,7 @@ import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
 import ScrollToBottomButton from "./components/ScrollToBottomButton.jsx";
+import ScrollToTopButton from "./components/ScrollToTopButton";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -225,9 +226,8 @@ export default function App() {
       
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
+      <ScrollToTopButton activeTab={activeTab} />
       <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
-
-
     </div>
   );
 }

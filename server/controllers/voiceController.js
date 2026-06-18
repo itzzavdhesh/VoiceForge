@@ -4,6 +4,15 @@ import { getIsMock } from "../utils/mock.js"; // adjust path to actual location
 import { isValidLanguageCode } from "../utils/languages.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
+const PENDING_STREAMS_MAX = Math.max(
+  1,
+  Number(process.env.PENDING_STREAMS_MAX) || 1000
+);
+
+const PENDING_STREAM_TTL_MS = Math.max(
+  1,
+  Number(process.env.PENDING_STREAM_TTL_MS) || 60_000
+);
 
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
@@ -26,6 +35,12 @@ const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
 const ENCRYPTION_KEY = crypto.scryptSync(STREAM_SECRET, "voiceforge-stream-salt", 32);
 const IV_LENGTH = 12;
 const ALGORITHM = "aes-256-gcm";
+
+function createTimeoutSignal(ms = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
 
 function encryptToken(payload) {
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -152,11 +167,25 @@ export async function cloneVoice(request, response, next) {
     const safeFileName = sanitizeUploadFileName(audioFile.originalname);
     formData.append("files", new Blob([audioFile.buffer], { type: audioFile.mimetype }), safeFileName);
 
-    const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
-      method: "POST",
-      headers: { "xi-api-key": apiKey },
-      body: formData
-    });
+    const { signal: cloneSignal, clear: clearClone } = createTimeoutSignal();
+      let elevenResponse;
+      try {
+        elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/voices/add`, {
+        method: "POST",
+        headers: { "xi-api-key": apiKey },
+        body: formData,
+        signal: cloneSignal
+      });
+      clearClone();
+    } catch (error) {
+      if (error.name === "AbortError") {
+        response.status(504).json({
+          error: "Voice clone request timed out. Please try again."
+        });
+        return;
+      }
+      throw error;
+    }
 
     if (!elevenResponse.ok) {
       const error = new Error(await readElevenLabsError(elevenResponse));
@@ -174,6 +203,21 @@ export async function cloneVoice(request, response, next) {
   }
 }
 
+// Maps speechId -> { text, voiceId, apiKey, mergedSettings, timeout }.
+// Keys are unguessable UUIDs (see speak) and entries are single-use.
+const pendingStreams = new Map();
+
+// Remove a pending stream and clear its expiry timer so timers do not pile up.
+function deletePendingStream(speechId) {
+  const entry = pendingStreams.get(speechId);
+  if (!entry) {
+    return undefined;
+  }
+  clearTimeout(entry.timeout);
+  pendingStreams.delete(speechId);
+  return entry;
+}
+
 export async function speak(request, response, next) {
   try {
     const {
@@ -183,6 +227,13 @@ export async function speak(request, response, next) {
       voice_settings
     } = request.body;
 
+    if (pendingStreams.size >= PENDING_STREAMS_MAX) {
+      response.status(503).json({
+        error:
+          "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+      });
+      return;
+    }
     const apiKey = getIsMock() ? null : requireApiKey(request);
 
     // Fix (Issue 1): trim both fields before checking so whitespace-only
@@ -214,6 +265,60 @@ export async function speak(request, response, next) {
       return;
     }
 
+    const defaultVoiceSettings = {
+      stability: 0.45,
+      similarity_boost: 0.8,
+      style: 0.2,
+      use_speaker_boost: true
+    };
+
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    const sanitizedSettings = {};
+    if (voice_settings && typeof voice_settings === "object") {
+      if (
+        typeof voice_settings.stability === "number" &&
+        Number.isFinite(voice_settings.stability)
+      ) {
+        sanitizedSettings.stability = clamp01(voice_settings.stability);
+      }
+      if (
+        typeof voice_settings.similarity_boost === "number" &&
+        Number.isFinite(voice_settings.similarity_boost)
+      ) {
+        sanitizedSettings.similarity_boost = clamp01(
+          voice_settings.similarity_boost
+        );
+      }
+      if (
+        typeof voice_settings.style === "number" &&
+        Number.isFinite(voice_settings.style)
+      ) {
+        sanitizedSettings.style = clamp01(voice_settings.style);
+      }
+      if (typeof voice_settings.use_speaker_boost === "boolean") {
+        sanitizedSettings.use_speaker_boost =
+          voice_settings.use_speaker_boost;
+      }
+    }
+
+    const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
+
+    // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
+    // cannot be reproduced from a seed or enumerated by a co-located process,
+    // so the stored API key cannot be retrieved by guessing the stream key.
+    const speechId = crypto.randomUUID();
+
+    const timeout = setTimeout(() => {
+      deletePendingStream(speechId);
+    }, PENDING_STREAM_TTL_MS);
+    // Do not keep the event loop alive solely for this cleanup timer.
+    timeout.unref?.();
+    
+    pendingStreams.set(speechId, { text: trimmedText, voiceId: trimmedVoiceId, apiKey, mergedSettings, timeout });
+
+    if (getIsMock()) {
+      console.warn(`[VoiceForge] MOCK_ELEVENLABS: speak enqueued mock stream for speechId=${speechId}`);
+    }
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({ text: trimmedText, voiceId: trimmedVoiceId, apiKey, language_code, voice_settings, expiresAt });
 
@@ -244,7 +349,10 @@ export async function streamSpeech(request, response, next) {
       return;
     }
 
-    const elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
+  const { signal: streamSignal, clear: clearStream } = createTimeoutSignal();
+  let elevenResponse;
+  try {
+    elevenResponse = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -258,6 +366,16 @@ export async function streamSpeech(request, response, next) {
         voice_settings: voice_settings
       })
     });
+    clearStream();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      response.status(504).json({
+        error: "Speech stream timed out. Please try again."
+      });
+      return;
+    }
+    throw error;
+  }
 
     if (!elevenResponse.ok) {
       const errorText = await readElevenLabsError(elevenResponse);

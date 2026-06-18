@@ -25,7 +25,7 @@ export default function Call() {
     persistLanguage(language);
   }, [language]);
   const [dbError, setDbError] = React.useState("");
-  const { speak, status, error, audioUrl } = useTTS();
+  const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
 
   React.useEffect(() => {
@@ -160,22 +160,32 @@ export default function Call() {
 }, [showToast]);
 
   async function handleSpeak(text) {
-    if (!activeProfile?.voice_id) return;
-    try {
-      await speak({
-  text,
-  voiceId: activeProfile.voice_id,
-  language_code: language,
-});
-    } catch (err) {
-      console.error("TTS streaming error:", err);
-      showToast("Speech generation failed", "error");
+  if (!activeProfile?.voice_id) return;
+
+  try {
+    const result = await speak({
+      text,
+      voiceId: activeProfile.voice_id,
+      language_code: language,
+    });
+
+    if (result?.fallback) {
+      showToast("Using browser voice fallback", "info");
     }
+  } catch (err) {
+    console.error("TTS streaming error:", err);
+    showToast("Speech generation failed", "error");
   }
+}
 
   return (
     <div className="space-y-5">
       {/* ── Header card ───────────────────────────────────────────────────── */}
+      {engine === "browser" && (
+      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+        Using Browser Voice (Offline Mode)
+      </div>
+    )}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
