@@ -246,35 +246,31 @@ export default function Onboarding({ onReady }) {
   const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
 
   React.useEffect(() => {
-  fetch(`${import.meta.env.VITE_API_URL}/api/voice/status`)
-    .then(async (res) => {
-      // Check if request succeeded
+  React.useEffect(() => {
+  const fetchServerStatus = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/voice/status`
+      );
+
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
 
-      
       const contentType = res.headers.get("content-type");
 
       if (!contentType?.includes("application/json")) {
         throw new Error("Server returned non-JSON response");
       }
 
-      
-      return res.json();
-    })
-    .then((data) => {
+      const data = await res.json();
       setServerStatus(data);
-    })
-    .catch((err) => {
+    } catch (err) {
       console.error("Failed to fetch server status:", err);
+    }
+  };
 
-      
-      setServerStatus({
-        isMock: false,
-        hasServerKey: false,
-      });
-    });
+  fetchServerStatus();
 }, []);
 
   const hasKey = React.useMemo(() => {
