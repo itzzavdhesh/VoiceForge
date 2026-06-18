@@ -66,11 +66,6 @@ export default function Contributors() {
       )}
 
       {status === "error" && (
-<<<<<<< Updated upstream
-        <p role="alert" className="text-center text-sm text-red-500">
-          Failed to load contributors. Please try again later.
-        </p>
-=======
         <div className="flex flex-col items-center gap-3 text-center">
           <p role="alert" className="text-sm text-red-500">
             Failed to load contributors. Please try again later.
@@ -82,7 +77,6 @@ export default function Contributors() {
             Retry
           </button>
         </div>
->>>>>>> Stashed changes
       )}
 
       {status === "success" && (
