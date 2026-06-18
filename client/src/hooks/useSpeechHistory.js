@@ -136,12 +136,6 @@ const addMessage = useCallback((text) => {
     // Check existing message
     const existing = prev.find((m) => m.text === trimmed);
 
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      timestamp,
-    };
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
     const entry = existing
