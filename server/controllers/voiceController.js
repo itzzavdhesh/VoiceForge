@@ -1,6 +1,7 @@
 // Implements ElevenLabs voice cloning and text-to-speech proxy handlers.
 import crypto from "crypto";
-import { getIsMock } from "../utils/mock.js"; // adjust path to actual location
+import { isValidAudioBuffer } from "../middleware/upload.js";
+import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode } from "../utils/languages.js";
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
@@ -142,6 +143,14 @@ export async function cloneVoice(request, response, next) {
 
     if (!audioFile) {
       response.status(400).json({ error: "Reference audio is required." });
+      return;
+    }
+
+    // The MIME type checked in upload.js comes from the client and can be
+    // spoofed. Verify the buffer begins with a known audio magic-byte
+    // signature so arbitrary binary data cannot be forwarded to ElevenLabs.
+    if (!isValidAudioBuffer(audioFile.buffer)) {
+      response.status(400).json({ error: "Uploaded file does not appear to be valid audio." });
       return;
     }
 
