@@ -2,6 +2,7 @@
 import React from "react";
 import { useTheme } from "./ThemeContext";
 import { useEffect, useRef } from "react";
+import { loadVoiceSettings } from "../utils/voiceSettings.js";
 import { AudioProcessor } from "../utils/audioProcessor";
 import { FaceProcessor } from "../utils/faceProcessor";
 
@@ -50,6 +51,21 @@ export default React.forwardRef(function VideoPreview({
     if (audioUrl && audioRef.current && audioProcessorRef.current && !audioRef.current.dataset.audioProcessorInitialized) {
       audioProcessorRef.current.initialize(audioRef.current);
       audioRef.current.dataset.audioProcessorInitialized = "true";
+    }
+  }, [audioUrl]);
+
+  // Set speech playback speed (rate) on HTML5 audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      try {
+        const voiceSettings = loadVoiceSettings();
+        if (typeof voiceSettings.rate === "number") {
+          audioRef.current.defaultPlaybackRate = voiceSettings.rate;
+          audioRef.current.playbackRate = voiceSettings.rate;
+        }
+      } catch (err) {
+        console.error("Failed to set audio playback rate:", err);
+      }
     }
   }, [audioUrl]);
 

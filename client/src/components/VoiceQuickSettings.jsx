@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange }) {
+function SliderRow({ id, label, description, value, onChange, min = "0", max = "1", step = "0.01" }) {
   return (
     <div className="space-y-1">
       <label
@@ -28,9 +28,9 @@ function SliderRow({ id, label, description, value, onChange }) {
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
-        step="0.01"
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={onChange}
         aria-label={label}
@@ -142,6 +142,16 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Higher → more stylised delivery from the reference audio."
             value={settings.style}
             onChange={updateSetting("style")}
+          />
+          <SliderRow
+            id="vqs-rate"
+            label="Speech Rate"
+            description="Adjust speaking speed. Lower → slower, Higher → faster."
+            value={settings.rate}
+            onChange={updateSetting("rate")}
+            min="0.5"
+            max="2.0"
+            step="0.05"
           />
 
           {/* ── Speaker Boost toggle ── */}
