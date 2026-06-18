@@ -14,6 +14,12 @@ const PENDING_STREAM_TTL_MS = Math.max(
   Number(process.env.PENDING_STREAM_TTL_MS) || 60_000
 );
 
+// In-memory store to prevent duplicate voice clone requests during network latency.
+// Maps session/user IDs to their active clone request state.
+// This prevents duplicate API calls when users retry or interact multiple times
+// before the UI reflects the cloning state (e.g., in slow network conditions).
+const activeCloneRequests = new Map();
+
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
   "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
@@ -136,7 +142,41 @@ function sanitizeUploadFileName(originalName) {
   return cleaned || "reference.webm";
 }
 
+// Generate a stable identifier used to deduplicate clone requests.
+// Authenticated flows should pass a per-user ID via a real session/auth middleware;
+// without session middleware wired up we fall back to the client IP.
+function getRequestLockId(request) {
+  const ip = request.ip || request.socket?.remoteAddress || "unknown";
+  return `ip:${ip}`;
+}
+
+// Atomically check and acquire the lock for a clone request.
+// Returns true if the lock was acquired (no request was in-flight),
+// false if a request is already in progress (duplicate - reject with 429).
+function tryAcquireCloneLock(lockId) {
+  const lockData = activeCloneRequests.get(lockId);
+
+  if (lockData) {
+    // Clean up expired locks (older than 5 minutes) and allow the request.
+    if (Date.now() - lockData.timestamp > 300000) {
+      activeCloneRequests.delete(lockId);
+    } else {
+      return false;
+    }
+  }
+
+  activeCloneRequests.set(lockId, { timestamp: Date.now() });
+  return true;
+}
+
+// Release a lock for a clone request.
+function releaseCloneLock(lockId) {
+  activeCloneRequests.delete(lockId);
+}
+
 export async function cloneVoice(request, response, next) {
+  const lockId = getRequestLockId(request);
+
   try {
     const audioFile = request.file;
 
@@ -145,9 +185,21 @@ export async function cloneVoice(request, response, next) {
       return;
     }
 
+    // Prevent duplicate clone requests during slow network conditions.
+    // tryAcquireCloneLock atomically checks and acquires the lock so there is
+    // no window between the check and the acquire where a concurrent request
+    // could slip through.
+    if (!tryAcquireCloneLock(lockId)) {
+      response.status(429).json({
+        error: "A voice clone request is already in progress. Please wait for it to complete before requesting another clone."
+      });
+      return;
+    }
+
     // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_ELEVENLABS: skipping real voice clone, returning fixture.");
+      releaseCloneLock(lockId);
       response.json({
         voice_id: "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
@@ -194,11 +246,13 @@ export async function cloneVoice(request, response, next) {
     }
 
     const payload = await elevenResponse.json();
+    releaseCloneLock(lockId);
     response.json({
       voice_id: payload.voice_id,
       name: request.body.name || "VoiceForge Voice"
     });
   } catch (error) {
+    releaseCloneLock(lockId);
     next(error);
   }
 }
