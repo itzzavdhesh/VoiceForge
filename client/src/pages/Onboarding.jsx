@@ -357,30 +357,45 @@ export default function Onboarding({ onReady }) {
           </div>
           
           {/* STEP PROGRESS INDICATORS COMPONENT GRID */}
-          <div className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm" aria-label="Onboarding progress indicators">
+          <ol className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm" aria-label={`Onboarding progress, Step ${activeStep} of 3`}>
             {stepContent[activeStep].labels.map((label, index) => {
               let isBarFilled = false;
+              let isCurrent = false;
+
               if (activeStep === 1) {
                 if (index === 0) isBarFilled = true;
                 if (index === 1 && recording) isBarFilled = true;
                 if (index === 2 && (successProfile || maxUnlockedStep >= 2)) isBarFilled = true;
+
+                if (index === 2 && (successProfile || maxUnlockedStep >= 2)) isCurrent = true;
+                else if (index === 1 && recording && !(successProfile || maxUnlockedStep >= 2)) isCurrent = true;
+                else if (index === 0 && !recording) isCurrent = true;
               } else if (activeStep === 2) {
                 if (index === 0) isBarFilled = true;
                 if (index === 1) isBarFilled = true;
                 if (index === 2 && maxUnlockedStep >= 3) isBarFilled = true;
+
+                if (index === 2 && maxUnlockedStep >= 3) isCurrent = true;
+                else if (index === 1 && !(maxUnlockedStep >= 3)) isCurrent = true;
               } else if (activeStep === 3) {
                 isBarFilled = true;
+                if (index === 2) isCurrent = true;
               }
 
               return (
-                <div
-                  key={label}
-                  className={`h-2 rounded-full transition-all duration-300 ${isBarFilled ? "bg-coral" : "bg-ink/15 dark:bg-white/25"}`}
-                  title={label}
-                />
+                <li key={label} aria-current={isCurrent ? "step" : undefined}>
+                  <span className="sr-only">
+                    {isCurrent ? `Current: ${label}` : isBarFilled ? `Completed: ${label}` : `Upcoming: ${label}`}
+                  </span>
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${isBarFilled ? "bg-coral" : "bg-ink/15 dark:bg-white/25"}`}
+                    aria-hidden="true"
+                    title={label}
+                  />
+                </li>
               );
             })}
-          </div>
+          </ol>
         </div>
       </section>
 
