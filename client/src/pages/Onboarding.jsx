@@ -191,19 +191,31 @@ function Step2VoiceSettings({ onBack, onContinue }) {
   );
 }
 
+const MIN_NAME_LENGTH = 3;
+const MAX_NAME_LENGTH = 100;
+
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null);
   const [recordingDuration, setRecordingDuration] = React.useState(0);
+
   function handleRecordingReady(blob, duration = 0) {
     setRecording(blob);
     setRecordingDuration(duration);
   }
+
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
+<<<<<<< HEAD
   const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+=======
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    hasServerKey: false,
+  });
+>>>>>>> 7eeb8da (refactor: reuse voice name length constants)
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -216,12 +228,8 @@ export default function Onboarding({ onReady }) {
   const hasKey = React.useMemo(() => {
     return serverStatus.isMock || Boolean(serverStatus.space);
   }, [serverStatus]);
-
-  // Derived validation: compute an error message from the current voiceName.
-  // Using a constant (not useState) because the value is always in sync with voiceName.
-  const MIN_NAME_LENGTH = 3;
-const MAX_NAME_LENGTH = 100;
-const nameError = React.useMemo(() => {
+  
+  const nameError = React.useMemo(() => {
   const trimmed = voiceName.trim();
   if (trimmed.length === 0) {
     return "Voice name is required.";
@@ -404,7 +412,7 @@ const nameError = React.useMemo(() => {
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
-                maxLength={100}
+                maxLength={MAX_NAME_LENGTH}
                 aria-describedby="voice-name-feedback"
                 aria-invalid={nameError ? "true" : undefined}
                 className={[
@@ -448,9 +456,9 @@ const nameError = React.useMemo(() => {
                     : "text-ink/45 dark:text-muted",
                 ].join(" ")}
                 aria-live="polite"
-                aria-label={`${voiceName.length} of 100 characters used`}
+                aria-label={`${voiceName.length} of ${MAX_NAME_LENGTH} characters used`}
               >
-                {voiceName.length}/100
+                {voiceName.length}/{MAX_NAME_LENGTH}
               </span>
             </div>
 
