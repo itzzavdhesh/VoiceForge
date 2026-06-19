@@ -59,7 +59,9 @@ export function SpeechHistory({
     const a = document.createElement("a");
     a.href = url;
     a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
