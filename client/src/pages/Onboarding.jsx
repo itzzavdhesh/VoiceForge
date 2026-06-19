@@ -219,12 +219,21 @@ export default function Onboarding({ onReady }) {
 
   // Derived validation: compute an error message from the current voiceName.
   // Using a constant (not useState) because the value is always in sync with voiceName.
-  const nameError = React.useMemo(() => {
-    const trimmed = voiceName.trim();
-    if (trimmed.length === 0) return "Voice name is required.";
-    if (trimmed.length > 100) return "Voice name must be 100 characters or fewer.";
-    return "";
-  }, [voiceName]);
+  const MIN_NAME_LENGTH = 3;
+const MAX_NAME_LENGTH = 100;
+const nameError = React.useMemo(() => {
+  const trimmed = voiceName.trim();
+  if (trimmed.length === 0) {
+    return "Voice name is required.";
+  }
+  if (trimmed.length < MIN_NAME_LENGTH) {
+    return `Voice name must be at least ${MIN_NAME_LENGTH} characters.`;
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return `Voice name must be ${MAX_NAME_LENGTH} characters or fewer.`;
+  }
+  return "";
+}, [voiceName]);
 
 
   // Track the highest milestone step the user is allowed to navigate to
