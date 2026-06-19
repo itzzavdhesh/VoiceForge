@@ -246,33 +246,43 @@ export default function Onboarding({ onReady }) {
   const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
 
   React.useEffect(() => {
-  React.useEffect(() => {
-  const fetchServerStatus = async () => {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/voice/status`
-      );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+
+  const apiBase = import.meta.env.VITE_API_URL || "";
+
+  fetch(`${apiBase}/api/voice/status`, { signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
 
       const contentType = res.headers.get("content-type");
-
       if (!contentType?.includes("application/json")) {
         throw new Error("Server returned non-JSON response");
       }
 
-      const data = await res.json();
+      return res.json();
+    })
+    .then((data) => {
       setServerStatus(data);
-    } catch (err) {
-      console.error("Failed to fetch server status:", err);
-    }
+    })
+    .catch((err) => {
+      if (err.name === "AbortError") {
+        console.error("Failed to fetch server status (timeout or cancelled):", err);
+      } else {
+        console.error("Failed to fetch server status:", err);
+      }
+      // Do NOT call setServerStatus here — leave previous/default state intact
+    });
+
+  return () => {
+    clearTimeout(timeoutId);
+    controller.abort();
   };
-
-  fetchServerStatus();
 }, []);
-
   const hasKey = React.useMemo(() => {
     return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
   }, [serverStatus]);
