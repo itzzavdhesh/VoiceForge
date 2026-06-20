@@ -7,18 +7,18 @@ VoiceForge is a browser-based assistive video tool that lets a user type during 
 
 ## 📑 Table of Contents
 
-- [Why This Exists](#why-this-exists)
-- [Tech Stack](#tech-stack)
-- [Browser Compatibility](#browser-compatibility)
-- [Prerequisites](#prerequisites)
-- [Setup](#setup)
-- [Environment Variables](#environment-variables)
-- [Using VoiceForge In A Call](#using-voiceforge-in-a-call)
-- [OBS Virtual Camera Setup](#obs-virtual-camera-setup)
-- [API](#api)
-- [Roadmap](#roadmap)
-- [License](#license)
-- [About](#about)
+* [Why This Exists](#why-this-exists)
+* [Tech Stack](#tech-stack)
+* [Browser Compatibility](#browser-compatibility)
+* [Prerequisites](#prerequisites)
+* [Setup](#setup)
+* [Environment Variables](#environment-variables)
+* [Using VoiceForge In A Call](#using-voiceforge-in-a-call)
+* [OBS Virtual Camera Setup](#obs-virtual-camera-setup)
+* [API](#api)
+* [Roadmap](#roadmap)
+* [License](#license)
+* [About](#about)
 
 ---
 
