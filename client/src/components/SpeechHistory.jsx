@@ -47,23 +47,52 @@ export function SpeechHistory({
     }
   }
 
-  function handleExportTranscript() {
-    if (!sessionTranscript || sessionTranscript.length === 0) return;
-    
-    const formattedText = sessionTranscript
-      .map(item => `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text}`)
-      .join("\n");
-      
-    const blob = new Blob([formattedText], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+  function downloadFile(content, fileName, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function handleExportTxt() {
+  if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+  const formattedText = sessionTranscript
+    .map(
+      (item) =>
+        `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - Success`
+    )
+    .join("\n");
+
+  downloadFile(
+    formattedText,
+    `VoiceHistory-${new Date().toISOString().split("T")[0]}.txt`,
+    "text/plain"
+  );
+}
+function handleExportJson() {
+  if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+  const exportData = sessionTranscript.map((item) => ({
+    command: item.text,
+    timestamp: new Date(item.timestamp).toISOString(),
+    status: "success",
+  }));
+
+  downloadFile(
+    JSON.stringify(exportData, null, 2),
+    `VoiceHistory-${new Date().toISOString().split("T")[0]}.json`,
+    "application/json"
+  );
+}
 
   return (
     <aside
@@ -180,13 +209,22 @@ export function SpeechHistory({
           {history.length > 0 && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
               {sessionTranscript && sessionTranscript.length > 0 && (
-                <button
-                  onClick={handleExportTranscript}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                >
-                  <Download size={13} aria-hidden="true" />
-                  Export Transcript
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleExportTxt}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    Export TXT
+                  </button>
+                  <button
+                    onClick={handleExportJson}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    Export JSON
+                  </button>
+                </div>
               )}
               <button
                 onClick={handleClearHistory}
