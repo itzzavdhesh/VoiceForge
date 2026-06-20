@@ -128,9 +128,13 @@ const addMessage = useCallback((text) => {
   const timestamp = Date.now();
 
   setSessionTranscript((prev) => [
-    ...prev,
-    { text: trimmed, timestamp },
-  ]);
+  ...prev,
+  {
+    text: trimmed,
+    timestamp,
+    status: "success",
+  },
+]);
 
   setHistory((prev) => {
     // Check existing message

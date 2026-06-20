@@ -51,8 +51,11 @@ export function SpeechHistory({
     if (!sessionTranscript || sessionTranscript.length === 0) return;
     
     const formattedText = sessionTranscript
-      .map(item => `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text}`)
-      .join("\n");
+    .map(
+      (item) =>
+      `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${item.status ?? "unknown"}`
+  )
+  .join("\n");
       
     const blob = new Blob([formattedText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -177,7 +180,7 @@ export function SpeechHistory({
             )}
           </div>
 
-          {history.length > 0 && (
+          {(history.length > 0 || sessionTranscript?.length > 0) && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
               {sessionTranscript && sessionTranscript.length > 0 && (
                 <button
