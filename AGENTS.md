@@ -45,6 +45,7 @@ npx playwright test
 - Client Vitest tests live alongside components in `client/src/`.
 - Server tests live in `server/test/`.
 - Client Vitest uses `vmForks` pool and `environment: "node"`.
+- Server tests use custom helpers (`server/test/helpers.js`) that mock Express req/res — no framework-level test deps.
 
 ## Environment
 
@@ -63,6 +64,10 @@ Copy `.env.example` to `.env`. Defaults to **mock mode** (`MOCK_CHATTERBOX=true`
 
 ## Code Conventions
 
+- Both packages use ESM (`"type": "module"`) — no CommonJS `require()`.
+- Express 5 (not 4) — error-handling middleware must have 4 params: `(err, req, res, next)`.
+- Vitest runs with `environment: "node"` (not jsdom) even for React component tests — no `window`/`document` globals unless mocked.
+- No linter or formatter is configured (no ESLint, no Prettier) — match existing code style manually.
 - Top-of-file comments on every source file explaining what it does.
 - Use `// TODO: [description]` for incomplete work.
 - Prefer browser-native APIs before adding dependencies.
@@ -73,6 +78,15 @@ Copy `.env.example` to `.env`. Defaults to **mock mode** (`MOCK_CHATTERBOX=true`
 ## PR / Issue Workflow
 
 This repo is part of GSSoC/SSOC/NSOC/ELUSOC programs. PRs and issues must use the matching program templates. PRs are validated against the linked closing issue and author assignment. Sign-offs encouraged (`git commit --signoff`).
+
+## Skills
+
+| Skill | What it does |
+|-------|-------------|
+| `express-rest-api` | Build and organize API routes, middleware, validation, and error handling for the voice server |
+| `playwright-generate-test` | Generate and run Playwright E2E tests for voice features and user flows |
+| `vercel-composition-patterns` | Structure React components with reusable patterns to avoid prop drilling and boolean hell |
+| `wcag-audit-patterns` | Audit and fix accessibility issues to ensure voice app works for all users |
 
 ## Key Files
 
