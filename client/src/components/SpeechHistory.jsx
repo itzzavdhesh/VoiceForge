@@ -71,6 +71,32 @@ export function SpeechHistory({history,
 
   URL.revokeObjectURL(url);
 }
+function handleExportJson() {
+  if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+  const exportData = sessionTranscript.map((item) => ({
+    command: item.text,
+    timestamp: new Date(item.timestamp).toISOString(),
+    status: item.status ?? "unknown",
+  }));
+
+  const blob = new Blob(
+    [JSON.stringify(exportData, null, 2)],
+    { type: "application/json" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
   return (
     <aside
       className={[
@@ -183,14 +209,22 @@ export function SpeechHistory({history,
             )}
           </div>
 
-          {sessionTranscript?.length > 0 && (
-  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+         {sessionTranscript?.length > 0 && (
+  <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
     <button
       onClick={handleExportTranscript}
       className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
     >
       <Download size={13} aria-hidden="true" />
-      Export Transcript
+      Export TXT
+    </button>
+
+    <button
+      onClick={handleExportJson}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+    >
+      <Download size={13} aria-hidden="true" />
+      Export JSON
     </button>
   </div>
 )}
