@@ -128,7 +128,15 @@ export default function VoiceForge() {
 
     if (isTyping) return;
 
+<<<<<<< HEAD
+<<<<<<< HEAD
     if (!event.repeat && event.ctrlKey && event.key === "Delete") {
+=======
+    if (event.ctrlKey && event.key === "Delete") {
+>>>>>>> 4745223 (feat: add keyboard shortcuts for voice recording controls)
+=======
+    if (!event.repeat && event.ctrlKey && event.key === "Delete") {
+>>>>>>> a0285fb (fix: prevent repeated keyboard shortcut actions)
       event.preventDefault();
 
       if (

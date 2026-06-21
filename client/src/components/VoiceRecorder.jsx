@@ -175,6 +175,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }
   React.useEffect(() => {
   function handleKeyDown(event) {
+
     if (event.repeat) return;
     // Don't trigger shortcuts while typing
    const target = event.target;
@@ -186,6 +187,11 @@ const isInteractive =
   );
 if (isInteractive) return;
 
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+if (isInteractive) return;
+
     // Space => Start/Stop recording
     if (event.code === "Space") {
       event.preventDefault();
@@ -193,7 +199,7 @@ if (isInteractive) return;
       if (isRecording) {
         stopRecording();
       } else if (!disabled && !isInitializing) {
-        startRecording();
+      startRecording();
       }
     }
 
