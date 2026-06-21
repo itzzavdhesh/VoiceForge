@@ -120,7 +120,6 @@ export default function PrivacyPolicy({ onBackHome }) {
         hover:bg-accent
         transition-colors
         "
-        aria-label="Return to the home page"
       >
         ← Back to Home
       </button>

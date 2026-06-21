@@ -87,12 +87,11 @@ export default function Contributors() {
               href={contributor.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`View ${contributor.login}'s GitHub profile (opens in new tab)`}
               className="flex flex-col items-center gap-2 rounded-lg border border-ink/10 bg-white p-4 text-center transition hover:border-moss hover:shadow-md dark:border-border dark:bg-surface dark:hover:border-glow"
             >
               <img
                 src={contributor.avatar_url}
-                alt={`Avatar of ${contributor.login}`}
+                alt={contributor.login}
                 className="h-16 w-16 rounded-full object-cover"
               />
               <span className="text-sm font-semibold text-ink dark:text-neutral-100">

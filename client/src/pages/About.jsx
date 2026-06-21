@@ -65,6 +65,7 @@ export default function About({ onNavigate }) {
                 hover:shadow-xl
                 hover:border-primary
                 hover:bg-accent/20
+                cursor-pointer
               "
             >
               <span className="text-3xl font-bold text-primary opacity-40">{step.number}</span>
@@ -98,14 +99,12 @@ export default function About({ onNavigate }) {
             href="https://github.com/itzzavdhesh/VoiceForge"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Star VoiceForge on GitHub (opens in new tab)"
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Star on GitHub
           </a>
           <button
             onClick={() => onNavigate("contributors")}
-            aria-label="Meet the VoiceForge contributors"
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
           >
             Meet the Contributors
