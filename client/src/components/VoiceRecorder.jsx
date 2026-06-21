@@ -173,6 +173,42 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       handleStopCleanup();
     }
   }
+  React.useEffect(() => {
+  function handleKeyDown(event) {
+    // Don't trigger shortcuts while typing
+    const target = event.target;
+    const isTyping =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable);
+
+    if (isTyping) return;
+
+    // Space => Start/Stop recording
+    if (event.code === "Space") {
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else if (!disabled && !isInitializing) {
+        startRecording();
+      }
+    }
+
+    // Esc => Cancel recording
+    if (event.key === "Escape" && isRecording) {
+      event.preventDefault();
+      handleStopCleanup({ emitReady: false });
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [isRecording, disabled, isInitializing]);
 
   React.useEffect(() => {
     return () => {

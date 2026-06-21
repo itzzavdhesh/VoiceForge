@@ -117,6 +117,43 @@ export default function VoiceForge() {
       handleSpeak();
     }
   }, [handleSpeak]);
+  useEffect(() => {
+  function handleGlobalShortcuts(event) {
+    const target = event.target;
+    const isTyping =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable);
+
+    if (isTyping) return;
+
+    if (event.ctrlKey && event.key === "Delete") {
+      event.preventDefault();
+
+      if (
+        history.length > 0 ||
+        favorites.size > 0 ||
+        sessionTranscript.length > 0
+      ) {
+        clearHistory();
+        showToast("History cleared", "success");
+      }
+    }
+  }
+
+  window.addEventListener("keydown", handleGlobalShortcuts);
+
+  return () => {
+    window.removeEventListener("keydown", handleGlobalShortcuts);
+  };
+}, [
+  clearHistory,
+  history.length,
+  favorites.size,
+  sessionTranscript.length,
+  showToast,
+]);
 
   const charsLeft = MAX_CHARS - inputText.length;
 
