@@ -678,7 +678,8 @@ function ForwardMessageDialog() {
 }
 
 function ForwardButton() {
-  const { actions } = use(Composer.Context)
+  // React 18: use useContext(); React 19+: use() works here too
+  const { actions } = useContext(Composer.Context)
   return <Button onPress={actions.submit}>Forward</Button>
 }
 ```

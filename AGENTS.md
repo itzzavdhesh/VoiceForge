@@ -84,6 +84,7 @@ This repo is part of GSSoC/SSOC/NSOC/ELUSOC programs. PRs and issues must use th
 | Skill | What it does |
 |-------|-------------|
 | `express-rest-api` | Build and organize API routes, middleware, validation, and error handling for the voice server |
+| `playwright-best-practices` | Playwright testing conventions, selectors, and async patterns for E2E test stability |
 | `playwright-generate-test` | Generate and run Playwright E2E tests for voice features and user flows |
 | `vercel-composition-patterns` | Structure React components with reusable patterns to avoid prop drilling and boolean hell |
 | `wcag-audit-patterns` | Audit and fix accessibility issues to ensure voice app works for all users |

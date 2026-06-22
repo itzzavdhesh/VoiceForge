@@ -23,7 +23,7 @@ Build a basic Express API in 5 steps:
 
 ### 1. Express Application Structure
 ```javascript
-const express = require('express');
+import express from 'express';
 const app = express();
 
 // Middleware
@@ -56,7 +56,7 @@ router.post('/', createUser);
 router.put('/:id', updateUser);
 router.delete('/:id', deleteUser);
 
-module.exports = router;
+export default router;
 ```
 
 ### 3. Middleware Patterns
@@ -192,9 +192,9 @@ src/
 
 Complete user API:
 ```javascript
-const express = require('express');
+import express from 'express';
+import { body, validationResult } from 'express-validator';
 const router = express.Router();
-const { body } = require('express-validator');
 
 // GET /api/users
 router.get('/', async (req, res, next) => {
@@ -216,6 +216,8 @@ router.post('/',
   body('password').isLength({ min: 8 }),
   async (req, res, next) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
       const user = await User.create(req.body);
       res.status(201).json({ success: true, data: user });
     } catch (error) {
@@ -224,7 +226,7 @@ router.post('/',
   }
 );
 
-module.exports = router;
+export default router;
 ```
 
 ## When to Use
