@@ -111,3 +111,10 @@ textarea {
 .animate-fade-in-up {
   animation: fade-in-up 0.2s ease-out;
 }
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-down {
+  animation: fade-in-down 0.2s ease-out;
+}

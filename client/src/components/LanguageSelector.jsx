@@ -24,6 +24,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIndex, setFocusIndex] = useState(-1);
+  const [dropdownUp, setDropdownUp] = useState(false);
 
   const containerRef = useRef(null);
   const searchRef = useRef(null);
@@ -73,8 +74,15 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     setIsOpen(true);
     setSearch("");
     setFocusIndex(-1);
-    // Focus the search input after render
-    requestAnimationFrame(() => searchRef.current?.focus());
+    // Check if dropdown should open upward to avoid viewport clipping
+    requestAnimationFrame(() => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const dropdownHeight = 460; // max panel height (~420 + padding)
+        setDropdownUp(rect.bottom + dropdownHeight > window.innerHeight);
+      }
+      searchRef.current?.focus();
+    });
   }, []);
 
   const closeDropdown = useCallback(() => {
@@ -213,9 +221,9 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
           role="dialog"
           aria-label="Language selection"
           className={[
-            "absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg",
+            "absolute z-50 flex flex-col overflow-hidden rounded-xl border shadow-lg",
             "border-neutral-200/80 bg-white dark:border-border dark:bg-surface",
-            "animate-fade-in-up",
+            dropdownUp ? "bottom-full mb-2 animate-fade-in-down" : "mt-2 animate-fade-in-up",
             compact ? "right-0 w-72" : "left-0 right-0 min-w-[320px] sm:w-96",
           ].join(" ")}
           style={{ maxHeight: "420px" }}
