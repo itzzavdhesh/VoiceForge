@@ -120,66 +120,6 @@ textarea {
   background: var(--bg-page);
 }
 ::-webkit-scrollbar-thumb {
-  background: #3f5f4d;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #22c55e;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #22c55e;
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #16a34a;
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #3f5f4d var(--bg-page);
-}
-.dark * {
-  scrollbar-color: #22c55e var(--bg-page);
-}
-
-/* Custom scrollbar to match VoiceForge color palette */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-page);
-}
-::-webkit-scrollbar-thumb {
-  background: #3f5f4d;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #22c55e;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #22c55e;
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #16a34a;
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #3f5f4d var(--bg-page);
-}
-.dark * {
-  scrollbar-color: #22c55e var(--bg-page);
-}
-
-/* Custom scrollbar to match VoiceForge color palette */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-page);
-}
-::-webkit-scrollbar-thumb {
   background: #22c55e;
   border-radius: 999px;
 }
