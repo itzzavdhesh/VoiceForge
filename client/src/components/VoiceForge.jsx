@@ -13,6 +13,8 @@ import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import useTTS from "../hooks/useTTS.js";
+import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 
 const MAX_CHARS = 500;
 
@@ -22,6 +24,36 @@ export default function VoiceForge() {
   const [language, setLanguage] = useState(loadLanguage);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
+
+  const [activeProfile, setActiveProfile] = useState(null);
+  const audioRef = useRef(null);
+
+  const { speak: ttsSpeak, audioUrl } = useTTS();
+
+  useEffect(() => {
+    async function loadActiveProfile() {
+      try {
+        const profile = await getActiveVoiceProfile();
+        setActiveProfile(profile);
+      } catch (err) {
+        console.error("Failed to load active profile in VoiceForge:", err);
+      }
+    }
+    loadActiveProfile();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+    };
+  }, []);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -38,42 +70,63 @@ export default function VoiceForge() {
 
   const { toasts, showToast } = useToast();
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
+  const speak = useCallback(async (text) => {
+    if (!text.trim()) return false;
 
-    if (!("speechSynthesis" in window)) {
-      showToast("Speech synthesis is not supported in this browser", "error");
-      return;
+    // 1. Cancel any active native speech synthesis
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    // 2. Pause/reset our local audio playback if it exists
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language;
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      showToast("Speech playback failed", "error");
-    };
-    window.speechSynthesis.speak(utterance);
-  }, [showToast, language]);
+    try {
+      setIsSpeaking(true);
+      const result = await ttsSpeak({
+        text,
+        voiceId: activeProfile?.voice_id || "",
+        language_code: language,
+      });
 
-  const handleSpeak = useCallback(() => {
+      if (result?.aborted) {
+        return false;
+      }
+
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+        setIsSpeaking(false);
+      }
+      return true;
+    } catch (err) {
+      console.error("TTS synthesis error:", err);
+      showToast("Speech generation failed", "error");
+      setIsSpeaking(false);
+      return false;
+    }
+  }, [ttsSpeak, activeProfile, language, showToast]);
+
+  const handleSpeak = useCallback(async () => {
     const text = inputText.trim();
     if (!text) {
       showToast("Please type a message first", "error");
       textareaRef.current?.focus();
       return;
     }
-    speak(text);
-    addMessage(text);
-    showToast("Saved to history", "success");
+    const success = await speak(text);
+    if (success) {
+      addMessage(text);
+      showToast("Saved to history", "success");
+    }
   }, [inputText, speak, addMessage, showToast]);
 
-  const handleReplay = useCallback((text) => {
-    speak(text);
-    showToast("Replaying...", "info");
+  const handleReplay = useCallback(async (text) => {
+    const success = await speak(text);
+    if (success) {
+      showToast("Replaying...", "info");
+    }
   }, [speak, showToast]);
 
   const handleReuse = useCallback((text) => {
@@ -105,10 +158,12 @@ export default function VoiceForge() {
       });
   }, [inputText, showToast]);
 
-  const handleQuickReply = useCallback((phrase) => {
-    speak(phrase);
-    addMessage(phrase);
-    showToast("Quick reply sent", "success");
+  const handleQuickReply = useCallback(async (phrase) => {
+    const success = await speak(phrase);
+    if (success) {
+      addMessage(phrase);
+      showToast("Quick reply sent", "success");
+    }
   }, [speak, addMessage, showToast]);
 
   const handleKeyDown = useCallback((event) => {
@@ -318,8 +373,8 @@ export default function VoiceForge() {
 
             <button
               onClick={handleSpeak}
-              disabled={!inputText.trim() || isSpeaking}
-              aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
+              disabled={isSpeaking}
+              aria-label={isSpeaking ? "Speaking" : "Speak & Save"}
               className={[
                 "ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-black",
@@ -334,6 +389,22 @@ export default function VoiceForge() {
         </div>
       </main>
 
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          key={audioUrl}
+          src={audioUrl}
+          className="hidden"
+          autoPlay
+          onPlay={() => setIsSpeaking(true)}
+          onPause={() => setIsSpeaking(false)}
+          onEnded={() => setIsSpeaking(false)}
+          onError={() => {
+            setIsSpeaking(false);
+            showToast("Speech playback failed", "error");
+          }}
+        />
+      )}
       <ToastContainer toasts={toasts} />
     </div>
   );
