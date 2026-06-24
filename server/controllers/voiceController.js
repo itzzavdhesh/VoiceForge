@@ -3,24 +3,12 @@
 import crypto from "crypto";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
-
-// ---------------------------------------------------------------------------
-// In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
-// In production you would persist this to a database or object store.
-// ---------------------------------------------------------------------------
-const voiceStore = new Map();
+import { getDb } from "../db.js";
 
 function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
   return Number.isFinite(numeric) ? Math.max(min, numeric) : fallback;
 }
-
-const MAX_STORED_VOICES = parseBoundedNumber(process.env.VOICE_STORE_MAX, 20, 1);
-const VOICE_STORE_TTL_MS = parseBoundedNumber(
-  process.env.VOICE_STORE_TTL_MS,
-  2 * 60 * 60 * 1000,
-  60_000
-);
 
 const PENDING_STREAMS_MAX = parseBoundedNumber(
   process.env.PENDING_STREAMS_MAX,
@@ -188,25 +176,6 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, numeric));
 }
 
-/**
- * Evicts expired voice entries and enforces the maximum limit on cached voices in memory.
- *
- * @param {number} [now] The current timestamp in milliseconds.
- */
-function pruneVoiceStore(now = Date.now()) {
-  for (const [voiceId, entry] of voiceStore) {
-    if (entry.expiresAt <= now) {
-      voiceStore.delete(voiceId);
-    }
-  }
-
-  while (voiceStore.size >= MAX_STORED_VOICES) {
-    const oldestVoiceId = voiceStore.keys().next().value;
-    if (!oldestVoiceId) break;
-    voiceStore.delete(oldestVoiceId);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Route handlers
 // ---------------------------------------------------------------------------
@@ -239,18 +208,18 @@ export async function cloneVoice(request, response, next) {
     }
 
     // Store the audio buffer server-side so it can be used during speak/stream.
-    pruneVoiceStore();
     const voiceId = crypto.randomUUID();
-    voiceStore.set(voiceId, {
-      name: request.body.name || "VoiceForge Voice",
-      audioBuffer: audioFile.buffer,
-      mimeType: audioFile.mimetype,
-      expiresAt: Date.now() + VOICE_STORE_TTL_MS
-    });
+    const voiceName = request.body.name || "VoiceForge Voice";
+    
+    const db = await getDb();
+    await db.run(
+      'INSERT INTO voice_profiles (voice_id, name, mime_type, audio_data) VALUES (?, ?, ?, ?)',
+      [voiceId, voiceName, audioFile.mimetype, audioFile.buffer]
+    );
 
     response.json({
       voice_id: voiceId,
-      name: request.body.name || "VoiceForge Voice"
+      name: voiceName
     });
   } catch (error) {
     next(error);
@@ -423,8 +392,8 @@ export async function streamSpeech(request, response, next) {
     }
 
     // Resolve the stored reference audio for this voice profile.
-    pruneVoiceStore();
-    const voiceEntry = voiceStore.get(voiceId);
+    const db = await getDb();
+    const voiceEntry = await db.get('SELECT * FROM voice_profiles WHERE voice_id = ?', [voiceId]);
     if (!voiceEntry) {
       response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
       return;
@@ -436,8 +405,8 @@ export async function streamSpeech(request, response, next) {
     let audioUrl;
     try {
       audioUrl = await generateClonedVoice(
-        voiceEntry.audioBuffer,
-        voiceEntry.mimeType,
+        voiceEntry.audio_data,
+        voiceEntry.mime_type,
         text,
         chatterboxLanguage,
         voice_settings
@@ -503,4 +472,37 @@ export function getStatus(request, response) {
     engine: "ResembleAI/Chatterbox-Multilingual-TTS",
     space: process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS"
   });
+}
+
+/**
+ * Express handler to get all saved voice profiles (excluding binary audio data).
+ */
+export async function getProfiles(request, response, next) {
+  try {
+    const db = await getDb();
+    const profiles = await db.all('SELECT voice_id, name, created_at FROM voice_profiles ORDER BY created_at DESC');
+    const mappedProfiles = profiles.map(p => ({
+      id: p.voice_id,
+      voice_id: p.voice_id,
+      name: p.name,
+      createdAt: p.created_at
+    }));
+    response.json(mappedProfiles);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Express handler to delete a saved voice profile.
+ */
+export async function deleteProfile(request, response, next) {
+  try {
+    const { voiceId } = request.params;
+    const db = await getDb();
+    await db.run('DELETE FROM voice_profiles WHERE voice_id = ?', [voiceId]);
+    response.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
 }

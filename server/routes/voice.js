@@ -1,7 +1,7 @@
 // Defines VoiceForge voice cloning and speech generation API routes.
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { cloneVoice, speak, streamSpeech, getStatus } from "../controllers/voiceController.js";
+import { cloneVoice, speak, streamSpeech, getStatus, getProfiles, deleteProfile } from "../controllers/voiceController.js";
 import upload from "../middleware/upload.js";
 
 const router = Router();
@@ -28,6 +28,8 @@ router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
 router.post("/speak", speakRateLimit, speak);
 router.get("/speak/stream", streamSpeech);
 router.get("/status", getStatus);
+router.get("/profiles", getProfiles);
+router.delete("/profiles/:voiceId", deleteProfile);
 
 // Handle multer and upload errors with structured JSON responses.
 router.use((err, req, res, next) => {
