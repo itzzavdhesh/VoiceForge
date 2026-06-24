@@ -184,6 +184,52 @@ const addMessage = useCallback((text) => {
     setSessionTranscript([]);
   }, []);
 
+  /**
+   * Imports a history and favorites backup.
+   * Merges imported items with the existing setup, preventing text duplicates
+   * and updating favorite relationships.
+   */
+  const importBackup = useCallback((importedHistory, importedFavorites) => {
+    const mergedMap = new Map();
+    // Add existing history
+    history.forEach(m => mergedMap.set(m.text, m));
+
+    const favIdsToAdd = [];
+    importedHistory.forEach((impMsg) => {
+      const isImportedFav = importedFavorites.includes(impMsg.id);
+      if (mergedMap.has(impMsg.text)) {
+        const existingMsg = mergedMap.get(impMsg.text);
+        if (isImportedFav) {
+          favIdsToAdd.push(existingMsg.id);
+        }
+      } else {
+        mergedMap.set(impMsg.text, impMsg);
+        if (isImportedFav) {
+          favIdsToAdd.push(impMsg.id);
+        }
+      }
+    });
+
+    const mergedList = Array.from(mergedMap.values());
+    mergedList.sort((a, b) => b.timestamp - a.timestamp);
+    const finalHistory = mergedList.slice(0, MAX_HISTORY);
+
+    const nextFavorites = new Set(favorites);
+    favIdsToAdd.forEach(id => nextFavorites.add(id));
+
+    // Clean up favorites: only keep favorites whose IDs are in the finalHistory
+    const finalHistoryIds = new Set(finalHistory.map(m => m.id));
+    const cleanedFavorites = new Set();
+    nextFavorites.forEach(id => {
+      if (finalHistoryIds.has(id)) {
+        cleanedFavorites.add(id);
+      }
+    });
+
+    setHistory(finalHistory);
+    setFavorites(cleanedFavorites);
+  }, [history, favorites]);
+
   return {
     history,
     favorites,
@@ -192,5 +238,6 @@ const addMessage = useCallback((text) => {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    importBackup,
   };
 }

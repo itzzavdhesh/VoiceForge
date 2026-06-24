@@ -160,15 +160,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({

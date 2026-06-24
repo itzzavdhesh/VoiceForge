@@ -167,10 +167,10 @@ export default React.forwardRef(function VideoPreview({
             ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
             : 1.0;
 
-          const centerX = canvas.width / 2 + xOffset;
-          const centerY = canvas.height * 0.63 + yOffset;
-          const radiusX = 56 * scale;
-          const radiusY = mouthOpen * scale;
+          const centerX = Math.max(0, Math.min(canvas.width, canvas.width / 2 + xOffset));
+          const centerY = Math.max(0, Math.min(canvas.height, canvas.height * 0.63 + yOffset));
+          const radiusX = Math.max(0.01, 56 * scale);
+          const radiusY = Math.max(0.01, mouthOpen * scale);
 
           context.save();
           context.fillStyle = mouthColor;
