@@ -155,9 +155,7 @@ Most video call apps cannot directly select a browser tab as a system camera. Fo
 4. Click Start Virtual Camera in OBS.
 5. Select OBS Virtual Camera in Zoom, Meet, or Teams.
 
-Screenshot placeholder: OBS browser source configuration.
-
-Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
+**For detailed setup guides (including Discord and Webex) and troubleshooting tips, see our [Virtual Camera Guide](docs/virtual-camera.md).**
 
 ## API
 
@@ -181,7 +179,7 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 - TODO: Replace the placeholder `models/wav2lip.onnx` with a real lightweight browser Wav2Lip ONNX model.
 - TODO: Implement real ONNX Runtime Web Wav2Lip inference.
 - TODO: Replace the fallback mouth animation with model-driven mouth movement.
-- TODO: Add richer virtual camera documentation for OBS and each call provider.
+- Done: Add richer virtual camera documentation for OBS and each call provider.
 - TODO: Add automated browser tests for camera and microphone permission flows.
 - TODO: Persist voice profiles across server restarts (database or object-store backend).
 
