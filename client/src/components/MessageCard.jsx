@@ -1,17 +1,17 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Copy, Pin, Play, RotateCcw, Trash2 } from "lucide-react";
+import { formatTime } from "../utils/formatTime.js";
 
-function formatTime(timestamp) {
-  const diff = Date.now() - timestamp;
-  if (diff < 60_000) return "Just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  return new Date(timestamp).toLocaleDateString([], { month: "short", day: "numeric" });
+function useRelativeTime(timestamp) {
+  const [label, setLabel] = useState(() => formatTime(timestamp));
+
+  useEffect(() => {
+    setLabel(formatTime(timestamp));
+    const interval = setInterval(() => setLabel(formatTime(timestamp)), 30_000);
+    return () => clearInterval(interval);
+  }, [timestamp]);
+
+  return label;
 }
 
 export function MessageCard({
@@ -24,6 +24,7 @@ export function MessageCard({
   onCopy,
 }) {
   const { id, text, timestamp } = message;
+  const timeLabel = useRelativeTime(timestamp);
 
   return (
     <article
@@ -43,7 +44,7 @@ export function MessageCard({
           dateTime={new Date(timestamp).toISOString()}
           className="text-xs text-neutral-400 dark:text-neutral-500"
         >
-          {formatTime(timestamp)}
+          {timeLabel}
         </time>
 
         <div

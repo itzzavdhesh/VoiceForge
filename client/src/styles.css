@@ -3,7 +3,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Light mode CSS variables ──────────────────────────────────────────────── */
+/* Light mode CSS variables */
 :root {
   --bg-page:    #f6f8f5;
   --bg-card:    #ffffff;
@@ -23,7 +23,7 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Dark mode CSS variables ───────────────────────────────────────────────── */
+/* Dark mode CSS variables */
 /* Applied when ThemeContext adds "dark" to <html> */
 .dark {
   --bg-page:    #000000;
@@ -39,7 +39,7 @@
 }
 
 body {
-  min-width: 320px;
+  overflow-x: hidden;
   min-height: 100vh;
   margin: 0;
   /* Smooth background transition when toggling theme */
@@ -63,7 +63,7 @@ textarea {
   font: inherit;
 }
 
-/* ── Smooth theme transition on common elements ────────────────────────────── */
+/* Smooth theme transition on common elements */
 *,
 *::before,
 *::after {
@@ -72,13 +72,13 @@ textarea {
   transition-timing-function: ease;
 }
 
-/* Don't animate transforms/opacity — would break animations like the wave */
+/* Don't animate transforms/opacity - would break animations like the wave */
 .recording-wave *,
 [class*="animate-"] {
   transition: none !important;
 }
 
-/* ── Accessibility: improved focus ring for keyboard nav ───────────────────── */
+/* Accessibility: improved focus ring for keyboard nav */
 :focus-visible {
   outline: 2px solid #3f5f4d;
   outline-offset: 2px;
@@ -88,10 +88,10 @@ textarea {
   outline-color: #22c55e;
 }
 
-/* ── Recording wave animation (unchanged) ──────────────────────────────────── */
+/* Recording wave animation */
 .recording-wave span {
   animation: recording-wave 900ms ease-in-out infinite;
-  transform-origin: center;
+  transform-origin: bottom;
 }
 .recording-wave span:nth-child(2) { animation-delay: 90ms; }
 .recording-wave span:nth-child(3) { animation-delay: 180ms; }
@@ -103,7 +103,7 @@ textarea {
   50%       { transform: scaleY(1); }
 }
 
-/* ── Toast fade-in-up animation ────────────────────────────────────────────── */
+/* Toast fade-in-up animation */
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }

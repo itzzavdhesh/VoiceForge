@@ -2,14 +2,13 @@
 import React from "react";
 import { getAllProfiles, saveProfile, deleteProfile } from "../utils/db.js";
 
+// Fix (Issue 2): must match the server-side Multer limit in server/middleware/upload.js.
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
+
 const ACTIVE_KEY = "voiceforge:activeVoiceId";
 
-export async function getSavedProfiles() {
-  try {
-    return await getAllProfiles();
-  } catch {
-    return [];
-  }
+export function getSavedProfiles() {
+  return getAllProfiles();
 }
 
 export async function saveVoiceProfile(profile, audioBlob = null) {
@@ -36,13 +35,9 @@ export async function deleteVoiceProfile(voiceId) {
 }
 
 export async function getActiveVoiceProfile() {
-  try {
-    const profiles = await getSavedProfiles();
-    const activeVoiceId = localStorage.getItem(ACTIVE_KEY);
-    return profiles.find((profile) => profile.voice_id === activeVoiceId) || profiles[0] || null;
-  } catch {
-    return null;
-  }
+  const profiles = await getSavedProfiles();
+  const activeVoiceId = localStorage.getItem(ACTIVE_KEY);
+  return profiles.find((profile) => profile.voice_id === activeVoiceId) || profiles[0] || null;
 }
 
 export default function useVoiceClone() {
@@ -54,6 +49,24 @@ export default function useVoiceClone() {
     setError("");
 
     try {
+      // Fix (Issue 2): validate client-side before any network request so the
+      // user gets instant, clear feedback instead of waiting for the full
+      // upload to complete before Multer rejects it on the server.
+      if (!audioBlob) {
+        throw new Error("No audio recording found. Please record your voice first.");
+      }
+      if (!audioBlob.type.startsWith("audio/")) {
+        throw new Error(
+          `Unsupported file type "${audioBlob.type}". Please upload an audio recording.`
+        );
+      }
+      if (audioBlob.size > MAX_UPLOAD_BYTES) {
+        const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+        throw new Error(
+          `Recording is ${sizeMB} MB — the maximum allowed size is 12 MB. Please record a shorter clip.`
+        );
+      }
+
       const formData = new FormData();
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
@@ -62,6 +75,12 @@ export default function useVoiceClone() {
         method: "POST",
         body: formData
       });
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Could not connect to the VoiceForge server. Please ensure your local backend is running on port 3001.");
+      }
+
       const payload = await response.json();
 
       if (!response.ok) {
@@ -84,4 +103,3 @@ export default function useVoiceClone() {
 
   return { cloneVoice, status, error };
 }
-

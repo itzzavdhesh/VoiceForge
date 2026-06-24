@@ -4,19 +4,28 @@ import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-rea
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
+import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { loadLanguage, persistLanguage } from "../utils/languages.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
   const [cameraError, setCameraError] = React.useState("");
+  const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
+  const [language, setLanguage] = React.useState(loadLanguage);
+
+  React.useEffect(() => {
+    persistLanguage(language);
+  }, [language]);
   const [dbError, setDbError] = React.useState("");
-  const { speak, status, error, audioUrl } = useTTS();
+  const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
 
   React.useEffect(() => {
@@ -73,18 +82,29 @@ export default function Call() {
 });
 
   const handleCalibrationChange = (key, value) => {
-  if (typeof value !== "number" || isNaN(value)) return;
-  setCalibration((prev) => {
-    const updated = { ...prev, [key]: value };
-    try {
-      localStorage.setItem(
-        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-        value.toString()
-      );
-    } catch { /* storage unavailable – continue without persisting */ }
-    return updated;
-  });
-};
+    let parsedValue = typeof value === "string" ? parseFloat(value) : value;
+    if (typeof parsedValue !== "number" || isNaN(parsedValue)) return;
+
+    // Apply strict clamping matching the slider limits based on the key
+    if (key === "xOffset") {
+      parsedValue = Math.max(-400, Math.min(400, Math.round(parsedValue)));
+    } else if (key === "yOffset") {
+      parsedValue = Math.max(-250, Math.min(150, Math.round(parsedValue)));
+    } else if (key === "scale") {
+      parsedValue = Math.max(0.5, Math.min(2.5, parsedValue));
+    }
+
+    setCalibration((prev) => {
+      const updated = { ...prev, [key]: parsedValue };
+      try {
+        localStorage.setItem(
+          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+          parsedValue.toString()
+        );
+      } catch { /* storage unavailable – continue without persisting */ }
+      return updated;
+    });
+  };
 
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
@@ -94,45 +114,78 @@ export default function Call() {
     localStorage.setItem("voiceforge:calibrationScale", "1.0");
   };
 
-  React.useEffect(() => {
-    let activeStream = null;
-    async function openCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        activeStream = stream;
-        setWebcamStream(stream);
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        setCameraError("");
-      } catch (webcamError) {
-        setCameraError(webcamError?.message || String(webcamError));
-      }
-    }
-    openCamera();
-    return () => {
-      activeStream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
+ React.useEffect(() => {
+  let activeStream = null;
+  let isMounted = true;
 
-  async function handleSpeak(text) {
-    if (!activeProfile?.voice_id) return;
+  async function openCamera() {
     try {
-      const result = await speak({ text, voiceId: activeProfile.voice_id });
-      setIsSpeaking(true);
-      const audio = new Audio(result.audioUrl);
-      audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
-      await audio.play();
-    } catch {
-      setIsSpeaking(false);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+
+      // Prevent webcam resource leak if component unmounts
+      // before getUserMedia resolves.
+      if (!isMounted) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      activeStream = stream;
+      setWebcamStream(stream);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      setCameraError("");
+    } catch (webcamError) {
+      if (!isMounted) return;
+
+      setCameraError(webcamError?.message || String(webcamError));
+      showToast("Camera access failed", "error");
     }
   }
+
+  openCamera();
+
+  return () => {
+    isMounted = false;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+    }
+  };
+}, [showToast]);
+
+  async function handleSpeak(text) {
+  if (!activeProfile?.voice_id) return;
+
+  try {
+    const result = await speak({
+      text,
+      voiceId: activeProfile.voice_id,
+      language_code: language,
+    });
+
+    if (result?.fallback) {
+      showToast("Using browser voice fallback", "info");
+    }
+  } catch (err) {
+    console.error("TTS streaming error:", err);
+    showToast("Speech generation failed", "error");
+  }
+}
 
   return (
     <div className="space-y-5">
       {/* ── Header card ───────────────────────────────────────────────────── */}
+      {engine === "browser" && (
+      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+        Using Browser Voice (Offline Mode)
+      </div>
+    )}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -192,7 +245,7 @@ export default function Call() {
             <p className="text-sm text-ink/65 mb-4">
               Calibrate the animated fallback mouth position and size overlay to align with your camera.
             </p>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
@@ -268,7 +321,19 @@ export default function Call() {
           </div>
         )}
       </section>
-
+      <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface">
+        <label
+          htmlFor="output-language"
+          className="mb-3 block text-sm font-bold dark:text-neutral-100"
+        >
+          Output Language
+        </label>
+        <LanguageSelector
+          id="output-language"
+          value={language}
+          onChange={setLanguage}
+        />
+      </section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -307,7 +372,8 @@ export default function Call() {
           ref={canvasRef}
           webcamStream={webcamStream}
           audioUrl={audioUrl}
-          isSpeaking={isSpeaking || status === "speaking"}
+          isSpeaking={isSpeaking}
+          onSpeakingChange={setIsSpeaking}
           calibration={calibration}
           isCalibrating={isCalibrationOpen}
         />
@@ -325,6 +391,7 @@ export default function Call() {
           {error}
         </p>
       )}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

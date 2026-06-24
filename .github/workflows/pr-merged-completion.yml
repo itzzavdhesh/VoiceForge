@@ -1,0 +1,154 @@
+name: PR Merge Completion
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-merged-completion-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  complete:
+    if: github.event.pull_request.merged == true && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Label merged PR and linked issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = pr.number;
+            const username = pr.user.login;
+            const body = pr.body || '';
+
+            const labelDefinitions = {
+              merged: '0E8A16',
+              completed: '0E8A16',
+              'issue-completed': '0E8A16',
+              'pr-merged': '0E8A16',
+              'closed-by-pr': '5319E7'
+            };
+
+            async function ensureLabel(name) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({
+                      owner,
+                      repo,
+                      name,
+                      color: labelDefinitions[name] || 'EDEDED'
+                    });
+                  } catch (createError) {
+                    if (createError.status === 403) {
+                      core.warning(`Could not create label "${name}": ${createError.message}`);
+                      return;
+                    }
+                    throw createError;
+                  }
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            async function addLabels(issue_number, labels) {
+              for (const label of labels) await ensureLabel(label);
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not add labels "${labels.join(', ')}" to #${issue_number}: ${error.message}`);
+                  return;
+                }
+                throw error;
+              }
+            }
+
+            async function createOrUpdateComment(issue_number, marker, commentBody) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100
+              });
+              const existing = comments.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body &&
+                comment.body.includes(marker)
+              );
+
+              try {
+                if (existing) {
+                  if (existing.body.trim() === commentBody.trim()) return;
+                  await github.rest.issues.updateComment({
+                    owner,
+                    repo,
+                    comment_id: existing.id,
+                    body: commentBody
+                  });
+                } else {
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number,
+                    body: commentBody
+                  });
+                }
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not write completion comment on #${issue_number}: ${error.message}`);
+                  return;
+                }
+                throw error;
+              }
+            }
+
+            const linkedIssueRegex = /\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#(\d+)/gi;
+            const linkedIssueNumbers = [...new Set([...body.matchAll(linkedIssueRegex)].map(match => Number(match[2])))];
+
+            await addLabels(prNumber, ['merged', 'pr-merged', 'completed']);
+
+            const linkedIssueText = linkedIssueNumbers.length > 0
+              ? linkedIssueNumbers.map(number => `#${number}`).join(', ')
+              : 'No closing issue was detected in the PR body.';
+
+            const prMarker = '<!-- voiceforge-pr-merged-completion -->';
+            const prCommentBody =
+              `${prMarker}\n` +
+              `## 🎊 PR Merged Successfully\n\n` +
+              `Hey @${username}! 👋 Congratulations and thank you for your contribution to VoiceForge!\n\n` +
+              `> [!NOTE]\n` +
+              `> 🔗 Linked issue(s): ${linkedIssueText} · ✅ Marked as merged and complete\n\n` +
+              `Maintainers may still handle final cleanup, release notes, or follow-up tracking after the merge.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+            await createOrUpdateComment(prNumber, prMarker, prCommentBody);
+
+            for (const linkedIssueNumber of linkedIssueNumbers) {
+              const issueMarker = '<!-- voiceforge-issue-completed-by-pr -->';
+              await addLabels(linkedIssueNumber, ['completed', 'issue-completed', 'closed-by-pr']);
+              const issueCommentBody =
+                `${issueMarker}\n` +
+                `## ✅ Issue Completed\n\n` +
+                `> [!NOTE]\n` +
+                `> PR #${prNumber} has been merged — this issue is now marked as complete! 🎉\n\n` +
+                `Great work @${username}! Thank you for your contribution to VoiceForge.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+              await createOrUpdateComment(linkedIssueNumber, issueMarker, issueCommentBody);
+            }

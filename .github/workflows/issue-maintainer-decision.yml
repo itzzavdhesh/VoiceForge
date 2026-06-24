@@ -1,0 +1,395 @@
+name: Issue Maintainer Decision
+
+on:
+  issues:
+    types: [labeled, assigned]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-maintainer-decision-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    if: github.event.issue.pull_request == null && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply maintainer decision
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = issue.number;
+            const action = context.payload.action;
+
+            const labelDefinitions = {
+              duplicate: 'CFD3D7',
+              'not needed': 'D93F0B',
+              'out of scope': 'D93F0B',
+              'go ahead': '0E8A16',
+              'needs maintainer review': 'FBCA04',
+              'ready to work': '0E8A16',
+              'stale-assignment': 'D93F0B',
+              'priority: low': 'C2E0C6',
+              'priority: medium': 'FBCA04',
+              'priority: high': 'D93F0B',
+              'level: easy': 'C2E0C6',
+              'level: medium': 'FBCA04',
+              'level: hard': 'D93F0B',
+              closed: '6A737D',
+              completed: '0E8A16'
+            };
+
+            const labels = (issue.labels || []).map(label => label.name);
+            const normalizedLabels = labels.map(label => label.toLowerCase());
+            const maintainerLabels = ['duplicate', 'not needed', 'out of scope', 'go ahead', 'stale-assignment'];
+            const priorityLabel = labels.find(label => label.toLowerCase().startsWith('priority: ')) || 'Not set';
+            const levelLabel = labels.find(label => label.toLowerCase().startsWith('level: ')) || 'Not set';
+            const closeReasons = {
+              duplicate: {
+                title: '🔁 Duplicate Issue Closed',
+                summary: 'This issue appears to already be tracked elsewhere.',
+                nextStep: 'Please continue the discussion on the existing issue so all context stays in one place.'
+              },
+              'not needed': {
+                title: '🚫 Issue Closed — Not Needed',
+                summary: 'The maintainer team reviewed this and decided it is not needed for VoiceForge right now.',
+                nextStep: "You're welcome to explore another open issue that better matches the current roadmap."
+              },
+              'out of scope': {
+                title: '🚫 Issue Closed — Out of Scope',
+                summary: 'The maintainer team reviewed this and found it outside the current VoiceForge scope.',
+                nextStep: 'Please look for issues that match the project direction and contribution guidelines.'
+              }
+            };
+
+            async function ensureLabel(name) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({
+                      owner,
+                      repo,
+                      name,
+                      color: labelDefinitions[name] || 'EDEDED'
+                    });
+                  } catch (createError) {
+                    if (createError.status === 403) {
+                      core.warning(`Could not create label "${name}": ${createError.message}`);
+                      return;
+                    }
+                    throw createError;
+                  }
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            async function addLabels(issueNumber, names) {
+              for (const name of names) await ensureLabel(name);
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: names });
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not add labels "${names.join(', ')}" to #${issueNumber}: ${error.message}`);
+                  return;
+                }
+                throw error;
+              }
+            }
+
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not remove label "${name}" from #${issue_number}: ${error.message}`);
+                  return;
+                }
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            async function removeLabels(names) {
+              for (const name of names) await removeLabel(name);
+            }
+
+            function sleep(ms) {
+              return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            async function getFreshIssue() {
+              const { data } = await github.rest.issues.get({
+                owner,
+                repo,
+                issue_number
+              });
+              return data;
+            }
+
+            function getDecisionState(issueData) {
+              const currentLabels = (issueData.labels || []).map(label => label.name);
+              return {
+                labels: currentLabels,
+                normalizedLabels: currentLabels.map(label => label.toLowerCase()),
+                priorityLabel: currentLabels.find(label => label.toLowerCase().startsWith('priority: ')) || 'Not set',
+                levelLabel: currentLabels.find(label => label.toLowerCase().startsWith('level: ')) || 'Not set',
+                assignees: issueData.assignees || []
+              };
+            }
+
+            async function actorCanMakeMaintainerDecision() {
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner,
+                  repo,
+                  username: context.actor
+                });
+                return ['admin', 'maintain', 'write'].includes(data.permission);
+              } catch (error) {
+                core.warning(`Could not verify maintainer permission for @${context.actor}: ${error.message}`);
+                return false;
+              }
+            }
+
+            async function createOrUpdateComment(marker, body) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100
+              });
+              const existing = comments.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body &&
+                comment.body.includes(marker)
+              );
+
+              try {
+                if (existing) {
+                  if (existing.body.trim() === body.trim()) return;
+                  await github.rest.issues.updateComment({
+                    owner,
+                    repo,
+                    comment_id: existing.id,
+                    body
+                  });
+                } else {
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number,
+                    body
+                  });
+                }
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not write maintainer decision comment: ${error.message}`);
+                  return;
+                }
+                throw error;
+              }
+            }
+
+            async function deleteBotCommentsByMarkers(markers) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100
+              });
+              const commentsToDelete = comments.filter(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body &&
+                markers.some(marker => comment.body.includes(marker))
+              );
+
+              for (const comment of commentsToDelete) {
+                try {
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: comment.id
+                  });
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning(`Could not delete old issue automation comment: ${error.message}`);
+                    return;
+                  }
+                  throw error;
+                }
+              }
+            }
+
+            const isAssignmentEvent = action === 'assigned';
+            const hasMaintainerDecisionLabel = maintainerLabels.some(label => normalizedLabels.includes(label));
+            if (!hasMaintainerDecisionLabel && !isAssignmentEvent) return;
+
+            const canDecide = await actorCanMakeMaintainerDecision();
+            if (!canDecide) {
+              core.warning(`Ignoring maintainer decision label because @${context.actor} does not have write, maintain, or admin permission.`);
+              return;
+            }
+
+            const closeLabel = Object.keys(closeReasons).find(label => normalizedLabels.includes(label));
+            if (closeLabel) {
+              const decision = closeReasons[closeLabel];
+              const marker = '<!-- voiceforge-issue-maintainer-close -->';
+              const body =
+                `${marker}\n` +
+                `## ${decision.title}\n\n` +
+                `> [!NOTE]\n` +
+                `> ${decision.summary}\n\n` +
+                `Hey @${issue.user.login}! 👋 Thank you for taking the time to open this.\n\n` +
+                `${decision.nextStep}\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+              await createOrUpdateComment(marker, body);
+              await addLabels(issue_number, ['closed']);
+              await removeLabels(['go ahead', 'ready to work', 'needs maintainer review', 'stale-assignment']);
+
+              if (issue.state !== 'closed') {
+                try {
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number,
+                    state: 'closed',
+                    state_reason: 'not_planned'
+                  });
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning(`Could not close issue #${issue_number}: ${error.message}`);
+                    return;
+                  }
+                  throw error;
+                }
+              }
+              return;
+            }
+
+            if (normalizedLabels.includes('stale-assignment')) {
+              const assignees = issue.assignees || [];
+              const assigneeMentions = assignees.length > 0
+                ? assignees.map(assignee => `@${assignee.login}`).join(', ')
+                : 'No current assignee';
+              const marker = '<!-- voiceforge-issue-stale-assignment -->';
+              const body =
+                `${marker}\n` +
+                `## 🔄 Assignment Reopened\n\n` +
+                `> [!WARNING]\n` +
+                `> The previous assignment has been cleared — maintainers will reassign this issue.\n\n` +
+                `Hey ${assigneeMentions}! The \`stale-assignment\` label was applied to this issue.\n\n` +
+                `To claim it, comment \`/assign\` below.\n\n` +
+                `⚠️ Work should only begin **after** a maintainer confirms your assignment.\n\n` +
+                `If you were previously assigned and still intend to work on this, please leave a fresh status update.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+              await createOrUpdateComment(marker, body);
+              await addLabels(issue_number, ['needs maintainer review']);
+              await removeLabels(['go ahead', 'ready to work']);
+
+              if (assignees.length > 0) {
+                try {
+                  await github.rest.issues.removeAssignees({
+                    owner,
+                    repo,
+                    issue_number,
+                    assignees: assignees.map(assignee => assignee.login)
+                  });
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning(`Could not remove stale assignees from #${issue_number}: ${error.message}`);
+                    return;
+                  }
+                  throw error;
+                }
+              }
+              return;
+            }
+
+            let decisionIssue = issue;
+            let decisionState = getDecisionState(decisionIssue);
+
+            if (!decisionState.normalizedLabels.includes('go ahead')) {
+              if (!isAssignmentEvent) return;
+
+              await sleep(120000);
+              decisionIssue = await getFreshIssue();
+              decisionState = getDecisionState(decisionIssue);
+
+              if (!decisionState.normalizedLabels.includes('go ahead') && decisionState.assignees.length > 0) {
+                await addLabels(issue_number, ['go ahead']);
+                decisionIssue = await getFreshIssue();
+                decisionState = getDecisionState(decisionIssue);
+              }
+            }
+
+            if (!decisionState.normalizedLabels.includes('go ahead')) return;
+
+            if (decisionState.assignees.length === 0) {
+              await sleep(120000);
+              decisionIssue = await getFreshIssue();
+              decisionState = getDecisionState(decisionIssue);
+            }
+
+            if (decisionState.assignees.length === 0) {
+              const marker = '<!-- voiceforge-issue-go-ahead-waiting -->';
+              const maintainerMention = `@${context.actor}`;
+              const body =
+                `${marker}\n` +
+                `## ⏳ Approved — Waiting for Assignment\n\n` +
+                `> [!TIP]\n` +
+                `> **For maintainers:** please assign a contributor.\n\n` +
+                `Hey ${maintainerMention}! 👋 You marked this \`go ahead\`, but no contributor is assigned yet.\n\n` +
+                `Once you assign someone, the start-work guidance will post automatically. 🙋\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+              await createOrUpdateComment(marker, body);
+              await addLabels(issue_number, ['needs maintainer review']);
+              await removeLabel('ready to work');
+              return;
+            }
+
+            const defaultsToAdd = [];
+            if (decisionState.priorityLabel === 'Not set') defaultsToAdd.push('priority: medium');
+            if (decisionState.levelLabel === 'Not set') defaultsToAdd.push('level: medium');
+            if (defaultsToAdd.length > 0) {
+              await addLabels(issue_number, defaultsToAdd);
+              decisionIssue = await getFreshIssue();
+              decisionState = getDecisionState(decisionIssue);
+            }
+
+            const assigneeMentions = decisionState.assignees.map(assignee => `@${assignee.login}`).join(', ');
+            const marker = '<!-- voiceforge-issue-go-ahead -->';
+            const body =
+              `${marker}\n` +
+              `## 🚀 You're Good to Go!\n\n` +
+              `> [!IMPORTANT]\n` +
+              `> **Work is officially approved.** Please read everything below before you start.\n\n` +
+              `Hey ${assigneeMentions}! 🎉 This issue has been reviewed and approved by the maintainer team.\n\n` +
+              `**📋 Before you start**\n` +
+              `- 🏷️ **Priority:** \`${decisionState.priorityLabel}\`\n` +
+              `- 🎯 **Difficulty:** \`${decisionState.levelLabel}\`\n` +
+              `- 🔗 **PR:** use the matching program template and include \`Closes #${issue_number}\`\n\n` +
+              `If you can no longer continue, please comment here so maintainers can reassign this issue.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+            await addLabels(issue_number, ['ready to work']);
+            await removeLabels(['needs maintainer review', 'stale-assignment']);
+            await deleteBotCommentsByMarkers([
+              '<!-- voiceforge-issue-go-ahead-waiting -->'
+            ]);
+            await createOrUpdateComment(marker, body);

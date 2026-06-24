@@ -1,0 +1,2 @@
+# Program-specific mentor routing is handled in GitHub Actions workflows.
+# Keep this file without a global owner so GitHub does not auto-request every collaborator.

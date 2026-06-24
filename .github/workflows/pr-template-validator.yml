@@ -1,0 +1,594 @@
+name: PR Template Validator
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-template-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR template, issue link, and labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = pr.number;
+            const username = pr.user.login;
+            const title = pr.title || '';
+            const body = pr.body || '';
+
+            const labelDefinitions = {
+              gssoc26: '0E8A16',
+              nsoc26: '1D76DB',
+              SSoC26: '5319E7',
+              ELUSOC: 'FBCA04',
+              bug: 'D73A4A',
+              enhancement: 'A2EEEF',
+              documentation: '0075CA',
+              accessibility: '7057FF',
+              ci: 'C5DEF5',
+              refactor: 'FBCA04',
+              client: '1D76DB',
+              server: '5319E7',
+              'pr-validated': '0E8A16',
+              'template-ok': 'C2E0C6',
+              'linked-issue-ok': 'C2E0C6',
+              'assignee-match': 'C2E0C6',
+              'docs-ok': 'C2E0C6',
+              'ready for review': '0E8A16',
+              'invalid-pr': 'D93F0B',
+              'needs revision': 'FBCA04',
+              'needs-template': 'B60205',
+              'needs-quality': 'D4C5F9',
+              'needs-linked-issue': 'D93F0B',
+              'needs-assignee-match': 'D93F0B',
+              'needs-title': 'D93F0B',
+              'large PR': 'D93F0B',
+              'size/xs': 'C2E0C6',
+              'size/s': 'BFDADC',
+              'size/m': 'D4C5F9',
+              'size/l': 'F9D0C4',
+              'size/xl': 'D73A4A'
+            };
+
+            async function ensureLabel(name) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({
+                      owner,
+                      repo,
+                      name,
+                      color: labelDefinitions[name] || 'EDEDED'
+                    });
+                  } catch (createError) {
+                    if (createError.status === 403) {
+                      core.warning(`Could not create label "${name}": ${createError.message}`);
+                      return;
+                    }
+                    throw createError;
+                  }
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            async function addLabels(labels) {
+              for (const label of labels) await ensureLabel(label);
+              if (labels.length > 0) {
+                try {
+                  await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning(`Could not add labels "${labels.join(', ')}": ${error.message}`);
+                    return;
+                  }
+                  throw error;
+                }
+              }
+            }
+
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(`Could not remove label "${name}": ${error.message}`);
+                  return;
+                }
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            async function removeLabels(labels) {
+              for (const label of labels) await removeLabel(label);
+            }
+
+            async function assignAuthor() {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number,
+                  assignees: [username]
+                });
+              } catch (error) {
+                core.warning(`Could not assign @${username}: ${error.message}`);
+              }
+            }
+
+            function getProgramReviewerMentions(programLabel) {
+              const reviewersByProgram = {
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@1754riya', '@Mrigakshi-Rathore', '@itzzavdheshh', '@Nitya-003'],
+                nsoc26: ['@joyprakashk', '@rushi-k12'],
+                SSoC26: ['@joyprakashk', '@rushi-k12'],
+                ELUSOC: ['@joyprakashk', '@rushi-k12']
+              };
+              return [...new Set(reviewersByProgram[programLabel] || [])];
+            }
+
+            function getReviewRequestTargets(programLabel) {
+              const mentions = getProgramReviewerMentions(programLabel);
+              const reviewers = [];
+              const teamReviewers = [];
+
+              for (const mention of mentions) {
+                const target = mention.slice(1);
+                if (target.includes('/')) {
+                  const [, teamSlug] = target.split('/');
+                  if (teamSlug) teamReviewers.push(teamSlug);
+                } else {
+                  reviewers.push(target);
+                }
+              }
+
+              return {
+                mentions,
+                reviewers: [...new Set(reviewers)],
+                teamReviewers: [...new Set(teamReviewers)]
+              };
+            }
+
+            async function requestPullRequestReview(program) {
+              const targets = getReviewRequestTargets(program.label);
+              if (targets.mentions.length === 0) {
+                return {
+                  mentions: `No mentor configured for ${program.name} yet`,
+                  status: 'No review request sent'
+                };
+              }
+
+              // Fetch existing reviews to avoid re-requesting from mentors who have already reviewed
+              let reviews = [];
+              try {
+                reviews = await github.paginate(github.rest.pulls.listReviews, {
+                  owner,
+                  repo,
+                  pull_number: issue_number,
+                  per_page: 100
+                });
+              } catch (error) {
+                core.warning(`Could not fetch reviews: ${error.message}`);
+              }
+              const reviewersWhoReviewed = new Set(
+                reviews
+                  .map(review => review.user?.login?.toLowerCase())
+                  .filter(Boolean)
+              );
+
+              const existingReviewers = new Set((pr.requested_reviewers || []).map(reviewer => reviewer.login.toLowerCase()));
+              const existingTeams = new Set((pr.requested_teams || []).map(team => team.slug.toLowerCase()));
+              const reviewers = targets.reviewers
+                .filter(reviewer => reviewer.toLowerCase() !== username.toLowerCase())
+                .filter(reviewer => !existingReviewers.has(reviewer.toLowerCase()))
+                .filter(reviewer => !reviewersWhoReviewed.has(reviewer.toLowerCase()));
+              const team_reviewers = targets.teamReviewers
+                .filter(team => !existingTeams.has(team.toLowerCase()));
+
+              const succeeded = [];
+              const failed = [];
+              
+              for (const reviewer of reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    reviewers: [reviewer]
+                  });
+                  succeeded.push(reviewer);
+                } catch (error) {
+                  core.warning(`Could not request PR review from @${reviewer}: ${error.message}`);
+                  failed.push(reviewer);
+                }
+              }
+
+              for (const team of team_reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    team_reviewers: [team]
+                  });
+                  succeeded.push(team);
+                } catch (error) {
+                  core.warning(`Could not request PR review from team @${team}: ${error.message}`);
+                  failed.push(team);
+                }
+              }
+
+              if (succeeded.length > 0) {
+                return {
+                  mentions: targets.mentions.join(' '),
+                  status: 'Review requested'
+                };
+              } else if (failed.length > 0) {
+                return {
+                  mentions: targets.mentions.join(' '),
+                  status: 'Mentioned in review queue comment'
+                };
+              } else {
+                return {
+                  mentions: targets.mentions.join(' '),
+                  status: 'Already requested or no eligible reviewer found'
+                };
+              }
+            }
+
+            for (const label of ['ready for review', 'invalid-pr', 'needs revision']) {
+              await ensureLabel(label);
+            }
+
+            const programs = [
+              { name: 'GSSoC', label: 'gssoc26', patterns: [/\bGSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i, /\bGirlScript\s+Summer\s+of\s+Code\b/i] },
+              { name: 'NSOC', label: 'nsoc26', patterns: [/\bNSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'SSOC', label: 'SSoC26', patterns: [/\bSSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] },
+              { name: 'ELUSOC', label: 'ELUSOC', patterns: [/\bELU\s*-?\s*SOC\b/i, /\bELUSOC(?:\s*['-]?\s*26|\s*2026)?\b/i] }
+            ];
+
+            const programLabels = programs.map(program => program.label);
+            function hasHeading(name) {
+              const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b`, 'im').test(body);
+            }
+            function getHeadingSection(name) {
+              const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const sectionMatch = body.match(new RegExp(`^\\s*(#{1,6})\\s*.*${escapedName}\\b.*$`, 'im'));
+              if (!sectionMatch || typeof sectionMatch.index !== 'number') return '';
+
+              const level = sectionMatch[1].length;
+              const sectionStart = sectionMatch.index + sectionMatch[0].length;
+              const nextHeadingMatch = body.slice(sectionStart).match(new RegExp(`^\\s*#{1,${level}}\\s+.+$`, 'm'));
+              const sectionEnd = nextHeadingMatch && typeof nextHeadingMatch.index === 'number'
+                ? sectionStart + nextHeadingMatch.index
+                : body.length;
+
+              return body.slice(sectionStart, sectionEnd).replace(/<!--[\s\S]*?-->/g, '').trim();
+            }
+
+            const programSection = getHeadingSection('Program');
+            const matchedPrograms = programs.filter(program =>
+              program.patterns.some(pattern => pattern.test(programSection))
+            );
+            const matchedProgram = matchedPrograms.length === 1 ? matchedPrograms[0] : null;
+
+            const requiredSections = ['Program', 'Description', 'Related Issue', 'Type of Change', 'How to Test', 'Checklist'];
+            const linkedIssueRegex = /\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#(\d+)/gi;
+            const validTitleRegex = /^(?:(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore)(?:\([^)]+\))?|\[(?:feature|feat|bug|fix|docs|documentation|style|refactor|perf|performance|test|build|ci|chore|enhancement)(?:\s+(?:feature|feat|bug|fix|docs|documentation|style|refactor|perf|performance|test|build|ci|chore|enhancement))*\])\s*:\s*\S.+/i;
+
+            const problems = [];
+            const statusLabelsToAdd = [];
+            const neutralLabelsToAdd = [];
+            const needsLabelsToAdd = [];
+            const linkedIssueNumbers = [...new Set([...body.matchAll(linkedIssueRegex)].map(match => Number(match[2])))];
+            const linkedIssues = [];
+
+            if (!matchedProgram) {
+              problems.push(matchedPrograms.length > 1
+                ? 'Select only one program in the PR template: GSSoC, NSOC, SSOC, or ELUSOC.'
+                : 'Select a program PR template: GSSoC, NSOC, SSOC, or ELUSOC.');
+            }
+
+            const missingSections = requiredSections.filter(section => !hasHeading(section));
+            if (missingSections.length > 0) {
+              problems.push('Use the mandatory VoiceForge PR template and keep all required sections.');
+              needsLabelsToAdd.push('needs-template');
+            } else {
+              const descriptionSection = getHeadingSection('Description');
+              if (!descriptionSection || descriptionSection.length < 20) {
+                problems.push('Please fill in the Description section with details about your changes (minimum 20 characters).');
+                needsLabelsToAdd.push('needs-quality');
+              }
+
+              const typeOfChangeSection = getHeadingSection('Type of Change');
+              const hasCheckedTypeOfChange = /[-*+]\s*\[\s*[xX]\s*\]/.test(typeOfChangeSection);
+              if (!hasCheckedTypeOfChange) {
+                problems.push('Please select at least one option under the Type of Change section.');
+                needsLabelsToAdd.push('needs-template');
+              }
+
+              const howToTestSection = getHeadingSection('How to Test')
+                .replace(/1\.\s*Open\s*`http:\/\/localhost:5173`\s*in\s*a\s*browser/i, '')
+                .replace(/2\.\s*\.{3}/g, '')
+                .replace(/\.\.\./g, '')
+                .trim();
+              if (!howToTestSection || howToTestSection.length < 10) {
+                problems.push('Please fill in the How to Test section with verification steps (minimum 10 characters).');
+                needsLabelsToAdd.push('needs-quality');
+              }
+
+              const checklistSection = getHeadingSection('Checklist');
+              const hasChecklistItems = /[-*+]\s*\[\s*[ xX\s]\s*\]/i.test(checklistSection);
+              if (!hasChecklistItems) {
+                problems.push('Please keep and complete the Checklist section.');
+                needsLabelsToAdd.push('needs-template');
+              }
+            }
+
+            if (linkedIssueNumbers.length === 0) {
+              problems.push('Link the related issue using `Closes #issue-number`.');
+              needsLabelsToAdd.push('needs-linked-issue');
+            } else {
+              for (const linkedIssueNumber of linkedIssueNumbers) {
+                try {
+                  const { data: linkedIssue } = await github.rest.issues.get({
+                    owner,
+                    repo,
+                    issue_number: linkedIssueNumber
+                  });
+
+                  if (linkedIssue.pull_request) {
+                    problems.push(`#${linkedIssueNumber} is a pull request. Please link the issue this PR resolves.`);
+                    needsLabelsToAdd.push('needs-linked-issue');
+                  } else {
+                    linkedIssues.push(linkedIssue);
+                  }
+                } catch (error) {
+                  if (error.status === 404) {
+                    problems.push(`Linked issue #${linkedIssueNumber} was not found.`);
+                    needsLabelsToAdd.push('needs-linked-issue');
+                  } else {
+                    throw error;
+                  }
+                }
+              }
+            }
+
+            if (linkedIssues.length > 0) {
+              const issueNumbersWithoutAuthorAssignment = linkedIssues
+                .filter(linkedIssue => !(linkedIssue.assignees || []).some(assignee => assignee.login.toLowerCase() === username.toLowerCase()))
+                .map(linkedIssue => `#${linkedIssue.number}`);
+
+              if (issueNumbersWithoutAuthorAssignment.length > 0) {
+                problems.push(`The PR author @${username} must be assigned on the linked issue before this PR can be validated: ${issueNumbersWithoutAuthorAssignment.join(', ')}.`);
+                needsLabelsToAdd.push('needs-assignee-match');
+              }
+
+              if (matchedProgram) {
+                const issuesWithoutMatchingProgram = linkedIssues
+                  .filter(linkedIssue => !(linkedIssue.labels || []).some(label => label.name === matchedProgram.label))
+                  .map(linkedIssue => `#${linkedIssue.number}`);
+
+                if (issuesWithoutMatchingProgram.length > 0) {
+                  problems.push(`The PR program template must match the program label on the linked issue: ${issuesWithoutMatchingProgram.join(', ')}.`);
+                  needsLabelsToAdd.push('needs-linked-issue');
+                }
+              }
+            }
+
+            if (!validTitleRegex.test(title)) {
+              problems.push('Use a clear PR title, for example `feat: add voice preview` or `[feature]: add voice preview`.');
+              needsLabelsToAdd.push('needs-title');
+            }
+
+            // Individual sections are checked for quality above.
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100
+            });
+
+            const tooManyFilesChanged = files.length > 13;
+            if (tooManyFilesChanged) {
+              problems.push(`This PR changes ${files.length} files. VoiceForge keeps contributor PRs focused, so please recheck the changed files and reduce the PR to 13 files or fewer unless a maintainer explicitly approves the larger scope.`);
+              neutralLabelsToAdd.push('large PR');
+            }
+
+            const totalChanges = files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
+            const sizeLabel =
+              totalChanges <= 20 ? 'size/xs' :
+              totalChanges <= 100 ? 'size/s' :
+              totalChanges <= 300 ? 'size/m' :
+              totalChanges <= 700 ? 'size/l' :
+              'size/xl';
+            neutralLabelsToAdd.push(sizeLabel);
+
+            const changedPaths = files.map(file => file.filename);
+            const typeOfChangeSection = getHeadingSection('Type of Change');
+            const hasDocumentationChange = (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:documentation|docs)/i.test(typeOfChangeSection)) || changedPaths.some(path => /\.md$/i.test(path));
+            if (changedPaths.some(path => path.startsWith('client/'))) neutralLabelsToAdd.push('client');
+            if (changedPaths.some(path => path.startsWith('server/'))) neutralLabelsToAdd.push('server');
+            if (changedPaths.some(path => path.startsWith('.github/'))) neutralLabelsToAdd.push('ci');
+            if (hasDocumentationChange) neutralLabelsToAdd.push('documentation');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:accessibility|a11y)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('accessibility');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*bug/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('bug');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:new feature|enhancement)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('enhancement');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:refactor|cleanup)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('refactor');
+
+            if (problems.length === 0) {
+              statusLabelsToAdd.push(
+                matchedProgram.label,
+                'pr-validated',
+                'template-ok',
+                'linked-issue-ok',
+                'assignee-match',
+                'ready for review'
+              );
+              if (hasDocumentationChange) statusLabelsToAdd.push('docs-ok');
+            }
+
+            await addLabels([...new Set([...neutralLabelsToAdd, ...needsLabelsToAdd, ...statusLabelsToAdd])]);
+
+            for (const label of ['size/xs', 'size/s', 'size/m', 'size/l', 'size/xl']) {
+              if (label !== sizeLabel) await removeLabel(label);
+            }
+            if (linkedIssueNumbers.length > 0 && !needsLabelsToAdd.includes('needs-linked-issue')) await removeLabel('needs-linked-issue');
+            if (linkedIssues.length > 0 && !needsLabelsToAdd.includes('needs-assignee-match')) await removeLabel('needs-assignee-match');
+            if (!needsLabelsToAdd.includes('needs-template')) await removeLabel('needs-template');
+            if (!needsLabelsToAdd.includes('needs-quality')) await removeLabel('needs-quality');
+            if (validTitleRegex.test(title)) await removeLabel('needs-title');
+            if (!tooManyFilesChanged) await removeLabel('large PR');
+
+            if (problems.length === 0) {
+              await removeLabels(programLabels.filter(label => label !== matchedProgram.label));
+              await removeLabels(['needs-template', 'needs-quality', 'needs-linked-issue', 'needs-assignee-match', 'needs-title', 'needs revision']);
+            } else {
+              await removeLabels([...programLabels, 'pr-validated', 'template-ok', 'linked-issue-ok', 'assignee-match', 'docs-ok', 'ready for review']);
+            }
+
+            const marker = '<!-- voiceforge-pr-template-validator -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+            const existing = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body &&
+              comment.body.includes(marker)
+            );
+
+            if (problems.length === 0) {
+              await assignAuthor();
+              const reviewRequest = await requestPullRequestReview(matchedProgram);
+              const reviewRequestText = reviewRequest.status === 'No review request sent'
+                ? `No mentor is configured for ${matchedProgram.name} yet — no mentor ping was sent.\n\n`
+                : `${reviewRequest.mentions}, this PR is ready for your review — please confirm scope, check behavior and tests, then approve or request changes.\n\n`;
+              const successCommentBody =
+                `${marker}\n` +
+                `## 🎉 PR Ready for Mentor Review\n\n` +
+                `Hey @${username}! 👋 Your PR passed all checks and is now in the **${matchedProgram.name}** review queue.\n\n` +
+                `> [!NOTE]\n` +
+                `> 🔗 Closing: ${linkedIssueNumbers.map(number => `#${number}`).join(', ')} · 📐 ${totalChanges} lines across ${files.length} file(s) · 📬 ${reviewRequest.status}\n\n` +
+                reviewRequestText +
+                `> [!IMPORTANT]\n` +
+                `> This is not an approval. Please wait for mentor feedback before expecting a merge. If changes are requested, push them to this same branch and keep the PR focused on the linked issue.\n\n` +
+                `---\n` +
+                `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+              if (existing && existing.body.trim() === successCommentBody.trim()) return;
+
+              if (existing) {
+                try {
+                  await github.rest.issues.updateComment({
+                    owner,
+                    repo,
+                    comment_id: existing.id,
+                    body: successCommentBody
+                  });
+                } catch (error) {
+                  if (error.status === 403) core.warning(`Could not update validator comment: ${error.message}`);
+                  else throw error;
+                }
+              } else {
+                try {
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number,
+                    body: successCommentBody
+                  });
+                } catch (error) {
+                  if (error.status === 403) core.warning(`Could not create validator comment: ${error.message}`);
+                  else throw error;
+                }
+              }
+              return;
+            }
+
+            const fixRows = [];
+            if (needsLabelsToAdd.includes('needs-template')) {
+              fixRows.push(['PR template', 'Use one complete program PR template and keep all required sections.']);
+            }
+            if (needsLabelsToAdd.includes('needs-linked-issue')) {
+              fixRows.push(['Linked issue', 'Add a valid closing reference like `Closes #64`, and make sure the issue has the same program label.']);
+            }
+            if (needsLabelsToAdd.includes('needs-assignee-match')) {
+              fixRows.push(['Issue assignment', `Ask a maintainer to assign the linked issue to @${username}, or open a PR only for an issue already assigned to you.`]);
+            }
+            if (needsLabelsToAdd.includes('needs-title')) {
+              fixRows.push(['PR title', 'Use a clear title like `fix: update onboarding progress bar` or `[bug refactor]: replace pending stream cache`.']);
+            }
+            if (needsLabelsToAdd.includes('needs-quality')) {
+              fixRows.push(['PR details', 'Fill the description and test steps with enough detail for maintainers to review the change.']);
+            }
+            if (neutralLabelsToAdd.includes('large PR')) {
+              fixRows.push(['Large PR', 'Please recheck the changed files, remove accidental edits, and keep this contribution polished and focused on one approved issue. If the larger scope is truly needed, ask a mentor before continuing.']);
+            }
+            if (!matchedProgram) {
+              fixRows.push(['Program', 'Choose exactly one program: GSSoC, NSOC, SSOC, or ELUSOC.']);
+            }
+
+            const commentBody =
+              `${marker}\n` +
+              `## 🛠️ PR Needs Updates\n\n` +
+              `Hey @${username}! 👋 A few things need fixing before a mentor can review this PR.\n\n` +
+              `> [!WARNING]\n` +
+              problems.map(problem => `> - ${problem}`).join('\n') +
+              `\n\n` +
+              `**How to fix:**\n` +
+              fixRows.map(([area, correction]) => `- **${area}:** ${correction}`).join('\n') +
+              `\n\n` +
+              `Once fixed, the workflow re-runs automatically and pings the right mentor.\n\n` +
+              `---\n` +
+              `<sub>🤖 VoiceForge Automation · *Updates automatically on edits*</sub>`;
+
+            if (existing) {
+              try {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body: commentBody
+                });
+              } catch (error) {
+                if (error.status === 403) core.warning(`Could not update validator comment: ${error.message}`);
+                else throw error;
+              }
+            } else {
+              try {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number,
+                  body: commentBody
+                });
+              } catch (error) {
+                if (error.status === 403) core.warning(`Could not create validator comment: ${error.message}`);
+                else throw error;
+              }
+            }
+
+            core.setFailed(problems.join('\n'));
