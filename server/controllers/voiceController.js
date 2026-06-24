@@ -8,7 +8,7 @@ import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/language
 // In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
 // In production you would persist this to a database or object store.
 // ---------------------------------------------------------------------------
-const voiceStore = new Map();
+export const voiceStore = new Map();
 
 function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
@@ -240,7 +240,7 @@ export async function cloneVoice(request, response, next) {
 
     // Store the audio buffer server-side so it can be used during speak/stream.
     pruneVoiceStore();
-    const voiceId = crypto.randomUUID();
+    const voiceId = request.body.voice_id || crypto.randomUUID();
     voiceStore.set(voiceId, {
       name: request.body.name || "VoiceForge Voice",
       audioBuffer: audioFile.buffer,
@@ -317,6 +317,11 @@ export async function speak(request, response, next) {
     }
     if (!trimmedVoiceId) {
       response.status(400).json({ error: "voice_id is required and must not be blank." });
+      return;
+    }
+    pruneVoiceStore();
+    if (!getIsMock() && !voiceStore.has(trimmedVoiceId)) {
+      response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
       return;
     }
     if (trimmedText.length > 300) {

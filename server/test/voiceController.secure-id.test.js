@@ -4,6 +4,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRequest, createResponse, invoke } from "./helpers.js";
+import { voiceStore } from "../controllers/voiceController.js";
+
+// Seed voiceStore with a mock entry for the tests to pass speak validations
+voiceStore.set("voice_1", {
+  name: "voice_1",
+  audioBuffer: Buffer.from("fake-audio"),
+  mimeType: "audio/webm",
+  expiresAt: Date.now() + 2 * 60 * 60 * 1000
+});
 
 async function callSpeak(speak, overrides = {}) {
   const request = createRequest({
