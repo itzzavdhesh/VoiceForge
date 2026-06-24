@@ -26,8 +26,10 @@ export function useToast(duration = 2200) {
   return { toasts, showToast };
 }
 
-export function ToastContainer({ toasts }) {
-  if (toasts.length === 0) return null;
+// FIX: Added default value for toasts prop to prevent undefined error
+export function ToastContainer({ toasts = [] }) {
+  // Guard clause to handle undefined or empty array
+  if (!toasts || toasts.length === 0) return null;
 
   return (
     <div
