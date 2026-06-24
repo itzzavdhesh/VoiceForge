@@ -176,14 +176,15 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   React.useEffect(() => {
   function handleKeyDown(event) {
     // Don't trigger shortcuts while typing
-    const target = event.target;
-    const isTyping =
-      target instanceof HTMLElement &&
-      (target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable);
+   const target = event.target;
 
-    if (isTyping) return;
+const isInteractive =
+  target instanceof HTMLElement &&
+  target.closest(
+    "input, textarea, select, button, a, [contenteditable='true'], [role='button'], [role='link']"
+  );
+
+if (isInteractive) return;
 
     // Space => Start/Stop recording
     if (event.code === "Space") {
