@@ -62,10 +62,22 @@ function createTimeoutSignal(ms = 30000) {
   return { signal: controller.signal, clear: () => clearTimeout(timer) };
 }
 
-function withTimeout(promise, ms, label) {
+function withTimeout(promise, ms, label, abortSignal = null) {
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        clearTimeout(timeoutId);
+        reject(new Error("Request aborted by client"));
+      } else {
+        abortSignal.addEventListener("abort", () => {
+          clearTimeout(timeoutId);
+          reject(new Error("Request aborted by client"));
+        });
+      }
+    }
   });
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
@@ -142,7 +154,8 @@ async function generateClonedVoice(
   mimeType,
   targetText,
   languageCode = "en",
-  voiceSettings = {}
+  voiceSettings = {},
+  abortSignal = null
 ) {
   const normalizedVoiceSettings =
     voiceSettings && typeof voiceSettings === "object" ? voiceSettings : {};
@@ -170,7 +183,8 @@ async function generateClonedVoice(
       cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
     ]),
     30000,
-    "Chatterbox predict"
+    "Chatterbox predict",
+    abortSignal
   );
 
   const audioUrl = result.data[0].url;
@@ -379,6 +393,7 @@ export async function speak(request, response, next) {
     }
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
+      speechId,
       text: trimmedText,
       voiceId: trimmedVoiceId,
       language_code,
@@ -411,7 +426,7 @@ export async function streamSpeech(request, response, next) {
       response.status(400).json({ error: "Missing stream token." });
       return;
     }
-    const { text, voiceId, language_code, voice_settings } = decryptToken(token);
+    const { speechId, text, voiceId, language_code, voice_settings } = decryptToken(token);
 
     // --- mock mode: stream the bundled silent MP3 fixture ---
     if (getIsMock()) {
@@ -432,6 +447,15 @@ export async function streamSpeech(request, response, next) {
 
     const chatterboxLanguage = toChatterboxLanguageCode(language_code);
 
+    // Set up abortion for client disconnect
+    const generateController = new AbortController();
+    const onClose = () => {
+      console.log("[VoiceForge] Request aborted by client");
+      if (speechId) deletePendingStream(speechId);
+      generateController.abort();
+    };
+    request.on("close", onClose);
+
     // Call Chatterbox and get back a direct audio URL.
     let audioUrl;
     try {
@@ -440,14 +464,22 @@ export async function streamSpeech(request, response, next) {
         voiceEntry.mimeType,
         text,
         chatterboxLanguage,
-        voice_settings
+        voice_settings,
+        generateController.signal
       );
     } catch (error) {
+      if (error.message === "Request aborted by client") {
+        console.log("[VoiceForge] Inference canceled. Cleanup completed.");
+        return; // Stop processing, request is already closed
+      }
       if (error.message.includes("timed out")) {
         response.status(504).json({ error: error.message });
         return;
       }
       throw error;
+    } finally {
+      request.off("close", onClose);
+      if (speechId) deletePendingStream(speechId);
     }
 
     // Proxy the audio bytes back to the client so they don't need to reach
