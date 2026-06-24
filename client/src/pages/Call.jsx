@@ -205,6 +205,8 @@ React.useEffect(() => {
           id="toggle-calibration-btn"
           type="button"
           onClick={() => setIsCalibrationOpen(!isCalibrationOpen)}
+          title={isCalibrationOpen ? "Close calibration settings" : "Open calibration settings"}
+          aria-label={isCalibrationOpen ? "Close calibration settings" : "Open calibration settings"}
           className="flex w-full items-center justify-between font-bold text-ink"
         >
           <div className="flex items-center gap-2">
@@ -241,6 +243,8 @@ React.useEffect(() => {
                   step="1"
                   value={calibration.xOffset}
                   onChange={(e) => handleCalibrationChange("xOffset", parseInt(e.target.value, 10))}
+                  title="Adjust horizontal position of the mouth overlay"
+                  aria-label="Horizontal position slider for mouth calibration"
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -261,6 +265,8 @@ React.useEffect(() => {
                   step="1"
                   value={calibration.yOffset}
                   onChange={(e) => handleCalibrationChange("yOffset", parseInt(e.target.value, 10))}
+                  title="Adjust vertical position of the mouth overlay"
+                  aria-label="Vertical position slider for mouth calibration"
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -281,6 +287,8 @@ React.useEffect(() => {
                   step="0.1"
                   value={calibration.scale}
                   onChange={(e) => handleCalibrationChange("scale", parseFloat(e.target.value))}
+                  title="Adjust size of the mouth overlay"
+                  aria-label="Scale slider for mouth calibration"
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -290,6 +298,8 @@ React.useEffect(() => {
                 id="reset-calibration-btn"
                 type="button"
                 onClick={handleResetCalibration}
+                title="Reset mouth calibration to default values"
+                aria-label="Reset mouth calibration to default values"
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-coral/40 px-3 py-1.5 text-xs font-bold text-coral hover:bg-coral hover:text-white transition"
               >
                 <RotateCcw size={14} aria-hidden="true" />
@@ -299,29 +309,33 @@ React.useEffect(() => {
           </div>
         )}
       </section>
+      
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface">
-  <label
-  htmlFor="output-language"
-  className="mb-2 block text-sm font-bold dark:text-neutral-100"
->
-  Output Language
-</label>
+        <label
+          htmlFor="output-language"
+          className="mb-2 block text-sm font-bold dark:text-neutral-100"
+        >
+          Output Language
+        </label>
 
-<select
-  id="output-language"
-  value={language}
-  onChange={(e) => setLanguage(e.target.value)}
-  className="w-full rounded-md border border-ink/15 bg-cloud p-3 dark:border-border dark:bg-black dark:text-neutral-100"
->
-   <option value="en">English</option>
-<option value="hi">Hindi</option>
-<option value="es">Spanish</option>
-<option value="fr">French</option>
-<option value="de">German</option>
-<option value="pt">Portuguese</option>
-<option value="ja">Japanese</option>
-  </select>
-</section>
+        <select
+          id="output-language"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          title="Select the output language for speech synthesis"
+          aria-label="Select output language for speech synthesis"
+          className="w-full rounded-md border border-ink/15 bg-cloud p-3 dark:border-border dark:bg-black dark:text-neutral-100"
+        >
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="ja">Japanese</option>
+        </select>
+      </section>
+      
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">

@@ -56,6 +56,7 @@ export function SpeechHistory({
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-3 dark:border-border">
         <button
           onClick={() => setCollapsed((value) => !value)}
+          title={collapsed ? "Expand history panel" : "Collapse history panel"}
           aria-label={collapsed ? "Expand history panel" : "Collapse history panel"}
           aria-expanded={!collapsed}
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-400 dark:hover:bg-neutral-900"
@@ -91,6 +92,8 @@ export function SpeechHistory({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search messages..."
+                title="Search through your speech history"
+                aria-label="Search through your speech history"
                 className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
               />
             </div>
@@ -114,6 +117,8 @@ export function SpeechHistory({
                 tabIndex={tab === key ? 0 : -1}
                 onClick={() => setTab(key)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
+                title={`View ${label.toLowerCase()} messages`}
+                aria-label={`View ${label.toLowerCase()} messages`}
                 className={[
                   "rounded-t-md px-3 py-1.5 text-xs font-medium transition",
                   "focus:outline-none focus:ring-2 focus:ring-blue-400",
@@ -160,6 +165,8 @@ export function SpeechHistory({
             <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
               <button
                 onClick={handleClearHistory}
+                title="Clear all speech history"
+                aria-label="Clear all speech history"
                 className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
               >
                 <Trash2 size={13} aria-hidden="true" />

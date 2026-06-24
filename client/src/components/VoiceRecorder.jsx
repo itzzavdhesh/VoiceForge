@@ -186,6 +186,8 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
           disabled={disabled}
+          title={isRecording ? "Stop recording your voice" : "Start recording your voice"}
+          aria-label={isRecording ? "Stop recording your voice" : "Start recording your voice"}
           className={`inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 font-bold text-white transition ${
             isRecording
               ? "bg-coral hover:bg-coral/90"
