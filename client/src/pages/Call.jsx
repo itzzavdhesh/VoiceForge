@@ -160,23 +160,27 @@ export default function Call() {
 }, [showToast]);
 
   async function handleSpeak(text) {
-  if (!activeProfile?.voice_id) return;
+    if (!activeProfile?.voice_id) return;
 
-  try {
-    const result = await speak({
-      text,
-      voiceId: activeProfile.voice_id,
-      language_code: language,
-    });
+    try {
+      const result = await speak({
+        text,
+        voiceId: activeProfile.voice_id,
+        language_code: language,
+      });
 
-    if (result?.fallback) {
-      showToast("Using browser voice fallback", "info");
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+      }
+    } catch (err) {
+      if (err.isColdStart) {
+        // Suppress generic toast for cold start, banner handles it
+        return;
+      }
+      console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
-  } catch (err) {
-    console.error("TTS streaming error:", err);
-    showToast("Speech generation failed", "error");
   }
-}
 
   return (
     <div className="space-y-5">
@@ -386,7 +390,14 @@ export default function Call() {
         onStop={virtualCamera.stop}
       />
 
-      {error && (
+      {status === "waking_up" && (
+        <div className="flex animate-pulse items-center gap-3 rounded-md border border-sky-400/50 bg-sky-50 p-4 text-sm font-semibold text-sky-800 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-200">
+          <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+          Waking up AI Engine... this may take 1-2 minutes. Your request will fail right now, please try again shortly!
+        </div>
+      )}
+      
+      {status !== "waking_up" && error && (
         <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
           {error}
         </p>

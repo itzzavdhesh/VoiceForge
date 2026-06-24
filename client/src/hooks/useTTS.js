@@ -75,6 +75,11 @@ export default function useTTS() {
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
+        if (payload.status === "waking_up") {
+          const err = new Error("Waking up AI Engine... this may take a minute.");
+          err.isColdStart = true;
+          throw err;
+        }
         throw new Error(payload.error || "Speech generation failed.");
       }
 
@@ -90,6 +95,12 @@ export default function useTTS() {
         engine: "chatterbox",
       };
     } catch (ttsError) {
+      if (ttsError.isColdStart) {
+        setError(ttsError.message);
+        setStatus("waking_up");
+        throw ttsError;
+      }
+
       try {
         await browserSpeak(text, language_code);
 

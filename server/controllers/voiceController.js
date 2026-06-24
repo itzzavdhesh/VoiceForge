@@ -126,6 +126,33 @@ function decryptToken(token) {
 // Gradio / Chatterbox voice generation
 // ---------------------------------------------------------------------------
 
+let cachedGradioClient = null;
+let currentSpaceIdentifier = null;
+
+async function getGradioClient() {
+  const spaceIdentifier = process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
+  if (!cachedGradioClient || currentSpaceIdentifier !== spaceIdentifier) {
+    const { client } = await import("@gradio/client");
+    try {
+      cachedGradioClient = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+      currentSpaceIdentifier = spaceIdentifier;
+    } catch (err) {
+      if (
+        err.message?.includes("SPACE_INITIALIZING") || 
+        err.message?.includes("Space is sleeping") || 
+        err.message?.includes("is sleeping") ||
+        err.message?.includes("Chatterbox client init timed out")
+      ) {
+        const error = new Error("AI Engine is waking up");
+        error.isColdStart = true;
+        error.status = 503;
+        throw error;
+      }
+      throw err;
+    }
+  }
+  return cachedGradioClient;
+}
 /**
  * Calls the ResembleAI/Chatterbox-Multilingual-TTS Gradio space and returns
  * the URL of the generated audio file.
@@ -146,11 +173,8 @@ async function generateClonedVoice(
 ) {
   const normalizedVoiceSettings =
     voiceSettings && typeof voiceSettings === "object" ? voiceSettings : {};
-  const spaceIdentifier =
-    process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
 
-  const { client } = await import("@gradio/client");
-  const app = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+  const app = await getGradioClient();
 
   // Wrap the raw Buffer in a Blob so Gradio treats it as a file upload.
   const referenceBlob = new Blob([audioBuffer], { type: mimeType });
@@ -376,7 +400,20 @@ export async function speak(request, response, next) {
 
     if (getIsMock()) {
       console.warn(`[VoiceForge] MOCK_CHATTERBOX: speak enqueued mock stream for speechId=${speechId}`);
+    } else {
+      // Trigger client init to immediately detect Cold Start before streaming
+      try {
+        await getGradioClient();
+      } catch (err) {
+        if (err.isColdStart) {
+          deletePendingStream(speechId);
+          response.status(503).json({ status: "waking_up", estimated_time: 120 });
+          return;
+        }
+        throw err;
+      }
     }
+
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
       text: trimmedText,
