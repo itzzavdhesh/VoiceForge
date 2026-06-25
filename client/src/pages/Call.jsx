@@ -39,6 +39,14 @@ export default function Call() {
       }
     }
     loadActiveProfile();
+
+    window.addEventListener("voiceforge:profileChanged", loadActiveProfile);
+    window.addEventListener("storage", loadActiveProfile);
+
+    return () => {
+      window.removeEventListener("voiceforge:profileChanged", loadActiveProfile);
+      window.removeEventListener("storage", loadActiveProfile);
+    };
   }, []);
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);

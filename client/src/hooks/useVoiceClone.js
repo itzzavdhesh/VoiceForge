@@ -22,6 +22,7 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
   };
   await saveProfile(nextProfile);
   localStorage.setItem(ACTIVE_KEY, nextProfile.voice_id);
+  window.dispatchEvent(new Event("voiceforge:profileChanged"));
   return nextProfile;
 }
 
@@ -31,12 +32,14 @@ export async function deleteVoiceProfile(voiceId) {
   if (localStorage.getItem(ACTIVE_KEY) === voiceId) {
     localStorage.setItem(ACTIVE_KEY, nextProfiles[0]?.voice_id || "");
   }
+  window.dispatchEvent(new Event("voiceforge:profileChanged"));
   return nextProfiles;
 }
 
 export async function clearAllVoiceProfiles() {
   await clearStorage();
   localStorage.setItem(ACTIVE_KEY, "");
+  window.dispatchEvent(new Event("voiceforge:profileChanged"));
   return [];
 }
 
