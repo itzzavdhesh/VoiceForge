@@ -175,6 +175,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }
   React.useEffect(() => {
   function handleKeyDown(event) {
+    if (event.repeat) return;
     // Don't trigger shortcuts while typing
    const target = event.target;
 

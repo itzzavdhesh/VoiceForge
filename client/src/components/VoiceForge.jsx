@@ -128,7 +128,7 @@ export default function VoiceForge() {
 
     if (isTyping) return;
 
-    if (event.ctrlKey && event.key === "Delete") {
+    if (!event.repeat && event.ctrlKey && event.key === "Delete") {
       event.preventDefault();
 
       if (
