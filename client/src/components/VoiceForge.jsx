@@ -34,6 +34,7 @@ export default function VoiceForge() {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    importBackup,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -191,6 +192,8 @@ export default function VoiceForge() {
           onDelete={removeMessage}
           onClearHistory={clearHistory}
           onCopy={handleCopy}
+          onImportBackup={importBackup}
+          showToast={showToast}
         />
       </div>
 

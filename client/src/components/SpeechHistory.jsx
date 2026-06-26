@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useDeferredValue } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import React, { useMemo, useState, useDeferredValue, useRef } from "react";
+import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, Upload } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
@@ -13,11 +13,95 @@ export function SpeechHistory({
   onDelete,
   onClearHistory,
   onCopy,
+  onImportBackup,
+  showToast,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+
+  const fileInputRef = useRef(null);
+
+  const handleExport = () => {
+    try {
+      const backupData = {
+        history,
+        favorites: Array.from(favorites),
+      };
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "voiceforge-speech-history-backup.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast?.("Backup exported successfully", "success");
+    } catch (error) {
+      showToast?.("Failed to export history", "error");
+    }
+  };
+
+  const validateBackupSchema = (data) => {
+    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data.history)) return false;
+
+    for (const message of data.history) {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        typeof message.text !== "string" ||
+        typeof message.timestamp !== "number"
+      ) {
+        return false;
+      }
+    }
+
+    if (data.favorites !== undefined) {
+      if (!Array.isArray(data.favorites)) return false;
+      for (const favId of data.favorites) {
+        if (typeof favId !== "string") {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (validateBackupSchema(data)) {
+          onImportBackup?.(data.history, data.favorites || []);
+          showToast?.("Backup imported successfully", "success");
+        } else {
+          showToast?.("Error: Invalid backup schema", "error");
+        }
+      } catch (error) {
+        showToast?.("Error: Invalid JSON structure", "error");
+      }
+      event.target.value = "";
+    };
+    reader.onerror = () => {
+      showToast?.("Error reading backup file", "error");
+      event.target.value = "";
+    };
+    reader.readAsText(file);
+  };
 
   const visible = useMemo(() => {
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
@@ -177,17 +261,35 @@ export function SpeechHistory({
             )}
           </div>
 
-          {history.length > 0 && (
-            <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-              {sessionTranscript && sessionTranscript.length > 0 && (
-                <button
-                  onClick={handleExportTranscript}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                >
-                  <Download size={13} aria-hidden="true" />
-                  Export Transcript
-                </button>
-              )}
+          <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border flex flex-col gap-2">
+            {sessionTranscript && sessionTranscript.length > 0 && (
+              <button
+                onClick={handleExportTranscript}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export Transcript
+              </button>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                disabled={history.length === 0}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export History
+              </button>
+              <button
+                onClick={handleImportClick}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
+              >
+                <Upload size={13} aria-hidden="true" />
+                Import History
+              </button>
+            </div>
+
+            {history.length > 0 && (
               <button
                 onClick={handleClearHistory}
                 className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
@@ -195,8 +297,16 @@ export function SpeechHistory({
                 <Trash2 size={13} aria-hidden="true" />
                 Clear all history
               </button>
-            </div>
-          )}
+            )}
+
+            <input
+              type="file"
+              accept=".json"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </div>
         </>
       )}
     </aside>
