@@ -13,6 +13,7 @@ export default function useTTS() {
   const [error, setError] = React.useState("");
   const [audioUrl, setAudioUrl] = React.useState("");
   const [engine, setEngine] = React.useState("chatterbox");
+  const abortControllerRef = React.useRef(null);
 
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
@@ -54,6 +55,13 @@ export default function useTTS() {
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
   async function speak({ text, voiceId, language_code }) {
+    // Cancel any in-flight request before starting a new one.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setError("");
     setStatus("speaking");
 
@@ -62,6 +70,7 @@ export default function useTTS() {
 
       const response = await fetch("/api/voice/speak", {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
         },
@@ -90,6 +99,11 @@ export default function useTTS() {
         engine: "chatterbox",
       };
     } catch (ttsError) {
+      // A cancelled request is not an error — a newer speak() call took over.
+      if (ttsError?.name === "AbortError") {
+        return;
+      }
+
       try {
         await browserSpeak(text, language_code);
 
