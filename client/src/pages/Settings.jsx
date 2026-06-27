@@ -18,6 +18,7 @@ import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
+  clearAllVoiceProfiles,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
 
@@ -232,6 +233,21 @@ export default function Settings() {
     }
   }
 
+  async function removeAllProfiles() {
+    const confirmOverwrite = window.confirm("Are you sure you want to delete all saved voice profiles? This action cannot be undone and will free up storage space.");
+    if (!confirmOverwrite) return;
+    
+    try {
+      const next = await clearAllVoiceProfiles();
+      setProfiles(next);
+      setDbError("");
+      showToast("All voice profiles deleted", "success");
+    } catch (err) {
+      setDbError(err?.message || String(err));
+      showToast("Failed to clear profiles", "error");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -394,7 +410,18 @@ export default function Settings() {
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Saved voice profiles</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold">Saved voice profiles</h2>
+          {profiles.length > 0 && (
+            <button
+              type="button"
+              onClick={removeAllProfiles}
+              className="text-sm font-bold text-coral hover:underline"
+            >
+              Clear All Profiles
+            </button>
+          )}
+        </div>
         <div className="mt-4 divide-y divide-ink/10 rounded-md border border-ink/10 dark:divide-border dark:border-border">
           {profiles.length === 0 && (
             <p className="p-4 text-sm text-ink/65 dark:text-muted">

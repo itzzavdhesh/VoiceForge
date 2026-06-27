@@ -127,8 +127,10 @@ textarea {
   background: #16a34a;
 }
 
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #22c55e var(--bg-page);
+/* Firefox fallback (only when WebKit scrollbar is not supported) */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #22c55e var(--bg-page);
+  }
 }

@@ -1,6 +1,7 @@
 // Handles microphone permission, short reference recording, playback, and upload readiness.
 import React from "react";
-import { Mic, Square, Upload, CircleAlert, Loader2 } from "lucide-react";
+import { Mic, Square, Upload, CircleAlert, Loader2, FileUp } from "lucide-react";
+import { extractAudioFromFile } from "../utils/audioExtractor.js";
 
 export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [isRecording, setIsRecording] = React.useState(false);
@@ -9,7 +10,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [duration, setDuration] = React.useState(0);
   const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
+  const [isExtracting, setIsExtracting] = React.useState(false);
   
+  const fileInputRef = React.useRef(null);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -174,6 +177,36 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     }
   }
 
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl("");
+    setRecorderError("");
+    onRecordingReady(null);
+    setDuration(0);
+    durationRef.current = 0;
+    
+    setIsExtracting(true);
+    
+    try {
+      const { blob, duration } = await extractAudioFromFile(file);
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setDuration(duration);
+      durationRef.current = duration;
+      onRecordingReady(blob, duration);
+    } catch (err) {
+      setRecorderError(err.message || String(err));
+    } finally {
+      setIsExtracting(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   React.useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -279,10 +312,10 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Record a 10-second reference</h2>
+          <h2 className="text-xl font-bold">Record or upload a 10-second reference</h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-ink/70 dark:text-muted">
             Use your own voice or a trusted reference speaker with consent. Keep
-            background noise low.
+            background noise low. You can also upload a video (.mp4, .mov) or audio file.
           </p>
         </div>
         <span className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
@@ -310,6 +343,27 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           )}
           {isInitializing ? "Initializing..." : isRecording ? "Stop recording" : "Start recording"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || isRecording || isInitializing || isExtracting}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-cloud px-5 py-3 font-bold text-ink transition hover:bg-ink/10 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+        >
+          {isExtracting ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : (
+            <FileUp size={18} aria-hidden="true" />
+          )}
+          {isExtracting ? "Extracting..." : "Upload file"}
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept="audio/*,video/mp4,video/quicktime"
+          className="hidden"
+        />
 
         <div
           className="recording-wave flex h-12 flex-1 items-center gap-1 rounded-md border border-ink/10 bg-cloud px-4 dark:border-border dark:bg-black"

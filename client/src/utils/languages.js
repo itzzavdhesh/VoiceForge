@@ -16,32 +16,32 @@ export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
  * Each entry: { code, name, nativeName, flag, region }
  */
 export const SUPPORTED_LANGUAGES = [
-  { code: "en", name: "English", nativeName: "English", flag: "EN", region: "Europe" },
-  { code: "fr", name: "French", nativeName: "Francais", flag: "FR", region: "Europe" },
-  { code: "de", name: "German", nativeName: "Deutsch", flag: "DE", region: "Europe" },
-  { code: "es", name: "Spanish", nativeName: "Espanol", flag: "ES", region: "Europe" },
-  { code: "pt", name: "Portuguese", nativeName: "Portugues", flag: "PT", region: "Europe" },
-  { code: "it", name: "Italian", nativeName: "Italiano", flag: "IT", region: "Europe" },
-  { code: "nl", name: "Dutch", nativeName: "Nederlands", flag: "NL", region: "Europe" },
-  { code: "pl", name: "Polish", nativeName: "Polski", flag: "PL", region: "Europe" },
-  { code: "sv", name: "Swedish", nativeName: "Svenska", flag: "SV", region: "Europe" },
-  { code: "da", name: "Danish", nativeName: "Dansk", flag: "DA", region: "Europe" },
-  { code: "fi", name: "Finnish", nativeName: "Suomi", flag: "FI", region: "Europe" },
-  { code: "el", name: "Greek", nativeName: "Greek", flag: "EL", region: "Europe" },
-  { code: "ru", name: "Russian", nativeName: "Russian", flag: "RU", region: "Europe" },
-  { code: "no", name: "Norwegian", nativeName: "Norsk", flag: "NO", region: "Europe" },
-  { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
+  { code: "en", name: "English", nativeName: "English", flag: "🇺🇸", region: "Europe" },
+  { code: "fr", name: "French", nativeName: "Francais", flag: "🇫🇷", region: "Europe" },
+  { code: "de", name: "German", nativeName: "Deutsch", flag: "🇩🇪", region: "Europe" },
+  { code: "es", name: "Spanish", nativeName: "Espanol", flag: "🇪🇸", region: "Europe" },
+  { code: "pt", name: "Portuguese", nativeName: "Portugues", flag: "🇵🇹", region: "Europe" },
+  { code: "it", name: "Italian", nativeName: "Italiano", flag: "🇮🇹", region: "Europe" },
+  { code: "nl", name: "Dutch", nativeName: "Nederlands", flag: "🇳🇱", region: "Europe" },
+  { code: "pl", name: "Polish", nativeName: "Polski", flag: "🇵🇱", region: "Europe" },
+  { code: "sv", name: "Swedish", nativeName: "Svenska", flag: "🇸🇪", region: "Europe" },
+  { code: "da", name: "Danish", nativeName: "Dansk", flag: "🇩🇰", region: "Europe" },
+  { code: "fi", name: "Finnish", nativeName: "Suomi", flag: "🇫🇮", region: "Europe" },
+  { code: "el", name: "Greek", nativeName: "Greek", flag: "🇬🇷", region: "Europe" },
+  { code: "ru", name: "Russian", nativeName: "Russian", flag: "🇷🇺", region: "Europe" },
+  { code: "no", name: "Norwegian", nativeName: "Norsk", flag: "🇳🇴", region: "Europe" },
+  { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "🇹🇷", region: "Europe" },
 
-  { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
-  { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
-  { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
-  { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
-  { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "MS", region: "Asia & Pacific" },
+  { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "🇮🇳", region: "Asia & Pacific" },
+  { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "🇯🇵", region: "Asia & Pacific" },
+  { code: "ko", name: "Korean", nativeName: "Korean", flag: "🇰🇷", region: "Asia & Pacific" },
+  { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "🇨🇳", region: "Asia & Pacific" },
+  { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "🇲🇾", region: "Asia & Pacific" },
 
-  { code: "ar", name: "Arabic", nativeName: "Arabic", flag: "AR", region: "Middle East" },
-  { code: "he", name: "Hebrew", nativeName: "Hebrew", flag: "HE", region: "Middle East" },
+  { code: "ar", name: "Arabic", nativeName: "Arabic", flag: "🇸🇦", region: "Middle East" },
+  { code: "he", name: "Hebrew", nativeName: "Hebrew", flag: "🇮🇱", region: "Middle East" },
 
-  { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
+  { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "🇰🇪", region: "Africa" },
 ];
 
 /** Set of all valid language codes for O(1) lookups. */
@@ -66,30 +66,15 @@ export function getLanguageByCode(code) {
 
 /**
  * Reads the saved language code from localStorage.
- * Falls back to "en" if the stored value is missing, empty, or invalid.
- *
- * Also performs a one-time migration from the legacy "voiceforge:compose-language"
- * key used by the Compose page.
+ * Returns "" (auto-detect) if the stored value is missing or invalid.
  */
 export function loadLanguage() {
   try {
-    const legacyCompose = localStorage.getItem("voiceforge:compose-language");
     const current = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (!current && legacyCompose) {
-      const migrated = VALID_CODES.has(legacyCompose) ? legacyCompose : "en";
-      localStorage.setItem(LANGUAGE_STORAGE_KEY, migrated);
-      localStorage.removeItem("voiceforge:compose-language");
-      return migrated;
-    }
-
-    const legacyNameToCode = Object.fromEntries(
-      SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code])
-    );
-    const normalized = legacyNameToCode[current] ?? current;
-
-    return VALID_CODES.has(normalized) ? normalized : "en";
+    // If it's valid, return it; otherwise return empty string for auto-detect
+    return isValidLanguageCode(current) ? (current || "") : "";
   } catch {
-    return "en";
+    return "";
   }
 }
 
@@ -99,7 +84,8 @@ export function loadLanguage() {
  */
 export function persistLanguage(code) {
   try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, code || "en");
+    // Save the raw code (allowing "" for Auto-detect)
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, code ?? "");
   } catch {
     // Storage unavailable - continue without persisting.
   }
