@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucid
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { API_BASE_URL } from "../utils/apiConfig.js";
 
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -214,9 +215,7 @@ export default function Onboarding({ onReady }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
-  const apiBase = import.meta.env.VITE_API_URL || "";
-
-  fetch(`${apiBase}/api/voice/status`, { signal: controller.signal })
+  fetch(`${API_BASE_URL}/api/voice/status`, { signal: controller.signal })
     .then(async (res) => {
       clearTimeout(timeoutId);
 
