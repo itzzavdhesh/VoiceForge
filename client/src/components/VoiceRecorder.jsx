@@ -180,11 +180,10 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
    const target = event.target;
 
 const isInteractive =
-  target instanceof HTMLElement &&
+  target instanceof Element &&
   target.closest(
-    "input, textarea, select, button, a, [contenteditable='true'], [role='button'], [role='link']"
+    "input, textarea, select, button, a, summary, [contenteditable='true'], [role='button'], [role='link'], [role='menuitem'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab']"
   );
-
 if (isInteractive) return;
 
     // Space => Start/Stop recording
