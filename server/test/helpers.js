@@ -1,4 +1,4 @@
-// Shared lightweight Express request/response mocks and an ElevenLabs fetch
+// Shared lightweight Express request/response mocks and a fetch
 // stub used by the voiceController test suites. Keeps tests dependency-free.
 
 export function createRequest({ headers = {}, body = {}, params = {}, query = {} } = {}) {
@@ -52,7 +52,7 @@ export function createResponse() {
 }
 
 // Returns a fetch stub that yields a single-chunk audio stream and records
-// the upstream call so tests can assert on the API key and request body.
+// the upstream call so tests can assert on the request body.
 export function createFetchStub({ ok = true, status = 200, chunk = "audio-bytes" } = {}) {
   const calls = [];
   const stub = async (url, options) => {

@@ -3,13 +3,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createRequest, createResponse, createFetchStub, invoke } from "./helpers.js";
-
-const API_KEY_HEADER = { "X-ElevenLabs-Api-Key": "sk_test_key" };
+import { createRequest, createResponse, invoke } from "./helpers.js";
 
 async function callSpeak(speak, overrides = {}) {
   const request = createRequest({
-    headers: API_KEY_HEADER,
     body: { text: "Hello there", voice_id: "voice_1", ...overrides }
   });
   const response = createResponse();
@@ -48,6 +45,73 @@ test("audioUrl embeds the matching speechId", async () => {
     `/api/voice/speak/stream?t=${payload.speechId}`,
     "audioUrl should reference the generated speechId via query parameter"
   );
+});
+
+test("pending-stream store rejects new /speak calls when full", async (t) => {
+  // Force a tiny cap so the test stays fast, and a long TTL so the timer does
+  // not expire entries during the test. Re-import so the new ceiling is read.
+  const originalMax = process.env.PENDING_STREAMS_MAX;
+  const originalTtl = process.env.PENDING_STREAM_TTL_MS;
+  const originalMock = process.env.MOCK_CHATTERBOX;
+  const originalEnv = process.env.NODE_ENV;
+
+  process.env.PENDING_STREAMS_MAX = "10";
+  process.env.PENDING_STREAM_TTL_MS = "60000";
+  process.env.MOCK_CHATTERBOX = "true";
+  process.env.NODE_ENV = "development";
+
+  t.after(() => {
+    if (originalMax === undefined) delete process.env.PENDING_STREAMS_MAX;
+    else process.env.PENDING_STREAMS_MAX = originalMax;
+    if (originalTtl === undefined) delete process.env.PENDING_STREAM_TTL_MS;
+    else process.env.PENDING_STREAM_TTL_MS = originalTtl;
+    if (originalMock === undefined) delete process.env.MOCK_CHATTERBOX;
+    else process.env.MOCK_CHATTERBOX = originalMock;
+    if (originalEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalEnv;
+  });
+
+  const modulePath = `../controllers/voiceController.js?cap=${Date.now()}`;
+  const { speak, streamSpeech } = await import(modulePath);
+
+  const created = [];
+  for (let i = 0; i < 10; i += 1) {
+    created.push(await callSpeak(speak));
+  }
+
+  const overflowResponse = createResponse();
+  await invoke(
+    speak,
+    createRequest({ body: { text: "Hello there", voice_id: "voice_1" } }),
+    overflowResponse
+  );
+  assert.equal(
+    overflowResponse.statusCode,
+    503,
+    "new /speak requests should be rejected when the pending stream store is full"
+  );
+  assert.equal(
+    overflowResponse.jsonBody.error,
+    "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+  );
+
+  const oldest = created[0];
+  const oldestResponse = createResponse();
+  await invoke(
+    streamSpeech,
+    createRequest({ query: { t: oldest.speechId } }),
+    oldestResponse
+  );
+  assert.equal(oldestResponse.ended, true, "oldest entry should still stream when the store is full");
+
+  const newest = created[created.length - 1];
+  const newestResponse = createResponse();
+  await invoke(
+    streamSpeech,
+    createRequest({ query: { t: newest.speechId } }),
+    newestResponse
+  );
+  assert.equal(newestResponse.ended, true, "newest entry should still stream when the store is full");
 });
 
 test("expired speech token throws 403 error", async (t) => {

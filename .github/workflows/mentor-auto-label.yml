@@ -40,11 +40,12 @@ jobs:
               'Anushreebasics': 'mentor:Anushreebasics',
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
+              '1754riya':       'mentor:1754riya',
               'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
               'joyprakashk':    'mentor:joyprakashk',
               'rushi-k12':      'mentor:rushi-k12',
               'itzzavdheshh':    'mentor:itzzavdheshh',
-              'vedhapprakashni': 'mentor:vedhapprakashni'
+              'Nitya-003':      'mentor:Nitya-003'
             };
             // Admin list — bypass guard (can always apply labels freely)
             const ADMINS = ['itzzavdhesh'];
