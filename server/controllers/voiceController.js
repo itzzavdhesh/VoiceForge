@@ -126,6 +126,9 @@ function decryptToken(token) {
 // Gradio / Chatterbox voice generation
 // ---------------------------------------------------------------------------
 
+let cachedGradioClient = null;
+let currentSpaceIdentifier = null;
+
 /**
  * Calls the ResembleAI/Chatterbox-Multilingual-TTS Gradio space and returns
  * the URL of the generated audio file.
@@ -149,8 +152,12 @@ async function generateClonedVoice(
   const spaceIdentifier =
     process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
 
-  const { client } = await import("@gradio/client");
-  const app = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+  if (!cachedGradioClient || currentSpaceIdentifier !== spaceIdentifier) {
+    const { client } = await import("@gradio/client");
+    cachedGradioClient = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+    currentSpaceIdentifier = spaceIdentifier;
+  }
+  const app = cachedGradioClient;
 
   // Wrap the raw Buffer in a Blob so Gradio treats it as a file upload.
   const referenceBlob = new Blob([audioBuffer], { type: mimeType });
@@ -159,25 +166,33 @@ async function generateClonedVoice(
   const temperature = clampNumber(normalizedVoiceSettings.temperature, 0.05, 5, 0.8);
   const seed = Number.isInteger(normalizedVoiceSettings.seed) ? normalizedVoiceSettings.seed : 0;
 
-  const result = await withTimeout(
-    app.predict("/generate_tts_audio", [
-      targetText,       // Text string to synthesize (max 300 chars)
-      languageCode,     // Language code string (e.g. "en", "hi")
-      referenceBlob,    // Reference audio Blob
-      exaggeration,     // Exaggeration intensity float (Default: 0.5)
-      temperature,      // Generation temperature float (Default: 0.8)
-      seed,             // Seed integer (0 = randomised)
-      cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
-    ]),
-    30000,
-    "Chatterbox predict"
-  );
+  try {
+    const result = await withTimeout(
+      app.predict("/generate_tts_audio", [
+        targetText,       // Text string to synthesize (max 300 chars)
+        languageCode,     // Language code string (e.g. "en", "hi")
+        referenceBlob,    // Reference audio Blob
+        exaggeration,     // Exaggeration intensity float (Default: 0.5)
+        temperature,      // Generation temperature float (Default: 0.8)
+        seed,             // Seed integer (0 = randomised)
+        cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
+      ]),
+      30000,
+      "Chatterbox predict"
+    );
 
-  const audioUrl = result.data[0].url;
-  if (!audioUrl) {
-    throw new Error("Chatterbox returned no audio URL.");
+    const audioUrl = result.data[0].url;
+    if (!audioUrl) {
+      throw new Error("Chatterbox returned no audio URL.");
+    }
+    return audioUrl;
+  } catch (error) {
+    console.error("[VoiceForge] Gradio predict error:", error);
+    // Clear cache on failure so next request attempts reconnection
+    cachedGradioClient = null;
+    currentSpaceIdentifier = null;
+    throw error;
   }
-  return audioUrl;
 }
 
 function clampNumber(value, min, max, fallback) {
