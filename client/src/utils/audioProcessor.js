@@ -2,7 +2,7 @@ import Meyda from "meyda";
 
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
- * This is a simplified wrapper for real-time inference.
+ * Tracks a history of mel-spectrograms for Wav2Lip ONNX real-time inference.
  */
 export class AudioProcessor {
   constructor() {
@@ -10,6 +10,7 @@ export class AudioProcessor {
     this.source = null;
     this.analyzer = null;
     this.currentMelSpectrogram = null;
+    this.melHistory = [];
   }
 
   /**
@@ -38,17 +39,23 @@ export class AudioProcessor {
       this.analyzer.stop();
     }
 
-    // Configure Meyda to extract the melSpectrogram
-    // Typical Wav2Lip uses specific mel bands and FFT sizes,
-    // this will need tuning to match the exact ONNX model requirements.
+    // Reset history when initialized/re-initialized
+    this.melHistory = [];
+
+    // Configure Meyda to extract the melSpectrogram with 80 bands
     this.analyzer = Meyda.createMeydaAnalyzer({
       audioContext: this.audioContext,
       source: this.source,
       bufferSize: 512, // Must be a power of 2
+      numberOfMelBands: 80,
       featureExtractors: ["melSpectrogram"],
       callback: (features) => {
         if (features && features.melSpectrogram) {
           this.currentMelSpectrogram = features.melSpectrogram;
+          this.melHistory.push(new Float32Array(features.melSpectrogram));
+          if (this.melHistory.length > 16) {
+            this.melHistory.shift();
+          }
         }
       },
     });
@@ -57,12 +64,28 @@ export class AudioProcessor {
   }
 
   /**
-   * Returns the most recently extracted mel-spectrogram.
-   * Format expected by Wav2Lip ONNX is usually [batch_size, 1, 80, 16] (example).
-   * @returns {Float32Array|null}
+   * Returns the most recently extracted mel-spectrogram sliding window history.
+   * Format expected by Wav2Lip ONNX is [1, 1, 80, 16] (planar array).
+   * @returns {Float32Array}
    */
   getLatestFeatures() {
-    return this.currentMelSpectrogram;
+    const history = this.melHistory || [];
+    const flat = new Float32Array(80 * 16);
+    
+    // Fill the flat array in shape [1, 1, 80, 16] where time step changes fastest.
+    // Flat index = b * 16 + t
+    const missing = 16 - history.length;
+    for (let b = 0; b < 80; b++) {
+      for (let t = 0; t < 16; t++) {
+        if (t >= missing) {
+          const frame = history[t - missing];
+          flat[b * 16 + t] = frame[b] || 0;
+        } else {
+          flat[b * 16 + t] = 0;
+        }
+      }
+    }
+    return flat;
   }
 
   /**
@@ -77,5 +100,6 @@ export class AudioProcessor {
       this.audioContext.close();
       this.audioContext = null;
     }
+    this.melHistory = [];
   }
 }
