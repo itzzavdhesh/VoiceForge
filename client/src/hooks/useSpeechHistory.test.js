@@ -3,6 +3,7 @@ import {
   trimHistoryPreservingFavorites,
   toggleFavoriteWithCap,
   clampFavorites,
+  reconcileFavoritesWithHistory,
 } from "./useSpeechHistory.js";
 
 function makeEntries(n) {
@@ -227,5 +228,65 @@ describe("clampFavorites", () => {
 
     const pinAfterFreeingSlot = toggleFavoriteWithCap(afterUnpin.favorites, "brand-new-id", 50);
     expect(pinAfterFreeingSlot.applied).toBe(true);
+  });
+});
+
+describe("reconcileFavoritesWithHistory", () => {
+  it("keeps favorite ids that have a matching history entry", () => {
+    const history = makeEntries(3); // id-0, id-1, id-2
+    const favoriteIds = new Set(["id-1"]);
+
+    const result = reconcileFavoritesWithHistory(favoriteIds, history);
+
+    expect(result).toEqual(new Set(["id-1"]));
+  });
+
+  it("drops orphaned favorite ids with no matching history entry", () => {
+    // Simulates leftover ids from the prior eviction bug, where a
+    // favorited entry could be evicted from history while its id stayed
+    // in `favorites` forever.
+    const history = makeEntries(2); // id-0, id-1
+    const favoriteIds = new Set(["id-0", "orphaned-id"]);
+
+    const result = reconcileFavoritesWithHistory(favoriteIds, history);
+
+    expect(result).toEqual(new Set(["id-0"]));
+    expect(result.has("orphaned-id")).toBe(false);
+  });
+
+  it("returns an empty Set when no favorite ids match history", () => {
+    const history = makeEntries(2);
+    const favoriteIds = new Set(["orphaned-a", "orphaned-b"]);
+
+    const result = reconcileFavoritesWithHistory(favoriteIds, history);
+
+    expect(result.size).toBe(0);
+  });
+
+  it("returns an empty Set when history is empty", () => {
+    const result = reconcileFavoritesWithHistory(new Set(["a", "b"]), []);
+    expect(result.size).toBe(0);
+  });
+
+  it("is a no-op when favorites is already empty", () => {
+    const result = reconcileFavoritesWithHistory(new Set(), makeEntries(5));
+    expect(result.size).toBe(0);
+  });
+
+  it("an orphaned id no longer occupies a slot toward the cap after reconciliation", () => {
+    // This is the exact scenario the fix addresses: without reconciliation,
+    // an orphaned id would permanently occupy one of MAX_FAVORITES slots.
+    const history = makeEntries(1); // only id-0 still exists
+    const persistedFavoriteIds = ["id-0", "orphaned-1", "orphaned-2"];
+
+    const reconciled = reconcileFavoritesWithHistory(persistedFavoriteIds, history);
+    const clamped = clampFavorites(reconciled, 2); // cap of 2, well under orphan count
+
+    expect(clamped.size).toBe(1); // only the still-valid id-0 survives
+    expect(clamped.has("id-0")).toBe(true);
+
+    // A new pin now succeeds instead of being blocked by orphaned slots.
+    const { applied } = toggleFavoriteWithCap(clamped, "brand-new-id", 2);
+    expect(applied).toBe(true);
   });
 });

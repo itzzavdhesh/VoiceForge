@@ -92,6 +92,23 @@ export function trimHistoryPreservingFavorites(entries, favoriteIds, maxHistory)
 }
 
 /**
+ * Drops favorite ids that have no matching entry in history. Orphaned ids
+ * can accumulate from prior bugs (e.g. a history entry was evicted while
+ * still favorited, before favorites were exempted from eviction) or from
+ * a history entry being deleted outright via removeMessage. Left unchecked,
+ * an orphaned id permanently occupies a slot toward MAX_FAVORITES even
+ * though it no longer corresponds to anything the user can see or unpin.
+ *
+ * @param {Iterable<string>} favoriteIds
+ * @param {Array<{id: string}>} historyEntries
+ * @returns {Set<string>}
+ */
+export function reconcileFavoritesWithHistory(favoriteIds, historyEntries) {
+  const validIds = new Set(historyEntries.map((m) => m.id));
+  return new Set([...favoriteIds].filter((id) => validIds.has(id)));
+}
+
+/**
  * Clamps a favorites collection down to maxFavorites, keeping the most
  * recently pinned ids. Used when loading favorites from localStorage,
  * where a legacy or otherwise oversized set (e.g. from before this cap
@@ -153,9 +170,12 @@ export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => readStorage(HISTORY_KEY, []));
-  const [favorites, setFavorites] = useState(
-    () => clampFavorites(readStorage(FAVS_KEY, []), MAX_FAVORITES)
-  );
+  const [favorites, setFavorites] = useState(() => {
+    const loadedHistory = readStorage(HISTORY_KEY, []);
+    const loadedFavoriteIds = readStorage(FAVS_KEY, []);
+    const reconciled = reconcileFavoritesWithHistory(loadedFavoriteIds, loadedHistory);
+    return clampFavorites(reconciled, MAX_FAVORITES);
+  });
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
 
   // Mirrors `favorites` so addMessage can read the latest pinned ids
