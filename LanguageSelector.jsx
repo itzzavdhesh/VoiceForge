@@ -108,40 +108,49 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
         <div role="dialog" tabIndex={-1} aria-label="Language selection" className={`absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg border-neutral-200 bg-white dark:border-border dark:bg-surface animate-fade-in-up ${compact ? "right-0 w-72" : "left-0 right-0 min-w-[320px] sm:w-96"}`} style={{ maxHeight: "420px" }}>
           <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2.5 dark:border-border">
             <Search size={15} className="text-neutral-400" />
-            <input ref={searchRef} type="text" aria-label="Search languages" value={search} onChange={(e) => { setSearch(e.target.value); setFocusIndex(-1); }} placeholder="Search languages..." className="flex-1 bg-transparent text-sm outline-none" />
+            <input 
+              ref={searchRef} 
+              type="text" 
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={isOpen}
+              aria-controls={id ? `${id}-listbox` : "language-listbox"}
+              aria-activedescendant={focusIndex >= 0 ? (id ? `${id}-option-${focusIndex}` : `option-${focusIndex}`) : undefined}
+              aria-label="Search languages" 
+              value={search} 
+              onChange={(e) => { setSearch(e.target.value); setFocusIndex(-1); }} 
+              placeholder="Search languages..." 
+              className="flex-1 bg-transparent text-sm outline-none" 
+            />
             {search && <button type="button" aria-label="Clear language search" onClick={() => { setSearch(""); searchRef.current?.focus(); }}><X size={14} /></button>}
           </div>
 
           <ul 
             ref={listRef} 
+            id={id ? `${id}-listbox` : "language-listbox"}
             role="listbox" 
             aria-label="Available languages"
-            aria-activedescendant={focusIndex >= 0 ? (id ? `${id}-option-${focusIndex}` : `option-${focusIndex}`) : undefined}
             className="overflow-y-auto overscroll-contain max-h-[360px]"
           >
             {filtered.length === 0 && (
-              <li role="presentation" className="px-4 py-8 text-center text-sm text-neutral-400">
-                No matches
-              </li>
+              <li role="presentation" className="px-4 py-8 text-center text-sm text-neutral-400">No matches</li>
             )}
             {flatItems.map((item, index) => {
               if (item.type === "header") return <li key={item.region} role="presentation" className="sticky top-0 bg-neutral-50 px-4 py-2 text-[11px] font-bold uppercase text-neutral-400">{item.region}</li>;
-    
+              
               const isSelected = value === item.code;
               const optionId = id ? `${id}-option-${index}` : `option-${index}`;
+              
               return (
-                <li 
-                  key={item.code || "auto"} 
+                <li
+                  key={item.code || "auto"}
                   id={optionId}
-                  role="option" 
-                  aria-selected={isSelected} 
+                  role="option"
+                  aria-selected={isSelected}
                   data-index={index}
-                  onClick={() => selectLanguage(item.code)} 
+                  onClick={() => selectLanguage(item.code)}
                   onMouseEnter={() => setFocusIndex(index)}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm cursor-pointer ${
-                    focusIndex === index ? "bg-moss/8" : ""
-                  } ${isSelected ? "font-semibold text-moss" : ""}`}
-                >
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm cursor-pointer ${focusIndex === index ? "bg-moss/8" : ""} ${isSelected ? "font-semibold text-moss" : ""}`}>
                   <span className="text-lg">{item.type === "auto" ? "🌐" : item.flag}</span>
                   <span className="flex-1 truncate">{item.name}</span>
                   {isSelected && <Check size={15} />}
