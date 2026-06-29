@@ -182,13 +182,14 @@ jobs:
               return;
             }
 
-            // 3. Build a map of latest review states per user
+            // 3. Build a map of latest review states per user (normalized to uppercase)
             const latestReviewByUser = {};
             for (const review of reviews) {
               const login = review.user?.login?.toLowerCase();
               if (!login) continue;
-              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+              latestReviewByUser[login] = review.state?.toUpperCase(); // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
             }
+
 
             // Helper: ensure a label exists in the repo
             async function ensureLabel(name, color, description) {
