@@ -153,7 +153,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                   onClick={() => selectLanguage(item.code)}
                   onMouseEnter={() => setFocusIndex(index)}
                   className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm cursor-pointer ${focusIndex === index ? "bg-moss/8" : ""} ${isSelected ? "font-semibold text-moss" : ""}`}>
-                  <span className="text-lg">{item.type === "auto" ? "🌐" : item.flag}</span>
+                  <span className="text-lg" aria-hidden="true">{item.type === "auto" ? "🌐" : item.flag}</span>
                   <span className="flex-1 truncate">{item.name}</span>
                   {isSelected && <Check size={15} />}
                 </li>
