@@ -108,8 +108,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
         <div role="dialog" aria-label="Language selection" className={`absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg border-neutral-200 bg-white dark:border-border dark:bg-surface animate-fade-in-up ${compact ? "right-0 w-72" : "left-0 right-0 min-w-[320px] sm:w-96"}`} style={{ maxHeight: "420px" }}>
           <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2.5 dark:border-border">
             <Search size={15} className="text-neutral-400" />
-            <input ref={searchRef} type="text" value={search} onChange={(e) => { setSearch(e.target.value); setFocusIndex(-1); }} placeholder="Search languages..." className="flex-1 bg-transparent text-sm outline-none" />
-            {search && <button onClick={() => { setSearch(""); searchRef.current?.focus(); }}><X size={14} /></button>}
+            <input ref={searchRef} type="text" aria-label="Search languages" value={search} onChange={(e) => { setSearch(e.target.value); setFocusIndex(-1); }} placeholder="Search languages..." className="flex-1 bg-transparent text-sm outline-none" />
+            {search && <button type="button" aria-label="Clear language search" onClick={() => { setSearch(""); searchRef.current?.focus(); }}><X size={14} /></button>}
           </div>
 
           <ul ref={listRef} role="listbox" aria-label="Available languages" className="overflow-y-auto overscroll-contain max-h-[360px]">
