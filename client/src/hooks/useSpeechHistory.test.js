@@ -289,4 +289,37 @@ describe("reconcileFavoritesWithHistory", () => {
     const { applied } = toggleFavoriteWithCap(clamped, "brand-new-id", 2);
     expect(applied).toBe(true);
   });
+
+  it("does not throw on malformed history entries (corrupted localStorage)", () => {
+    // readStorage only validates the top-level value is an array; it does
+    // not validate the shape of what's inside. Corrupted data — e.g. from
+    // manual tampering, a browser extension, or a future schema change —
+    // could contain entries like null, a bare string, or an object missing
+    // `id`. Accessing `.id` on these must not throw.
+    const corruptedHistory = [
+      null,
+      "just a string",
+      42,
+      { id: "valid-id", text: "ok" },
+      { text: "missing id field" },
+      undefined,
+    ];
+    const favoriteIds = new Set(["valid-id", "orphaned-id"]);
+
+    expect(() => {
+      reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
+    }).not.toThrow();
+
+    const result = reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
+    expect(result).toEqual(new Set(["valid-id"]));
+  });
+
+  it("treats every malformed entry as having no valid id", () => {
+    const corruptedHistory = [null, "x", 1, {}, { id: 123 }, { id: null }];
+    const favoriteIds = new Set(["any-id"]);
+
+    const result = reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
+
+    expect(result.size).toBe(0);
+  });
 });

@@ -67,6 +67,25 @@ function readSessionStorage(key, fallback) {
   }
 }
 /**
+ * Filters out malformed history entries — anything that isn't a plain
+ * object with a string `id` — before they reach any other history logic.
+ * `readStorage` only validates that the top-level parsed value is an array;
+ * it does not validate what's inside. Corrupted localStorage (manual
+ * tampering, a browser extension, data written by some other app version)
+ * could otherwise contain entries like `null` or a bare string, and
+ * accessing `m.id` on those would throw and crash hook initialization.
+ *
+ * @param {Array<unknown>} entries
+ * @returns {Array<{id: string}>}
+ */
+function sanitizeHistoryEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(
+    (m) => m !== null && typeof m === "object" && typeof m.id === "string"
+  );
+}
+
+/**
  * Trims a history array down to MAX_HISTORY entries, but exempts favorited
  * (pinned) entries from eviction. Only non-favorited entries count against
  * the cap, so pinning a message protects it indefinitely until unpinned.
@@ -104,7 +123,11 @@ export function trimHistoryPreservingFavorites(entries, favoriteIds, maxHistory)
  * @returns {Set<string>}
  */
 export function reconcileFavoritesWithHistory(favoriteIds, historyEntries) {
-  const validIds = new Set(historyEntries.map((m) => m.id));
+  const validIds = new Set(
+    historyEntries
+      .filter((m) => m !== null && typeof m === "object" && typeof m.id === "string")
+      .map((m) => m.id)
+  );
   return new Set([...favoriteIds].filter((id) => validIds.has(id)));
 }
 
@@ -169,9 +192,11 @@ export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
 
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
-  const [history, setHistory] = useState(() => readStorage(HISTORY_KEY, []));
+  const [history, setHistory] = useState(
+    () => sanitizeHistoryEntries(readStorage(HISTORY_KEY, []))
+  );
   const [favorites, setFavorites] = useState(() => {
-    const loadedHistory = readStorage(HISTORY_KEY, []);
+    const loadedHistory = sanitizeHistoryEntries(readStorage(HISTORY_KEY, []));
     const loadedFavoriteIds = readStorage(FAVS_KEY, []);
     const reconciled = reconcileFavoritesWithHistory(loadedFavoriteIds, loadedHistory);
     return clampFavorites(reconciled, MAX_FAVORITES);
