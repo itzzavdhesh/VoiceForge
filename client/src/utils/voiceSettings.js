@@ -20,6 +20,37 @@ export const DEFAULT_VOICE_SETTINGS = {
 };
 
 /**
+ * Predefined presets for Voice Synthesis Settings.
+ * Each preset defines stability, temperature, and style (Style Exaggeration).
+ */
+export const VOICE_PRESETS = {
+  neutral: {
+    name: "Narrator / Neutral",
+    stability: 0.70,
+    temperature: 0.60,
+    style: 0.30,
+  },
+  excited: {
+    name: "Excited / Energetic",
+    stability: 0.40,
+    temperature: 0.95,
+    style: 0.75,
+  },
+  robotic: {
+    name: "Robotic / Flat",
+    stability: 0.95,
+    temperature: 0.10,
+    style: 0.05,
+  },
+  soft: {
+    name: "Soft / Whispering",
+    stability: 0.55,
+    temperature: 0.50,
+    style: 0.20,
+  },
+};
+
+/**
  * Reads voice settings from localStorage and returns a fully sanitized object.
  *
  * Sanitization rules (applied per key, driven by the type of the default):

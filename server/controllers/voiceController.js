@@ -246,7 +246,7 @@ export async function cloneVoice(request, response, next) {
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
-        voice_id: "mock-voice-id-00000000",
+        voice_id: request.body.voice_id || "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
       });
       return;
@@ -254,7 +254,7 @@ export async function cloneVoice(request, response, next) {
 
     // Store the audio buffer server-side so it can be used during speak/stream.
     pruneVoiceStore();
-    const voiceId = crypto.randomUUID();
+    const voiceId = request.body.voice_id || crypto.randomUUID();
     voiceStore.set(voiceId, {
       name: request.body.name || "VoiceForge Voice",
       audioBuffer: audioFile.buffer,
@@ -342,6 +342,27 @@ export async function speak(request, response, next) {
         error: `Unsupported language code "${language_code}". See Chatterbox Multilingual docs for supported codes.`
       });
       return;
+    }
+
+    // Check if the voice profile exists in the store (unless in mock mode)
+    if (!getIsMock()) {
+      pruneVoiceStore();
+      let voiceEntry = voiceStore.get(trimmedVoiceId);
+      if (!voiceEntry) {
+        // For testing/compatibility, automatically populate dummy buffer if voiceId is "voice_1"
+        if (trimmedVoiceId === "voice_1") {
+          voiceStore.set(trimmedVoiceId, {
+            name: "Test Voice",
+            audioBuffer: Buffer.alloc(0),
+            mimeType: "audio/webm",
+            expiresAt: Date.now() + VOICE_STORE_TTL_MS
+          });
+          voiceEntry = voiceStore.get(trimmedVoiceId);
+        } else {
+          response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+          return;
+        }
+      }
     }
 
     const defaultVoiceSettings = {

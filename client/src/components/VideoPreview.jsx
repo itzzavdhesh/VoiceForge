@@ -19,6 +19,31 @@ export default React.forwardRef(function VideoPreview({
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
   const ortSessionRef = useRef(null);
+  const ortRef = useRef(null);
+  const tempCanvasRef = useRef(null);
+  const isInferringRef = useRef(false);
+  const lastMouthCanvasRef = useRef(null);
+  const lastMouthCoordsRef = useRef(null);
+  const waveRef = useRef(null);
+
+  if (!tempCanvasRef.current && typeof document !== "undefined") {
+    tempCanvasRef.current = document.createElement("canvas");
+    tempCanvasRef.current.width = 96;
+    tempCanvasRef.current.height = 96;
+  }
+
+  if (!lastMouthCanvasRef.current && typeof document !== "undefined") {
+    lastMouthCanvasRef.current = document.createElement("canvas");
+    lastMouthCanvasRef.current.width = 96;
+    lastMouthCanvasRef.current.height = 96;
+  }
+
+  useEffect(() => {
+    if (!isSpeaking) {
+      lastMouthCoordsRef.current = null;
+    }
+  }, [isSpeaking]);
+
   const [modelStatus, setModelStatus] = React.useState(
     "Fallback animation ready",
   );
@@ -68,6 +93,7 @@ export default React.forwardRef(function VideoPreview({
         await faceProcessorRef.current.initialize();
 
         const ort = await import("onnxruntime-web");
+        ortRef.current = ort;
         ortSessionRef.current = await ort.InferenceSession.create(modelBytes);
         setModelStatus("ONNX Wav2Lip model loaded");
       } catch (err) {
@@ -129,28 +155,74 @@ export default React.forwardRef(function VideoPreview({
       const drawMouth = isSpeaking || isCalibratingRef.current;
       if (drawMouth) {
         let inferenceSucceeded = false;
+        const useONNX = isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current;
 
         // Try ONNX Inference first
-        if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
-          try {
-             // 1. Get Audio Features
-             const melFeatures = audioProcessorRef.current.getLatestFeatures();
-             
-             // 2. Get Face Crop
-             const landmarks = faceProcessorRef.current.detectFace(video, timestamp);
-             
-             if (melFeatures && landmarks) {
-               // TODO: Construct Tensors and run inference when real model is available
-               // const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
-               // const videoCrop = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvas);
-               // const videoTensor = ... convert videoCrop to tensor ...
-               // const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
-               // ... draw results back to canvas ...
-               
-               // inferenceSucceeded = true;
-             }
-          } catch (e) {
-             console.error("Inference loop error:", e);
+        if (useONNX) {
+          inferenceSucceeded = true; // Prevent falling back to ellipse while model runs
+          if (!isInferringRef.current) {
+            isInferringRef.current = true;
+            (async () => {
+              try {
+                const melFeatures = audioProcessorRef.current.getLatestFeatures();
+                const landmarks = faceProcessorRef.current.detectFace(video, timestamp);
+                if (melFeatures && landmarks) {
+                  const detection = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvasRef.current);
+                  if (detection) {
+                    const ort = ortRef.current;
+                    const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
+                    
+                    const floatData = new Float32Array(1 * 3 * 96 * 96);
+                    const imgData = detection.imageData.data;
+                    for (let i = 0; i < 96 * 96; i++) {
+                      floatData[i] = imgData[i * 4] / 255.0;
+                      floatData[96 * 96 + i] = imgData[i * 4 + 1] / 255.0;
+                      floatData[2 * 96 * 96 + i] = imgData[i * 4 + 2] / 255.0;
+                    }
+                    const videoTensor = new ort.Tensor('float32', floatData, [1, 3, 96, 96]);
+
+                    const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
+                    const outputName = ortSessionRef.current.outputNames[0];
+                    const outputTensor = results[outputName];
+                    const outputData = outputTensor.data;
+
+                    const tempCanvas = tempCanvasRef.current;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    const outputImageData = tempCtx.createImageData(96, 96);
+                    const outData = outputImageData.data;
+                    for (let i = 0; i < 96 * 96; i++) {
+                      const r = Math.min(255, Math.max(0, Math.round(outputData[i] * 255.0)));
+                      const g = Math.min(255, Math.max(0, Math.round(outputData[96 * 96 + i] * 255.0)));
+                      const b = Math.min(255, Math.max(0, Math.round(outputData[2 * 96 * 96 + i] * 255.0)));
+                      outData[i * 4] = r;
+                      outData[i * 4 + 1] = g;
+                      outData[i * 4 + 2] = b;
+                      outData[i * 4 + 3] = 255;
+                    }
+                    tempCtx.putImageData(outputImageData, 0, 0);
+
+                    // Cache generated mouth and coordinates
+                    const lastMouthCanvas = lastMouthCanvasRef.current;
+                    const lastCtx = lastMouthCanvas.getContext('2d');
+                    lastCtx.drawImage(tempCanvas, 0, 0);
+                    lastMouthCoordsRef.current = detection.coords;
+                  }
+                }
+              } catch (e) {
+                console.error("Inference loop error:", e);
+              } finally {
+                isInferringRef.current = false;
+              }
+            })();
+          }
+
+          // Draw the cached mouth frame if available
+          if (lastMouthCoordsRef.current) {
+            const { x, y, w, h } = lastMouthCoordsRef.current;
+            context.drawImage(lastMouthCanvasRef.current, x, y, w, h);
+          } else {
+            // If not yet cached, temporarily use ellipse
+            inferenceSucceeded = false;
           }
         }
 
@@ -181,6 +253,16 @@ export default React.forwardRef(function VideoPreview({
         }
       }
 
+      if (waveRef.current && audioProcessorRef.current) {
+        const frequencies = audioProcessorRef.current.getFrequencyData();
+        const spans = waveRef.current.querySelectorAll("span");
+        spans.forEach((span, index) => {
+          const freq = frequencies[index] || 0;
+          const height = 4 + (freq / 255.0) * 16;
+          span.style.height = `${height}px`;
+        });
+      }
+
       animationRef.current = requestAnimationFrame(draw);
     }
 
@@ -199,15 +281,16 @@ export default React.forwardRef(function VideoPreview({
         </div>
         {isSpeaking && (
           <div
+            ref={waveRef}
             className="recording-wave flex h-5 items-center gap-0.5"
             role="status"
             aria-label="Avatar speech active"
           >
-            {[14, 20, 16, 18, 12].map((height, index) => (
+            {[0, 0, 0, 0, 0].map((_, index) => (
               <span
                 key={index}
                 className="block w-[3px] bg-coral rounded-full"
-                style={{ height: `${height}px` }}
+                style={{ height: "4px" }}
               />
             ))}
           </div>

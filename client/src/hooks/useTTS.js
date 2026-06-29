@@ -1,5 +1,6 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
+import { getProfile } from "../utils/db.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -60,7 +61,7 @@ export default function useTTS() {
     try {
       const voiceSettings = loadVoiceSettings();
 
-      const response = await fetch("/api/voice/speak", {
+      let response = await fetch("/api/voice/speak", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -72,6 +73,40 @@ export default function useTTS() {
           voice_settings: voiceSettings,
         }),
       });
+
+      if (response.status === 404) {
+        // Self-healing fallback:
+        // 1. Look up the voice profile in IndexedDB
+        const profile = await getProfile(voiceId);
+        if (profile && profile.audioBlob) {
+          // 2. Quietly re-clone (POST /api/voice/clone)
+          const formData = new FormData();
+          formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
+          formData.append("name", profile.name);
+          formData.append("voice_id", voiceId);
+
+          const cloneResponse = await fetch("/api/voice/clone", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (cloneResponse.ok) {
+            // 3. Retry the speak request
+            response = await fetch("/api/voice/speak", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                text,
+                voice_id: voiceId,
+                language_code,
+                voice_settings: voiceSettings,
+              }),
+            });
+          }
+        }
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
