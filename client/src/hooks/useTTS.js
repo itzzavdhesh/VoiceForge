@@ -14,51 +14,12 @@ export default function useTTS() {
   const [audioUrl, setAudioUrl] = React.useState("");
   const [engine, setEngine] = React.useState("chatterbox");
 
-  /**
-   * Triggers local browser SpeechSynthesis as a fallback engine.
-   *
-   * @param {string} text The text to read.
-   * @param {string} languageCode BCP-47 language tag to use.
-   * @returns {Promise<void>} Resolves when speech completes.
-   */
-  function browserSpeak(text, languageCode) {
-    return new Promise((resolve, reject) => {
-      if (!("speechSynthesis" in window)) {
-        reject(new Error("Speech synthesis not supported"));
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-
-      if (languageCode) {
-        utterance.lang = languageCode;
-      }
-
-      utterance.onend = resolve;
-      utterance.onerror = reject;
-
-      window.speechSynthesis.speak(utterance);
-    });
-  }
-
-  /**
-   * Generates cloned speech for the given text using the selected voice profile.
-   * Automatically attempts browser SpeechSynthesis fallback if the server request fails.
-   *
-   * @param {object} params Parameter payload.
-   * @param {string} params.text The text to synthesize.
-   * @param {string} params.voiceId The ID of the cloned voice profile.
-   * @param {string} [params.language_code] Chatterbox/BCP-47 language code.
-   * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
-   */
-  async function speak({ text, voiceId, language_code }) {
+  async function speak({ text, voiceId, language_code, voice_settings_override }) {
     setError("");
     setStatus("speaking");
 
     try {
-      const voiceSettings = loadVoiceSettings();
+      const voiceSettings = voice_settings_override || loadVoiceSettings();
 
       const response = await fetch("/api/voice/speak", {
         method: "POST",
