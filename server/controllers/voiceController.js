@@ -275,7 +275,6 @@ export async function cloneVoice(request, response, next) {
 // Keys are unguessable UUIDs (see speak) and entries are single-use.
 const pendingStreams = new Map();
 
-// Remove a pending stream and clear its expiry timer so timers do not pile up.
 /**
  * Clears and removes a pending speech stream.
  *
@@ -290,6 +289,18 @@ function deletePendingStream(speechId) {
   clearTimeout(entry.timeout);
   pendingStreams.delete(speechId);
   return entry;
+}
+
+// Drop the oldest entries until the store is below its configured cap. Map
+// preserves insertion order, so the first key is always the oldest.
+function evictOldestPendingStreams() {
+  while (pendingStreams.size >= PENDING_STREAMS_MAX) {
+    const oldestKey = pendingStreams.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    deletePendingStream(oldestKey);
+  }
 }
 
 /**
