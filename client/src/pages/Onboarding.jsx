@@ -3,7 +3,6 @@ import React from "react";
 import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
-import { hasApiKey } from "../utils/apiKeyStorage.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 
 import {
@@ -88,15 +87,6 @@ function Step2VoiceSettings({ onBack, onContinue }) {
     };
   }
 
-  function toggleSpeakerBoost() {
-    setSettings((prev) => {
-      const next = { ...prev, use_speaker_boost: !prev.use_speaker_boost };
-      persistVoiceSettings(next);
-      flashSaved();
-      return next;
-    });
-  }
-
   function resetToDefaults() {
     const defaults = { ...DEFAULT_VOICE_SETTINGS };
     setSettings(defaults);
@@ -113,7 +103,7 @@ function Step2VoiceSettings({ onBack, onContinue }) {
             Voice Workspace Parameters
           </h3>
           <p className="mt-1 text-sm text-ink/60 dark:text-muted">
-            Fine-tune how ElevenLabs generates your cloned speech. Changes are
+             Fine-tune how Chatterbox generates your cloned speech. Changes are
             saved instantly and shared across all tabs.
           </p>
         </div>
@@ -142,11 +132,11 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           onChange={updateSlider("stability")}
         />
         <VoiceSlider
-          id="ob-similarity"
-          label="Similarity Boost"
-          description="Higher values make the output closer to the original reference voice. Very high values may introduce artefacts."
-          value={settings.similarity_boost}
-          onChange={updateSlider("similarity_boost")}
+          id="ob-temperature"
+          label="Temperature"
+          description="Lower values are steadier; higher values allow more variation in the generated speech."
+          value={settings.temperature}
+          onChange={updateSlider("temperature")}
         />
         <VoiceSlider
           id="ob-style"
@@ -155,41 +145,6 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           value={settings.style}
           onChange={updateSlider("style")}
         />
-
-        {/* ── Speaker Boost toggle ── */}
-        <div className="flex items-center justify-between rounded-lg border border-ink/10 p-4 dark:border-border">
-          <div>
-            <p className="text-sm font-semibold text-ink dark:text-neutral-200">
-              Speaker Boost
-            </p>
-            <p className="mt-0.5 text-xs text-ink/55 dark:text-muted">
-              Boosts similarity to the reference speaker. Recommended on for
-              most voices; disable if you hear metallic artefacts.
-            </p>
-          </div>
-          <button
-            id="ob-speaker-boost"
-            type="button"
-            role="switch"
-            aria-checked={settings.use_speaker_boost}
-            onClick={toggleSpeakerBoost}
-            className={[
-              "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
-              "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-moss focus:ring-offset-2 dark:focus:ring-glow dark:focus:ring-offset-black",
-              settings.use_speaker_boost
-                ? "bg-moss dark:bg-glow"
-                : "bg-neutral-300 dark:bg-neutral-600",
-            ].join(" ")}
-            aria-label="Toggle Speaker Boost"
-          >
-            <span
-              className={[
-                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
-                settings.use_speaker_boost ? "translate-x-5" : "translate-x-0",
-              ].join(" ")}
-            />
-          </button>
-        </div>
       </div>
 
       {/* ── Info note ── */}
@@ -236,14 +191,31 @@ function Step2VoiceSettings({ onBack, onContinue }) {
   );
 }
 
+const MIN_NAME_LENGTH = 3;
+const MAX_NAME_LENGTH = 100;
+
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null);
+  const [recordingDuration, setRecordingDuration] = React.useState(0);
+
+  function handleRecordingReady(blob, duration = 0) {
+    setRecording(blob);
+    setRecordingDuration(duration);
+  }
+
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
+<<<<<<< HEAD
+  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+=======
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    hasServerKey: false,
+  });
+>>>>>>> 7eeb8da (refactor: reuse voice name length constants)
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -252,18 +224,24 @@ export default function Onboarding({ onReady }) {
       .catch((err) => console.error("Failed to fetch server status:", err));
   }, []);
 
+  // Chatterbox needs no API key — just ensure the local server is reachable.
   const hasKey = React.useMemo(() => {
-    return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
+    return serverStatus.isMock || Boolean(serverStatus.space);
   }, [serverStatus]);
-
-  // Derived validation: compute an error message from the current voiceName.
-  // Using a constant (not useState) because the value is always in sync with voiceName.
+  
   const nameError = React.useMemo(() => {
-    const trimmed = voiceName.trim();
-    if (trimmed.length === 0) return "Voice name is required.";
-    if (trimmed.length > 100) return "Voice name must be 100 characters or fewer.";
-    return "";
-  }, [voiceName]);
+  const trimmed = voiceName.trim();
+  if (trimmed.length === 0) {
+    return "Voice name is required.";
+  }
+  if (trimmed.length < MIN_NAME_LENGTH) {
+    return `Voice name must be at least ${MIN_NAME_LENGTH} characters.`;
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return `Voice name must be ${MAX_NAME_LENGTH} characters or fewer.`;
+  }
+  return "";
+}, [voiceName]);
 
 
   // Track the highest milestone step the user is allowed to navigate to
@@ -288,7 +266,7 @@ export default function Onboarding({ onReady }) {
   const stepContent = {
     1: {
       title: "Create your voice profile",
-      description: "Record a short, consent-based reference clip. VoiceForge sends it to ElevenLabs through your local server and saves the returned voice ID in this browser.",
+      description: "Record a short, consent-based reference clip. VoiceForge sends it via the Chatterbox engine on Hugging Face through your local server and saves the returned voice ID in this browser.",
       labels: ["Record", "Clone", "Next"]
     },
     2: {
@@ -313,8 +291,9 @@ export default function Onboarding({ onReady }) {
   }, [maxUnlockedStep]);
 
   async function handleClone() {
-    // 1. Strict validation guards: Don't run without API key, a recording, or a valid name
+    // 1. Strict validation guards: recording and a valid name are required.
     if (!hasKey || !recording) return;
+    if (recordingDuration < 10) return;
     if (nameError) return; // block on empty / whitespace / over-limit name
 
     try {
@@ -415,13 +394,13 @@ export default function Onboarding({ onReady }) {
             <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
               <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
               <span>
-                No ElevenLabs API key found. Go to the{" "}
-                <strong>Settings</strong> tab to add your key before cloning.
+              No voice engine available. Ensure your local server is running on port 3001. Check your{" "}
+                <strong>.env</strong> file and the README.
               </span>
             </div>
           )}
 
-          <VoiceRecorder onRecordingReady={setRecording} disabled={isCloning} />
+          <VoiceRecorder onRecordingReady={handleRecordingReady} disabled={isCloning} />
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <label className="block text-sm font-bold text-ink dark:text-neutral-100" htmlFor="voice-name">
@@ -433,7 +412,7 @@ export default function Onboarding({ onReady }) {
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
-                maxLength={100}
+                maxLength={MAX_NAME_LENGTH}
                 aria-describedby="voice-name-feedback"
                 aria-invalid={nameError ? "true" : undefined}
                 className={[
@@ -448,7 +427,7 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || Boolean(nameError)}
+                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCloning && <Loader2 className="animate-spin" size={18} />}
@@ -477,9 +456,9 @@ export default function Onboarding({ onReady }) {
                     : "text-ink/45 dark:text-muted",
                 ].join(" ")}
                 aria-live="polite"
-                aria-label={`${voiceName.length} of 100 characters used`}
+                aria-label={`${voiceName.length} of ${MAX_NAME_LENGTH} characters used`}
               >
-                {voiceName.length}/100
+                {voiceName.length}/{MAX_NAME_LENGTH}
               </span>
             </div>
 

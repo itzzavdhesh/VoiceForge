@@ -106,10 +106,10 @@ export default function VoiceForge() {
   }, [inputText, showToast]);
 
   const handleQuickReply = useCallback((phrase) => {
-    setInputText(phrase);
-    textareaRef.current?.focus();
-    showToast("Quick reply loaded", "success");
-  }, [showToast]);
+    speak(phrase);
+    addMessage(phrase);
+    showToast("Quick reply sent", "success");
+  }, [speak, addMessage, showToast]);
 
   const handleKeyDown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -232,7 +232,7 @@ export default function VoiceForge() {
           onUnpin={toggleFavorite}
         />
 
-        <QuickReplies onSelect={handleQuickReply} />
+        <QuickReplies onSelect={handleQuickReply} showToast={showToast} />
 
         <div className="flex flex-1 flex-col gap-3 overflow-auto p-5 dark:bg-black">
           <div className="flex items-center justify-between">

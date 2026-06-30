@@ -9,15 +9,14 @@
 export const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
 
 /**
- * Canonical defaults for every ElevenLabs voice-settings field.
+ * Canonical defaults for every Chatterbox voice-settings field.
  * Components that only surface a subset of these sliders still load the full
  * object so their writes never drop unknown fields from storage.
  */
 export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
-  similarity_boost: 0.8,
-  style: 0.2,
-  use_speaker_boost: true,
+  style: 0.5,
+  temperature: 0.8,
 };
 
 /**

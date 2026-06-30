@@ -122,11 +122,11 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             onChange={updateSetting("stability")}
           />
           <SliderRow
-            id="vqs-similarity"
-            label="Similarity Boost"
-            description="Higher → closer to original voice. May add artifacts at max."
-            value={settings.similarity_boost}
-            onChange={updateSetting("similarity_boost")}
+            id="vqs-temperature"
+            label="Temperature"
+            description="Lower → steadier output. Higher → more variation."
+            value={settings.temperature}
+            onChange={updateSetting("temperature")}
           />
           <SliderRow
             id="vqs-style"
@@ -137,7 +137,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           />
 
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
-            Changes apply to ElevenLabs voice synthesis.{" "}
+            Changes apply to Chatterbox voice synthesis.{" "}
             <span className="font-medium text-neutral-500 dark:text-neutral-400">
               Full controls in Settings →
             </span>

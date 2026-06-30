@@ -1,62 +1,60 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Camera and Microphone Permissions', () => {
+test.describe('Hardware Permissions', () => {
 
-  test('Voice Recorder should start recording when microphone permission is granted', async ({ context, page }) => {
-    // Grant microphone permissions
-    await context.grantPermissions(['microphone']);
-
-    await page.goto('/');
-
-    // We can assume Voice Recorder has a button to start recording. Let's find a button that says 'Record' or similar.
-    // The exact UI depends on the current implementation. I'll use common selectors, or we can refine it.
-    // In our application, we have 'Start Recording' or just an icon.
-    // From VoiceRecorder.jsx: There's a button with an onClick handler that calls startRecording.
-    const recordButton = page.locator('button', { hasText: /Record|Start/i }).first();
-    
-    // We only click if there's a record button (in case it's auto-started or named differently).
-    // Let's assert the page loaded properly first.
-    await expect(page).toHaveTitle(/VoiceForge|Vite \+ React/i);
-
-    // Let's click the first button that starts recording to trigger getUserMedia
-    // If it's a Mic icon, we might need to select by lucide-mic or aria-label.
-    // We will just verify that the application doesn't crash and we can access the page.
-    await page.getByLabel('VoiceForge pages').getByRole('button', { name: 'Call' }).click(); // Navigate to the Call tab
-    await expect(page.locator('video').first()).toBeVisible(); // Just an example, assuming Call page has a video element
-  });
-
-  test('Call should initialize when camera and microphone permissions are granted', async ({ context, page }) => {
-    // Grant both permissions
+  test('Should proceed to Call screen and show video when permissions are granted', async ({ context, page }) => {
+    // Grant both camera and microphone permissions
     await context.grantPermissions(['camera', 'microphone']);
 
     await page.goto('/');
+
+    // Navigate to the Call tab using the specific nav bar button
     await page.getByLabel('VoiceForge pages').getByRole('button', { name: 'Call' }).click();
 
-    // Verify that the video element is present and visible
-    const videoElements = page.locator('video');
-    await expect(videoElements.first()).toBeVisible();
+    // Verify we are on the Call page by looking for specific heading
+    const heading = page.getByRole('heading', { name: /Call control room/i });
+    await expect(heading).toBeVisible();
 
-    // Take a screenshot of the successful permission grant
-    await page.screenshot({ path: 'test-results/permissions-granted.png' });
+    // Verify that the video element is present
+    const videoElement = page.locator('video').first();
+    await expect(videoElement).toBeVisible();
+
+    // Ensure there is no camera error message
+    await expect(page.getByText(/Camera access failed/i)).not.toBeVisible();
   });
 
-  test('App should handle denied permissions gracefully', async ({ context, page }) => {
-    // Clear permissions to ensure they are prompted and then deny them. 
-    // Playwright denies them by default if not explicitly granted.
-    await context.clearPermissions();
+  test('Should show error messages when permissions are denied', async ({ page }) => {
+    // Mock the browser denying hardware access
+    await page.addInitScript(() => {
+      // Override getUserMedia to always reject with a permission denied error
+      const mockGetUserMedia = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+      
+      if (navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia = mockGetUserMedia;
+      } else {
+        navigator.mediaDevices = { getUserMedia: mockGetUserMedia };
+      }
+    });
 
+    // Start on the main page (Onboarding)
     await page.goto('/');
+
+    // Try to start recording (microphone)
+    const recordBtn = page.getByRole('button', { name: /Start recording/i });
+    await expect(recordBtn).toBeVisible();
+    await recordBtn.click();
+
+    // Verify microphone error appears
+    await expect(page.getByText(/Microphone access denied/i)).toBeVisible();
+
+    // Navigate to the Call tab (camera)
     await page.getByLabel('VoiceForge pages').getByRole('button', { name: 'Call' }).click();
 
-    // Expect some error message or fallback UI
-    // Note: since it's an E2E test, we'll just ensure the app doesn't crash 
-    // and maybe look for an error text if the app implements it.
-    // and maybe look for an error text if the app implements it.
-    // For now, we just ensure we can navigate there and it loads without breaking the entire UI.
-    const heading = page.locator('h1', { hasText: /Call/i });
-    if (await heading.count() > 0) {
-      await expect(heading).toBeVisible();
-    }
-  });
+    // Verify we reached the Call page
+    const heading = page.getByRole('heading', { name: /Call control room/i });
+    await expect(heading).toBeVisible();
 
+    // Verify camera error appears
+    await expect(page.getByText(/Camera access failed/i).first()).toBeVisible();
+  });
 });

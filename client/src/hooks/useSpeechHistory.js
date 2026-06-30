@@ -128,9 +128,13 @@ const addMessage = useCallback((text) => {
   const timestamp = Date.now();
 
   setSessionTranscript((prev) => [
-    ...prev,
-    { text: trimmed, timestamp },
-  ]);
+  ...prev,
+  {
+    text: trimmed,
+    timestamp,
+    status: "success",
+  },
+]);
 
   setHistory((prev) => {
     // Check existing message
@@ -138,14 +142,14 @@ const addMessage = useCallback((text) => {
 
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
-    const entry = existing
+    const updatedEntry = existing
       ? { ...existing, timestamp: Date.now() }
       : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
 
     // Move duplicate to top instead of recreating
     const updated = [
-      entry,
-      ...prev.filter((m) => m.id !== entry.id),
+      updatedEntry,
+      ...prev.filter((m) => m.id !== updatedEntry.id),
     ];
 
     return updated.slice(0, MAX_HISTORY);

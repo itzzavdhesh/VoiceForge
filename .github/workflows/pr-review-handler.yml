@@ -141,7 +141,9 @@ jobs:
               'joyprakashk',
               'rushi-k12',
               'itzzavdheshh',
-              'vedhapprakashni'
+              'Nitya-003',
+              '4f4d',
+              'lovestaco'
             ];
             const mentorLabelMap = {
               'sabeenaviklar':  'mentor:sabeenaviklar',
@@ -153,7 +155,9 @@ jobs:
               'joyprakashk':    'mentor:joyprakashk',
               'rushi-k12':      'mentor:rushi-k12',
               'itzzavdheshh':    'mentor:itzzavdheshh',
-              'vedhapprakashni': 'mentor:vedhapprakashni'
+              'Nitya-003':      'mentor:Nitya-003',
+              '4f4d':           'mentor:4f4d',
+              'lovestaco':      'mentor:lovestaco'
             };
             const ADMINS = ['itzzavdhesh'];
             const STATUS_CONTEXT = 'voiceforge/mentor-approved';
@@ -182,13 +186,14 @@ jobs:
               return;
             }
 
-            // 3. Build a map of latest review states per user
+            // 3. Build a map of latest review states per user (normalized to uppercase)
             const latestReviewByUser = {};
             for (const review of reviews) {
               const login = review.user?.login?.toLowerCase();
               if (!login) continue;
-              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+              latestReviewByUser[login] = review.state?.toUpperCase(); // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
             }
+
 
             // Helper: ensure a label exists in the repo
             async function ensureLabel(name, color, description) {

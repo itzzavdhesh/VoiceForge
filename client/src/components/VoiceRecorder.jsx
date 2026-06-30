@@ -1,12 +1,18 @@
 // Handles microphone permission, short reference recording, playback, and upload readiness.
 import React from "react";
-import { Mic, Square, Upload, CircleAlert } from "lucide-react";
+import { Mic, Square, Upload, CircleAlert, Loader2, FileUp } from "lucide-react";
+import { extractAudioFromFile } from "../utils/audioExtractor.js";
 
 export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [isRecording, setIsRecording] = React.useState(false);
+  const [isInitializing, setIsInitializing] = React.useState(false);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
+  const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
+  const [isExtracting, setIsExtracting] = React.useState(false);
+  
+  const fileInputRef = React.useRef(null);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -17,10 +23,55 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const audioCtxRef = React.useRef(null);
   const rafRef = React.useRef(null);
   const errorTimerRef = React.useRef(null);
+  const didFinalizeRef = React.useRef(false);
+
+  // Common stop cleanup function
+  function handleStopCleanup({ emitReady = true } = {}) {
+    if (didFinalizeRef.current) return;
+    didFinalizeRef.current = true;
+
+    window.clearInterval(timerRef.current);
+    setIsRecording(false);
+
+    // Stop stream tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {
+          console.warn("Failed to stop track:", e);
+        }
+      });
+      streamRef.current = null;
+    }
+
+    const hasRecordingData = chunksRef.current.some((chunk) => chunk.size > 0);
+    if (!emitReady || !hasRecordingData) {
+      onRecordingReady(null);
+      return;
+    }
+
+    // Create the final audio Blob
+    const blob = new Blob(chunksRef.current, {
+      type: recorderRef.current?.mimeType || "audio/webm"
+    });
+    
+    const url = URL.createObjectURL(blob);
+    setAudioUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return url;
+    });
+
+    onRecordingReady(blob, durationRef.current);
+  }
 
   async function startRecording() {
+    if (isInitializing || isRecording) return;
+    didFinalizeRef.current = false;
+    setIsInitializing(true);
     setRecorderError("");
     setDuration(0);
+    durationRef.current = 0;
     setAudioUrl((previous) => {
       if (previous) URL.revokeObjectURL(previous);
       return "";
@@ -32,9 +83,21 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       streamRef.current = stream;
       chunksRef.current = [];
 
+      // Detect support for audio/webm
+      let mimeType = "audio/webm";
+      if (typeof MediaRecorder.isTypeSupported === "function") {
+        if (!MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = ""; // Let browser choose default format
+        }
+      }
+
       let recorder;
       try {
-        recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        if (mimeType) {
+          recorder = new MediaRecorder(stream, { mimeType });
+        } else {
+          recorder = new MediaRecorder(stream);
+        }
       } catch (mimeError) {
         try {
           recorder = new MediaRecorder(stream);
@@ -46,35 +109,42 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        window.clearInterval(timerRef.current);
-
-        if (!isMountedRef.current) {
-          return;
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
         }
-
-        setIsRecording(false);
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        const url = URL.createObjectURL(blob);
-        setAudioUrl((previous) => {
-          if (previous) URL.revokeObjectURL(previous);
-          return url;
-        });
-        onRecordingReady(blob);
-        streamRef.current?.getTracks().forEach((track) => track.stop());
       };
 
-      recorder.start();
+      recorder.onstop = () => {
+        if (!isMountedRef.current) return;
+        handleStopCleanup();
+      };
+
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder runtime error:", event.error);
+        if (!isMountedRef.current) return;
+        setRecorderError(`Recording error: ${event.error?.message || "Unknown error"}`);
+        handleStopCleanup({ emitReady: false });
+      };
+
+      // Start recording with 250ms timeslice to ensure continuous chunk delivery
+      recorder.start(250);
       setIsRecording(true);
+
       timerRef.current = window.setInterval(() => {
-        setDuration((prev) => prev + 1);
+        setDuration((prev) => {
+          const next = prev + 1;
+          durationRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch (err) {
       window.clearInterval(timerRef.current);
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch (e) {}
+        });
         streamRef.current = null;
       }
       setIsRecording(false);
@@ -89,11 +159,52 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       setRecorderError(friendlyMessage);
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
       errorTimerRef.current = setTimeout(() => setRecorderError(""), 6000);
+    } finally {
+      setIsInitializing(false);
     }
   }
 
   function stopRecording() {
-    recorderRef.current?.stop();
+    try {
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        recorderRef.current.stop();
+      } else {
+        handleStopCleanup();
+      }
+    } catch (err) {
+      console.error("Failed to stop MediaRecorder:", err);
+      handleStopCleanup();
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl("");
+    setRecorderError("");
+    onRecordingReady(null);
+    setDuration(0);
+    durationRef.current = 0;
+    
+    setIsExtracting(true);
+    
+    try {
+      const { blob, duration } = await extractAudioFromFile(file);
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setDuration(duration);
+      durationRef.current = duration;
+      onRecordingReady(blob, duration);
+    } catch (err) {
+      setRecorderError(err.message || String(err));
+    } finally {
+      setIsExtracting(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   React.useEffect(() => {
@@ -101,90 +212,110 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       isMountedRef.current = false;
       window.clearInterval(timerRef.current);
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch (e) {}
+        });
+      }
     };
   }, []);
 
   React.useEffect(() => {
-    return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
   }, [audioUrl]);
- 
+
   React.useEffect(() => {
-  if (!isRecording) {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    if (analyserRef.current) analyserRef.current.disconnect();
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      audioCtxRef.current.close();
-    }
-    analyserRef.current = null;
-    audioCtxRef.current = null;
-    setBarHeights([18, 30, 42, 30, 18]);
-    return;
-  }
-
-  const stream = streamRef.current;
-  if (!stream) return;
-
-  let cancelled = false;
-
-  (async () => {
-    try {
-      const audioCtx = new AudioContext();
-      await audioCtx.resume();
-      if (cancelled) {
-        audioCtx.close();
-        return;
-      }
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      audioCtxRef.current = audioCtx;
-      analyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const bucketSize = Math.floor(dataArray.length / 5);
-
-      const tick = () => {
-        analyser.getByteFrequencyData(dataArray);
-        const heights = Array.from({ length: 5 }, (_, i) => {
-          const slice = dataArray.slice(i * bucketSize, (i + 1) * bucketSize);
-          const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-          return Math.max(8, Math.round(Math.sqrt(avg / 255) * 48));
-        });
-        setBarHeights(heights);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-
-      rafRef.current = requestAnimationFrame(tick);
-    } catch (err) {
-      // AudioContext/AnalyserNode failed — fall back to static bars silently
-      console.warn("Waveform animation unavailable:", err);
+    if (!isRecording) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      try {
+        if (analyserRef.current) analyserRef.current.disconnect();
+      } catch (e) {}
+      try {
+        if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+          audioCtxRef.current.close();
+        }
+      } catch (e) {}
+      analyserRef.current = null;
+      audioCtxRef.current = null;
       setBarHeights([18, 30, 42, 30, 18]);
+      return;
     }
-  })();
 
-  return () => {
-    cancelled = true;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    if (analyserRef.current) analyserRef.current.disconnect();
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      audioCtxRef.current.close();
-    }
-    analyserRef.current = null;
-    audioCtxRef.current = null;
-  };
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error("Web Audio API is not supported in this browser.");
+        }
+        const audioCtx = new AudioContextClass();
+        await audioCtx.resume();
+        if (cancelled) {
+          audioCtx.close();
+          return;
+        }
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        audioCtxRef.current = audioCtx;
+        analyserRef.current = analyser;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const bucketSize = Math.floor(dataArray.length / 5);
+
+        const tick = () => {
+          if (cancelled) return;
+          analyser.getByteFrequencyData(dataArray);
+          const heights = Array.from({ length: 5 }, (_, i) => {
+            const slice = dataArray.slice(i * bucketSize, (i + 1) * bucketSize);
+            const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+            return Math.max(8, Math.round(Math.sqrt(avg / 255) * 48));
+          });
+          setBarHeights(heights);
+          rafRef.current = requestAnimationFrame(tick);
+        };
+
+        rafRef.current = requestAnimationFrame(tick);
+      } catch (err) {
+        console.warn("Waveform animation unavailable:", err);
+        setBarHeights([18, 30, 42, 30, 18]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      try {
+        if (analyserRef.current) analyserRef.current.disconnect();
+      } catch (e) {}
+      try {
+        if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+          audioCtxRef.current.close();
+        }
+      } catch (e) {}
+      analyserRef.current = null;
+      audioCtxRef.current = null;
+    };
   }, [isRecording]);
 
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Record a 10-second reference</h2>
+          <h2 className="text-xl font-bold">Record or upload a 10-second reference</h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-ink/70 dark:text-muted">
             Use your own voice or a trusted reference speaker with consent. Keep
-            background noise low.
+            background noise low. You can also upload a video (.mp4, .mov) or audio file.
           </p>
         </div>
         <span className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
@@ -196,26 +327,48 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
         <button
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={disabled}
+          disabled={disabled || isInitializing}
           className={`inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 font-bold text-white transition ${
             isRecording
               ? "bg-coral hover:bg-coral/90"
               : "bg-moss hover:bg-moss/90"
           } disabled:cursor-not-allowed disabled:opacity-50`}
         >
-          {isRecording ? (
+          {isInitializing ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : isRecording ? (
             <Square size={18} aria-hidden="true" />
           ) : (
             <Mic size={18} aria-hidden="true" />
           )}
-          {isRecording ? "Stop recording" : "Start recording"}
+          {isInitializing ? "Initializing..." : isRecording ? "Stop recording" : "Start recording"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || isRecording || isInitializing || isExtracting}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-cloud px-5 py-3 font-bold text-ink transition hover:bg-ink/10 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+        >
+          {isExtracting ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : (
+            <FileUp size={18} aria-hidden="true" />
+          )}
+          {isExtracting ? "Extracting..." : "Upload file"}
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept="audio/*,video/mp4,video/quicktime"
+          className="hidden"
+        />
 
         <div
           className="recording-wave flex h-12 flex-1 items-center gap-1 rounded-md border border-ink/10 bg-cloud px-4 dark:border-border dark:bg-black"
           aria-hidden="true"
         >
-
           {barHeights.map((height, index) => (
             <span
               key={index}
@@ -233,6 +386,13 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           </audio>
         )}
       </div>
+      
+      {audioUrl && duration < 10 && (
+        <div className="mt-4 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-sm font-semibold text-ink flex items-center gap-2 dark:bg-amber-900/20 dark:text-amber-300">
+          <CircleAlert size={18} aria-hidden="true" className="text-amber-500" />
+          <span>Recording is too short. Please record at least 10 seconds for best results.</span>
+        </div>
+        )}
 
       {recorderError && (
         <div role="alert" aria-live="polite" className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2">
@@ -241,7 +401,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           <button
             type="button"
             onClick={startRecording}
-            disabled={disabled}
+            disabled={disabled || isInitializing}
             className="text-xs underline hover:no-underline shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Try again
@@ -255,7 +415,6 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
             aria-label="Dismiss error"
             className="text-xs font-bold shrink-0"
           >
-
             ✕
           </button>
         </div>
