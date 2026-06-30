@@ -43,7 +43,10 @@ const MOCK_AUDIO_MP3 = Buffer.from(
   "base64"
 );
 
-const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
+const STREAM_SECRET = process.env.STREAM_SECRET?.trim() || (() => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[VoiceForge] FATAL: STREAM_SECRET must be set in production.");
+  }
   console.warn(
     "[VoiceForge] STREAM_SECRET not set - using ephemeral key. " +
     "All speech tokens will be invalidated on server restart. " +
@@ -128,7 +131,7 @@ function decryptToken(token) {
     if (error.status === 403) {
       throw error;
     }
-    const err = new Error("Invalid or tampered speech token.");
+    const err = new Error("Audio link expired — please generate speech again.");
     err.status = 400;
     throw err;
   }
