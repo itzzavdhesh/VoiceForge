@@ -158,7 +158,7 @@ export default function VoiceForge() {
   }
 
   return (
-    <div className="relative flex h-[calc(100vh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100vh-65px)]">
+    <div className="relative flex h-[calc(100dvh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100dvh-65px)]">
       {/* Mobile history drawer overlay */}
       {historyOpen && (
         <div

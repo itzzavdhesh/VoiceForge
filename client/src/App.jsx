@@ -96,7 +96,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+    <div className="min-h-dvh flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       
       {/* Global Header */}
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-white/70 backdrop-blur-md dark:border-border dark:bg-surface/70">
