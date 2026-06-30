@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucid
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { API_BASE_URL } from "../utils/apiConfig.js";
 
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -208,23 +209,44 @@ export default function Onboarding({ onReady }) {
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-<<<<<<< HEAD
   const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
-=======
-  const [serverStatus, setServerStatus] = React.useState({
-    isMock: false,
-    hasServerKey: false,
-  });
->>>>>>> 7eeb8da (refactor: reuse voice name length constants)
 
   React.useEffect(() => {
-    fetch("/api/voice/status")
-      .then((res) => res.json())
-      .then((data) => setServerStatus(data))
-      .catch((err) => console.error("Failed to fetch server status:", err));
-  }, []);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
-  // Chatterbox needs no API key — just ensure the local server is reachable.
+  fetch(`${API_BASE_URL}/api/voice/status`, { signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        throw new Error("Server returned non-JSON response");
+      }
+
+      return res.json();
+    })
+    .then((data) => {
+      setServerStatus(data);
+    })
+    .catch((err) => {
+      if (err.name === "AbortError") {
+        console.error("Failed to fetch server status (timeout or cancelled):", err);
+      } else {
+        console.error("Failed to fetch server status:", err);
+      }
+      // Do NOT call setServerStatus here — leave previous/default state intact
+    });
+
+  return () => {
+    clearTimeout(timeoutId);
+    controller.abort();
+  };
+}, []);
   const hasKey = React.useMemo(() => {
     return serverStatus.isMock || Boolean(serverStatus.space);
   }, [serverStatus]);

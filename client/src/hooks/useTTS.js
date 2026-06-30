@@ -1,5 +1,6 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
+import { API_BASE_URL } from "../utils/apiConfig.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -60,7 +61,7 @@ export default function useTTS() {
     try {
       const voiceSettings = loadVoiceSettings();
 
-      const response = await fetch("/api/voice/speak", {
+      const response = await fetch(`${API_BASE_URL}/api/voice/speak`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
