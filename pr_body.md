@@ -1,14 +1,43 @@
-## Description
-This PR implements a dedicated multilingual voice selection system that unlocks all supported languages via the Chatterbox Multilingual TTS engine in VoiceForge.
+## 🚀 Program
+GSSoC
 
-## Key Changes
-- **Unified Language Configuration**: Created a centralized language registry for both the frontend and backend to support all 23 Chatterbox languages with flags, localized names, and regions.
-- **Premium Language Selector**: Built a highly interactive, searchable `LanguageSelector` React component with region grouping, dark mode support, and an "Auto-detect" option.
-- **Frontend Integration**: Replaced the legacy hardcoded `<select>` dropdowns across the Call, Compose, and Settings pages with the new centralized component.
-- **Backend Validation**: The `voiceController.js` server now strictly validates the `language_code` to ensure unsupported codes are immediately rejected.
-- **Storage Migration**: Automatically migrates the legacy storage keys to a unified `voiceforge:language` state.
+## 📝 Description
+This PR significantly reduces TTS request latency by caching the Hugging Face `@gradio/client` instance instead of re-instantiating it on every single speech request. 
 
-## Testing
-- Verified language persistence across Call, Compose, and Settings pages.
-- Verified auto-detect behavior triggers properly without crashing the server payload.
-- Verified backend rejects invalid language configurations with a 400 response.
+Connecting to a Gradio space involves fetching metadata, discovering API endpoints, and establishing a WebSocket connection. By caching the client at the module level in `voiceController.js`, we skip this massive overhead on subsequent requests.
+
+Key changes:
+- Created module-level cache variables `cachedGradioClient` and `currentSpaceIdentifier`.
+- Modified `generateClonedVoice()` to initialize the client only on the first request, or if the `VOICE_ENGINE_SPACE` changes.
+- Added a `try/catch` block around the `app.predict` call to immediately clear the cached instance if the WebSocket connection drops or expires, ensuring the next request forces a fresh reconnection.
+
+## 🔗 Related Issue
+Closes #440
+
+## 🔄 Type of Change
+- [ ] 🐛 Bug fix
+- [ ] ✨ New feature
+- [ ] 🔍 SEO improvement
+- [ ] 🎨 Style / UI improvement
+- [ ] ♿ Accessibility improvement
+- [ ] 📝 Documentation
+- [ ] ⚙️ CI / configuration
+- [x] 🧹 Refactor / cleanup
+- [x] ⚡ Performance Optimization
+
+## 🧪 How to Test
+1. Start the VoiceForge backend server.
+2. Trigger a voice cloning request to the `/api/voice/speak` endpoint via the web UI.
+3. Note the response time of the *first* request (it will include the Gradio client initialization overhead).
+4. Trigger a *second* request. It should respond significantly faster because it reuses the cached client.
+5. You can artificially disrupt your network connection mid-request to verify the cache clears and automatically recovers on the next successful call.
+
+## 📸 Screenshots (if applicable)
+N/A
+
+## ✅ Checklist
+- [x] I am contributing under GSSoC, NSOC, SSOC, or ELUSOC
+- [x] My code follows the project's existing style
+- [x] I have tested my changes locally
+- [x] I have linked the related issue above
+- [x] My PR title follows Conventional Commits format (e.g. `perf: cache gradio client instance to reduce latency`)
