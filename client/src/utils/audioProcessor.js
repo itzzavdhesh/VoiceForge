@@ -27,16 +27,31 @@ export class AudioProcessor {
       await this.audioContext.resume();
     }
 
-    // Prevent re-creating the source node if it already exists for this element
-    if (!audioElement.dataset.sourceCreated) {
+    if (this.analyzer) {
+      this.analyzer.stop();
+      this.analyzer = null;
+    }
+
+    // Clean up previous source node connection to prevent memory leak
+    if (this.source) {
+      this.source.disconnect();
+      this.source = null;
+    }
+
+    // Prevent re-creating the source node if it already exists for this element.
+    // We map the node to the element's lifecycle using a direct property.
+    if (audioElement._audioSourceNode) {
+      this.source = audioElement._audioSourceNode;
+      try {
+        this.source.connect(this.audioContext.destination);
+      } catch (e) {
+        // Safe fallback if already connected
+      }
+    } else {
       this.source = this.audioContext.createMediaElementSource(audioElement);
       // Connect to destination so we can still hear it
       this.source.connect(this.audioContext.destination);
-      audioElement.dataset.sourceCreated = "true";
-    }
-
-    if (this.analyzer) {
-      this.analyzer.stop();
+      audioElement._audioSourceNode = this.source;
     }
 
     // Configure Meyda to extract the melSpectrogram
@@ -94,6 +109,10 @@ export class AudioProcessor {
     if (this.analyzer) {
       this.analyzer.stop();
       this.analyzer = null;
+    }
+    if (this.source) {
+      this.source.disconnect();
+      this.source = null;
     }
     if (this.audioContext && this.audioContext.state !== "closed") {
       this.audioContext.close();
