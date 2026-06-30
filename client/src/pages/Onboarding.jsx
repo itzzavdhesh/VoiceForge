@@ -1,4 +1,6 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
+import React, { useRef, useEffect } from "react";
+import { CheckCircle2, Loader2, CircleAlert, ArrowRight } from "lucide-react";
 import React from "react";
 import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
@@ -262,6 +264,81 @@ export default function Onboarding({ onReady }) {
     return Math.min(parsedStep, parsedMax);
   });
 
+  // Refs for auto-focus (mutable objects)
+  const voiceNameInputRef = useRef(null);
+  const step2FirstInputRef = useRef(null);
+  const step3FirstInputRef = useRef(null);
+
+  React.useEffect(() => {
+    fetch("/api/voice/status")
+      .then((res) => res.json())
+      .then((data) => setServerStatus(data))
+      .catch((err) => console.error("Failed to fetch server status:", err));
+  }, []);
+
+  const hasKey = React.useMemo(() => {
+    return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
+  }, [serverStatus]);
+
+  // Auto-focus helper function with retry mechanism for async rendering
+  const setFocusWithRetry = React.useCallback((element) => {
+    if (!element) return;
+    
+    const attemptFocus = (attempt = 0) => {
+      if (attempt > 5) return; // Max 5 attempts
+      
+      try {
+        element.focus();
+        if (document.activeElement === element) return; // Focus successful
+      } catch (e) {
+        // Ignore focus errors (e.g., element not focusable)
+      }
+      
+      // Retry with increasing delay
+      setTimeout(() => attemptFocus(attempt + 1), 50 * (attempt + 1));
+    };
+    
+    attemptFocus();
+  }, []);
+
+  // Callback refs for Step 1
+  const setVoiceNameRef = React.useCallback((element) => {
+    voiceNameInputRef.current = element;
+    if (activeStep === 1 && element) {
+      setFocusWithRetry(element);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
+  // Callback ref for Step 2
+  const setStep2Ref = React.useCallback((element) => {
+    step2FirstInputRef.current = element;
+    if (activeStep === 2 && element) {
+      setFocusWithRetry(element);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
+  // Callback ref for Step 3
+  const setStep3Ref = React.useCallback((element) => {
+    step3FirstInputRef.current = element;
+    if (activeStep === 3 && element) {
+      setFocusWithRetry(element);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
+  // Backup focus effect on step change
+  useEffect(() => {
+    const focusMap = {
+      1: voiceNameInputRef.current,
+      2: step2FirstInputRef.current,
+      3: step3FirstInputRef.current,
+    };
+    
+    const targetElement = focusMap[activeStep];
+    if (targetElement) {
+      setFocusWithRetry(targetElement);
+    }
+  }, [activeStep, setFocusWithRetry]);
+
   // Dynamic content dictionary for the header banner based on activeStep
   const stepContent = {
     1: {
@@ -409,6 +486,7 @@ export default function Onboarding({ onReady }) {
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
               <input
                 id="voice-name"
+                ref={setVoiceNameRef}
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
@@ -501,6 +579,15 @@ export default function Onboarding({ onReady }) {
       {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
+          <button
+            ref={setStep3Ref}
+            onClick={() => {}}
+            className="sr-only focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-coral focus:ring-offset-2"
+            aria-label="Step 3 start focus target"
+            tabIndex={0}
+          >
+            Step 3 ready for activation - Press Tab to navigate through options
+          </button>
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
           <p className="mt-2 text-sm text-neutral-500">Your custom voice template setup is complete.</p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
