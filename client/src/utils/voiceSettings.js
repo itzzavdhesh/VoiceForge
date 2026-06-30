@@ -17,6 +17,7 @@ export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
   style: 0.5,
   temperature: 0.8,
+  rate: 1.0,
 };
 
 /**
@@ -53,6 +54,9 @@ export function loadVoiceSettings() {
       const coerced = parsed[key] == null ? NaN : Number(parsed[key]);
       if (Number.isNaN(coerced)) {
         result[key] = defaultVal;
+      } else if (key === "rate") {
+        // Speech rate range: clamp to [0.5, 2.0].
+        result[key] = Math.min(2.0, Math.max(0.5, coerced));
       } else if (defaultVal >= 0 && defaultVal <= 1) {
         // Slider range: clamp to [0, 1].
         result[key] = Math.min(1, Math.max(0, coerced));
