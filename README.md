@@ -150,14 +150,35 @@ This mirror runs the same Chatterbox Multilingual model. Useful when the primary
 Most video call apps cannot directly select a browser tab as a system camera. For the MVP, install [OBS Studio](https://obsproject.com/) and use OBS Virtual Camera as the bridge.
 
 1. Install OBS Studio.
-2. Add a Browser Source pointing to `http://localhost:5173`.
-3. Crop the source to the lip-synced output preview.
-4. Click Start Virtual Camera in OBS.
-5. Select OBS Virtual Camera in Zoom, Meet, or Teams.
+2. Add a **Browser Source** pointing to `http://localhost:5173`. Set the width to 1920 and height to 1080 to capture the full interface.
 
-Screenshot placeholder: OBS browser source configuration.
+   ![OBS Browser Source Configuration](docs/images/obs_browser_source.png)
 
-Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
+3. Crop the source to focus on the lip-synced output preview.
+4. Click **Start Virtual Camera** in the OBS Controls panel.
+
+   ![OBS Start Virtual Camera](docs/images/obs_virtual_camera.png)
+
+5. Select **OBS Virtual Camera** as your camera in your preferred video call application.
+
+### Video Call App Configuration
+
+**Zoom:**
+Go to Settings > Video > Camera and select **OBS Virtual Camera**.
+
+![Zoom Camera Picker](docs/images/zoom_camera_picker.png)
+
+**Google Meet:**
+Go to Settings > Video > Camera and select **OBS Virtual Camera**.
+
+![Google Meet Camera Picker](docs/images/meet_camera_picker.png)
+
+**Microsoft Teams:**
+Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
+
+![Microsoft Teams Camera Picker](docs/images/teams_camera_picker.png)
+
+**For detailed setup guides (including Discord and Webex) and troubleshooting tips, see our [Virtual Camera Guide](docs/virtual-camera.md).**
 
 ## API
 
@@ -180,8 +201,8 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 - In progress: The MVP virtual camera uses canvas capture; full WebRTC Insertable Streams frame replacement remains future work.
 - TODO: Replace the placeholder `models/wav2lip.onnx` with a real lightweight browser Wav2Lip ONNX model.
 - TODO: Implement real ONNX Runtime Web Wav2Lip inference.
-- TODO: Replace the fallback mouth animation with model-driven mouth movement.
-- TODO: Add richer virtual camera documentation for OBS and each call provider.
+- Done: Replace the fallback mouth animation with model-driven mouth movement.
+- Done: Add richer virtual camera documentation for OBS and each call provider.
 - TODO: Add automated browser tests for camera and microphone permission flows.
 - TODO: Persist voice profiles across server restarts (database or object-store backend).
 
