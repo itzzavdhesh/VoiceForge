@@ -1,6 +1,6 @@
 // Provides the large in-call typing surface and Speak command for generated speech.
 import React from "react";
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, LoaderCircle } from "lucide-react";
 
 export default function TextToSpeech({ onSpeak, disabled = false, status = "idle" }) {
   const [text, setText] = React.useState("");
@@ -76,7 +76,7 @@ if (estimatedDuration > 30) {
         className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <SendHorizontal size={18} aria-hidden="true" />
-        {status === "speaking" ? "Generating..." : "Speak"}
+        {status === "speaking" ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Generating...</> : "Speak"}
       </button>
     </section>
   );
