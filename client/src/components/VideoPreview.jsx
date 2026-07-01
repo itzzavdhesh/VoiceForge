@@ -20,7 +20,7 @@ export default React.forwardRef(function VideoPreview({
   const faceProcessorRef = useRef(null);
   const ortSessionRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
-    "Fallback animation ready",
+    "Audio-driven animation ready",
   );
   const { theme } = useTheme();
 
@@ -72,8 +72,8 @@ export default React.forwardRef(function VideoPreview({
         setModelStatus("ONNX Wav2Lip model loaded");
       } catch (err) {
         console.warn("Wav2Lip initialization skipped:", err.message);
-        setModelStatus("Fallback mouth animation active");
-        // TODO: Replace fallback canvas mouth animation with real browser Wav2Lip ONNX inference.
+        setModelStatus("Audio-driven animation active");
+        // TODO: Replace audio-driven mouth animation with real browser Wav2Lip ONNX inference.
       }
     }
     loadModel();
@@ -108,6 +108,9 @@ export default React.forwardRef(function VideoPreview({
     const textColor = isDark ? "#e2e8f0" : "#16201d";
     const mouthColor = isDark ? "rgba(226, 232, 240, 0.82)" : "rgba(22, 32, 29, 0.82)";
 
+    let lastSyncTime = 0;
+    let audioTimeOffset = null;
+
     function draw(timestamp) {
       context.fillStyle = bgColor;
       context.fillRect(0, 0, canvas.width, canvas.height);
@@ -136,8 +139,21 @@ export default React.forwardRef(function VideoPreview({
              // 1. Get Audio Features
              const melFeatures = audioProcessorRef.current.getLatestFeatures();
              
-             // 2. Get Face Crop
-             const landmarks = faceProcessorRef.current.detectFace(video, timestamp);
+             // 2. Synchronize visual timestamp to the audio master clock to prevent drift
+             let syncTimestamp = timestamp;
+             const audioTime = audioProcessorRef.current.getAudioTime() * 1000;
+             if (audioTime > 0) {
+                if (audioTimeOffset === null) {
+                   audioTimeOffset = timestamp - audioTime;
+                }
+                const targetSyncTime = audioTime + audioTimeOffset;
+                // MediaPipe requires strictly increasing timestamps
+                syncTimestamp = targetSyncTime <= lastSyncTime ? lastSyncTime + 1 : targetSyncTime;
+                lastSyncTime = syncTimestamp;
+             }
+
+             // 3. Get Face Crop
+             const landmarks = faceProcessorRef.current.detectFace(video, syncTimestamp);
              
              if (melFeatures && landmarks) {
                // TODO: Construct Tensors and run inference when real model is available
@@ -155,7 +171,14 @@ export default React.forwardRef(function VideoPreview({
         }
 
         if (!inferenceSucceeded) {
-          const mouthOpen = isSpeaking ? 14 + Math.sin(timestamp / 80) * 8 : 14;
+          let mouthOpen = 14;
+          if (isSpeaking && audioProcessorRef.current) {
+            const vol = audioProcessorRef.current.getVolume();
+            // Scale RMS volume (usually 0 to 0.3) to mouth height.
+            // vol * 150 provides a responsive map to pixels, capped at 30 extra pixels.
+            const extraOpen = Math.min(30, vol * 150);
+            mouthOpen = 14 + extraOpen;
+          }
           const currentCalibration = calibrationRef.current || {};
           const xOffset = typeof currentCalibration.xOffset === "number" && !isNaN(currentCalibration.xOffset)
             ? Math.max(-400, Math.min(400, currentCalibration.xOffset))

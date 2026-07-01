@@ -4,6 +4,7 @@ export default function useVirtualCamera(canvasRef) {
   const [isLive, setIsLive] = React.useState(false);
   const [status, setStatus] = React.useState("Idle");
   const [stream, setStream] = React.useState(null);
+  const originalTrackRef = React.useRef(null);
 
   function browserSupportsInsertableStreams() {
     return "MediaStreamTrackProcessor" in window && "MediaStreamTrackGenerator" in window && "TransformStream" in window;
@@ -18,20 +19,37 @@ export default function useVirtualCamera(canvasRef) {
 
     const canvasStream = canvas.captureStream(30);
     const [track] = canvasStream.getVideoTracks();
+    originalTrackRef.current = track;
+
+    let outputStream = canvasStream;
+    let outputTrack = track;
 
     if (browserSupportsInsertableStreams()) {
-      setStatus("Canvas stream live; Insertable Streams available");
-      // TODO: Replace this MVP passthrough with a TransformStream that emits Wav2Lip-rendered frames.
+      setStatus("Canvas stream live; Insertable Streams active");
+      const processor = new MediaStreamTrackProcessor({ track });
+      const generator = new MediaStreamTrackGenerator({ kind: "video" });
+
+      const transformer = new TransformStream({
+        async transform(videoFrame, controller) {
+          // Pass the frame through. Future Wav2Lip manipulations can happen here.
+          controller.enqueue(videoFrame);
+        },
+      });
+
+      processor.readable.pipeThrough(transformer).pipeTo(generator.writable);
+      outputStream = new MediaStream([generator]);
+      outputTrack = generator;
     } else {
       setStatus("Canvas stream live; Insertable Streams unavailable in this browser");
     }
 
-    setStream(canvasStream);
+    setStream(outputStream);
     setIsLive(true);
-    return { stream: canvasStream, track };
+    return { stream: outputStream, track: outputTrack };
   }
 
   function stop() {
+    originalTrackRef.current?.stop();
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
     setIsLive(false);
@@ -40,6 +58,7 @@ export default function useVirtualCamera(canvasRef) {
 
   React.useEffect(() => {
     return () => {
+      originalTrackRef.current?.stop();
       stream?.getTracks().forEach((track) => track.stop());
     };
   }, [stream]);

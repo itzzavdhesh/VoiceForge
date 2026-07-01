@@ -119,3 +119,20 @@ export async function deleteProfile(voiceId) {
     };
   });
 }
+
+export async function clearStorage() {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    request.onsuccess = () => {
+      resolve(true);
+    };
+
+    request.onerror = (event) => {
+      reject(new Error("Failed to clear storage: " + (event.target.error?.message || "Unknown error")));
+    };
+  });
+}

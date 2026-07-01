@@ -6,7 +6,7 @@ export default function TextToSpeech({ onSpeak, disabled = false, status = "idle
   const [text, setText] = React.useState("");
   const trimmedText = text.trim();
 
-const characterCount = trimmedText.length;
+const characterCount = text.length;
 
 const wordCount = trimmedText
   ? trimmedText.split(/\s+/).length
@@ -47,18 +47,12 @@ if (estimatedDuration > 30) {
           <h2 className="text-lg font-bold">Type to speak</h2>
           <p className="mt-1 text-sm text-ink/65 dark:text-muted">Press Enter to speak. Shift + Enter adds a new line.</p>
         </div>
-        <div className="text-right">
-  <span className="rounded-md border border-ink/10 px-3 py-1 text-sm font-semibold text-ink/65 dark:border-border dark:text-muted">
-    {characterCount}
-  </span>
-
-  <p
-  aria-live="polite"
-  className="mt-2 text-xs text-ink/60 dark:text-muted"
->
-  Est. Duration: {estimatedDuration}s ({durationCategory})
-</p>
-</div>
+        <p
+          aria-live="polite"
+          className="text-xs text-ink/60 dark:text-muted"
+        >
+          Est. Duration: {estimatedDuration}s ({durationCategory})
+        </p>
       </div>
       <textarea
         value={text}
@@ -68,6 +62,12 @@ if (estimatedDuration > 30) {
         className="min-h-64 flex-1 resize-none rounded-md border border-ink/15 bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:border-moss focus:ring-4 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-60 dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
         placeholder="Type what you want to say..."
       />
+      <p
+        className="mt-2 text-sm text-ink/65 dark:text-muted"
+        aria-live="polite"
+      >
+        Characters: {characterCount}
+      </p>
       
       <button
         type="button"

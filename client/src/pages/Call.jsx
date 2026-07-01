@@ -39,6 +39,14 @@ export default function Call() {
       }
     }
     loadActiveProfile();
+
+    window.addEventListener("voiceforge:profileChanged", loadActiveProfile);
+    window.addEventListener("storage", loadActiveProfile);
+
+    return () => {
+      window.removeEventListener("voiceforge:profileChanged", loadActiveProfile);
+      window.removeEventListener("storage", loadActiveProfile);
+    };
   }, []);
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);
@@ -243,7 +251,7 @@ export default function Call() {
         {isCalibrationOpen && (
           <div className="mt-4 border-t border-ink/10 pt-4">
             <p className="text-sm text-ink/65 mb-4">
-              Calibrate the animated fallback mouth position and size overlay to align with your camera.
+              Calibrate the audio-driven mouth position and size overlay to align with your camera.
             </p>
             <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>

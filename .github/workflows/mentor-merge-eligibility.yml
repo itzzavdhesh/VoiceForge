@@ -62,7 +62,9 @@ jobs:
               'joyprakashk',
               'rushi-k12',
               'itzzavdheshh',
-              'vedhapprakashni'
+              'Nitya-003',
+              '4f4d',
+              'lovestaco'
             ];
             const ADMINS = ['itzzavdhesh'];
 
@@ -106,14 +108,15 @@ jobs:
               return;
             }
 
-            // GitHub keeps the latest review per user. Build a map: username → latest state.
+            // GitHub keeps the latest review per user. Build a map: username → latest state (normalized to uppercase).
             const latestReviewByUser = {};
             for (const review of reviews) {
               const login = review.user?.login?.toLowerCase();
               if (!login) continue;
               // Reviews are in chronological order; later ones overwrite earlier ones.
-              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+              latestReviewByUser[login] = review.state?.toUpperCase(); // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
             }
+
 
             // Check: has any mentor reviewed the PR (APPROVED, COMMENTED, or CHANGES_REQUESTED)?
             const reviewingMentors = MENTORS.filter(m => {

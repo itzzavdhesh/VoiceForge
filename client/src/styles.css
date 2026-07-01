@@ -111,3 +111,26 @@ textarea {
 .animate-fade-in-up {
   animation: fade-in-up 0.2s ease-out;
 }
+
+/* Custom scrollbar to match VoiceForge color palette */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+::-webkit-scrollbar-thumb {
+  background: #22c55e;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #16a34a;
+}
+
+/* Firefox fallback (only when WebKit scrollbar is not supported) */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #22c55e var(--bg-page);
+  }
+}
