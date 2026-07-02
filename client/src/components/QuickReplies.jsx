@@ -355,7 +355,7 @@ export function QuickReplies({ onSelect, showToast }) {
         {filteredReplies.length === 0 && !isAdding && (
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
             {isEditing
-              ? 'No quick replies in this category. Click "Add" to create one.'
+              ? `No quick replies in this category. Click "Add" to create one.`
               : 'No quick replies in this category.'}
           </p>
         )}
