@@ -14,6 +14,9 @@ export default function useTTS() {
   const [audioUrl, setAudioUrl] = React.useState("");
   const [engine, setEngine] = React.useState("chatterbox");
 
+  const requestIdRef = React.useRef(0);
+  const abortControllerRef = React.useRef(null);
+
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
    *
@@ -51,9 +54,17 @@ export default function useTTS() {
    * @param {string} params.text The text to synthesize.
    * @param {string} params.voiceId The ID of the cloned voice profile.
    * @param {string} [params.language_code] Chatterbox/BCP-47 language code.
-   * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
+   * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}|{aborted: boolean}>} Result of speech synthesis.
    */
   async function speak({ text, voiceId, language_code }) {
+    const requestId = ++requestIdRef.current;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     setError("");
     setStatus("speaking");
 
@@ -71,7 +82,12 @@ export default function useTTS() {
           language_code,
           voice_settings: voiceSettings,
         }),
+        signal,
       });
+
+      if (requestId !== requestIdRef.current) {
+        return { aborted: true };
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -80,6 +96,10 @@ export default function useTTS() {
 
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
+
+      if (requestId !== requestIdRef.current) {
+        return { aborted: true };
+      }
 
       setEngine("chatterbox");
       setAudioUrl(nextAudioUrl);
@@ -90,8 +110,15 @@ export default function useTTS() {
         engine: "chatterbox",
       };
     } catch (ttsError) {
+      if (ttsError.name === "AbortError" || requestId !== requestIdRef.current) {
+        return { aborted: true };
+      }
       try {
         await browserSpeak(text, language_code);
+
+        if (requestId !== requestIdRef.current) {
+          return { aborted: true };
+        }
 
         setEngine("browser");
         setAudioUrl("");
@@ -101,7 +128,10 @@ export default function useTTS() {
           fallback: true,
           engine: "browser",
         };
-      } catch {
+      } catch (browserError) {
+        if (requestId !== requestIdRef.current) {
+          return { aborted: true };
+        }
         setError(ttsError?.message || String(ttsError));
         setStatus("error");
         throw ttsError;
