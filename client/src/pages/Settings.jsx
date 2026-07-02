@@ -37,6 +37,7 @@ function AudioPlayback({ blob }) {
     <audio
       src={audioUrl}
       controls
+      aria-label="Generated speech audio playback"
       className="mt-2 h-8 w-full max-w-xs"
     />
   );
@@ -281,6 +282,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.stability}
+              aria-label="Stability"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -296,6 +298,9 @@ export default function Settings() {
               id="temperature"
               type="range"
               min="0" max="1" step="0.01"
+              value={voiceSettings.similarity_boost}
+              aria-label="Similarity Boost"
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, similarity_boost: parseFloat(e.target.value) })}
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"
@@ -313,6 +318,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.style}
+              aria-label="Style Exaggeration"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -402,6 +408,7 @@ export default function Settings() {
               id="import-config-file"
               type="file"
               accept=".json"
+              aria-label="Choose backup file to import"
               onChange={handleImport}
               className="sr-only"
             />
@@ -444,6 +451,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => removeProfile(profile.voice_id)}
+                aria-label={`Delete profile ${profile.name}`}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-coral/40 px-3 py-2 font-bold text-coral hover:bg-coral hover:text-white"
               >
                 <Trash2 size={16} aria-hidden="true" />

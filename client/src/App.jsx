@@ -57,6 +57,7 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  const desktopNavRef = React.useRef(null);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -77,12 +78,38 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcutsOpen]);
 
-
-
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
     saveActiveTab(tab);
     setActiveTab(tab);
+  }
+
+  // Arrow key navigation for desktop nav tabs (WAI-ARIA Tabs pattern)
+  function handleNavKeyDown(event) {
+    const tabArray = tabs.map((t) => t.id);
+    const currentIndex = tabArray.indexOf(activeTab);
+    let nextIndex = -1;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % tabArray.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + tabArray.length) % tabArray.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabArray.length - 1;
+    }
+
+    if (nextIndex >= 0) {
+      event.preventDefault();
+      selectTab(tabArray[nextIndex]);
+      // Focus the newly selected tab button
+      const navEl = desktopNavRef.current;
+      if (navEl) {
+        const buttons = navEl.querySelectorAll('[role="tab"]');
+        buttons[nextIndex]?.focus();
+      }
+    }
   }
 
   // Support navigation to non-tab routes such as the privacy policy.
@@ -107,6 +134,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+      {/* Skip to main content link for keyboard/screen-reader users */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       
       {/* Global Header */}
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-white/70 backdrop-blur-md dark:border-border dark:bg-surface/70">
@@ -148,7 +179,13 @@ export default function App() {
 
           {/* Desktop nav + theme toggle */}
           <div className="hidden items-center gap-2 sm:flex">
-            <nav className="flex gap-2" aria-label="VoiceForge pages">
+            <nav
+              ref={desktopNavRef}
+              className="flex gap-2"
+              role="tablist"
+              aria-label="VoiceForge pages"
+              onKeyDown={handleNavKeyDown}
+            >
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const selected = activeTab === tab.id;
@@ -156,6 +193,10 @@ export default function App() {
                   <button
                     key={tab.id}
                     type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls={`tabpanel-${tab.id}`}
+                    tabIndex={selected ? 0 : -1}
                     onClick={() => selectTab(tab.id)}
                     className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
                       selected
@@ -186,11 +227,15 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-grow">
-        {activeTab === "compose" && <VoiceForge />}
+      <main id="main-content" className="flex-grow" role="main">
+        {activeTab === "compose" && (
+          <div id="tabpanel-compose" role="tabpanel" aria-label="Compose panel">
+            <VoiceForge />
+          </div>
+        )}
 
         {activeTab !== "compose" && (
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-label={`${activeTab} panel`} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}

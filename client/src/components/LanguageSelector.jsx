@@ -28,6 +28,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const containerRef = useRef(null);
   const searchRef = useRef(null);
   const listRef = useRef(null);
+  const triggerRef = useRef(null);
 
   const selectedLang = getLanguageByCode(value);
   const regions = useMemo(() => getRegions(), []);
@@ -81,6 +82,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     setIsOpen(false);
     setSearch("");
     setFocusIndex(-1);
+    // Restore focus to the trigger button
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
   const toggle = useCallback(() => {
@@ -179,6 +182,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
       {/* ── Trigger Button ─────────────────────────────────────────────── */}
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         onClick={toggle}
@@ -237,6 +241,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
               }}
               placeholder="Search languages..."
               aria-label="Search languages"
+              aria-activedescendant={focusIndex >= 0 && flatItems[focusIndex] ? `lang-option-${flatItems[focusIndex].code ?? "auto"}` : undefined}
               className="flex-1 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />
             {search && (
@@ -274,6 +279,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                     key="auto-detect"
                     type="button"
                     role="option"
+                    id="lang-option-auto"
                     aria-selected={isSelected}
                     data-index={index}
                     onClick={() => selectLanguage("")}
@@ -320,6 +326,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                   key={item.code}
                   type="button"
                   role="option"
+                  id={`lang-option-${item.code}`}
                   aria-selected={isSelected}
                   data-index={index}
                   onClick={() => selectLanguage(item.code)}

@@ -318,7 +318,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
             background noise low. You can also upload a video (.mp4, .mov) or audio file.
           </p>
         </div>
-        <span className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
+        <span aria-live="polite" aria-atomic="true" role="timer" className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
           {duration}s
         </span>
       </div>

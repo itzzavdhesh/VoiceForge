@@ -17,12 +17,13 @@ export default function VirtualCamera({ isLive, status, onStart, onStop }) {
           </span>
           <div>
             <h2 className="text-base font-bold">Virtual camera</h2>
-            <p className="text-sm text-ink/65 dark:text-muted">{status}</p>
+            <p className="text-sm text-ink/65 dark:text-muted" aria-live="polite">{status}</p>
           </div>
         </div>
         <button
           type="button"
           onClick={isLive ? onStop : onStart}
+          aria-label={isLive ? "Stop virtual camera broadcast" : "Start virtual camera broadcast"}
           className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-bold text-white transition ${
             isLive
               ? "bg-black hover:bg-black/90 dark:bg-surface dark:hover:bg-neutral-900"

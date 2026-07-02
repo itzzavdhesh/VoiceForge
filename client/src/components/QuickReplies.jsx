@@ -46,6 +46,7 @@ export function QuickReplies({ onSelect, showToast }) {
   const [newPhrase, setNewPhrase] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [newCategory, setNewCategory] = useState("General");
+  const tablistRef = React.useRef(null);
 
   useEffect(() => {
     try {
@@ -137,6 +138,30 @@ export function QuickReplies({ onSelect, showToast }) {
     return reply.category === selectedCategoryTab;
   });
 
+  const allCats = ["All", ...CATEGORIES];
+
+  const handleTabKeyDown = (e) => {
+    const currentIndex = allCats.indexOf(selectedCategoryTab);
+    let nextIndex = -1;
+
+    if (e.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % allCats.length;
+    } else if (e.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + allCats.length) % allCats.length;
+    } else if (e.key === "Home") {
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      nextIndex = allCats.length - 1;
+    }
+
+    if (nextIndex >= 0) {
+      e.preventDefault();
+      setSelectedCategoryTab(allCats[nextIndex]);
+      const buttons = tablistRef.current?.querySelectorAll('[role="tab"]');
+      buttons?.[nextIndex]?.focus();
+    }
+  };
+
   return (
     <section
       aria-labelledby="qr-heading"
@@ -182,18 +207,23 @@ export function QuickReplies({ onSelect, showToast }) {
 
       {/* Category Tabs */}
       <div
+        ref={tablistRef}
         className="mb-3 flex overflow-x-auto gap-1.5 pb-1 no-scrollbar"
         role="tablist"
         aria-label="Quick replies categories"
+        onKeyDown={handleTabKeyDown}
       >
-        {["All", ...CATEGORIES].map((cat) => (
+        {allCats.map((cat) => (
           <button
             key={cat}
             role="tab"
             aria-selected={selectedCategoryTab === cat}
+            aria-controls={`tabpanel-${cat}`}
+            tabIndex={selectedCategoryTab === cat ? 0 : -1}
             onClick={() => setSelectedCategoryTab(cat)}
             className={[
               "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150 shrink-0",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-black",
               selectedCategoryTab === cat
                 ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-surface dark:hover:text-neutral-300",
@@ -204,6 +234,13 @@ export function QuickReplies({ onSelect, showToast }) {
         ))}
       </div>
 
+      <div
+        id={`tabpanel-${selectedCategoryTab}`}
+        role="tabpanel"
+        aria-label={`${selectedCategoryTab} quick replies`}
+        className="flex flex-wrap items-center gap-2"
+      >
+        {filteredReplies.map(({ label, phrase }) => {
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
         {filteredReplies.map(({ id, label, phrase, category }) => {
           const isCurrentlyEditing = editingReplyId === id;
@@ -316,6 +353,7 @@ export function QuickReplies({ onSelect, showToast }) {
               onChange={(e) => setNewPhrase(e.target.value)}
               maxLength={120}
               placeholder="New reply..."
+              aria-label="New quick reply phrase"
               autoFocus
               className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />
@@ -355,7 +393,7 @@ export function QuickReplies({ onSelect, showToast }) {
         {filteredReplies.length === 0 && !isAdding && (
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
             {isEditing
-              ? 'No quick replies in this category. Click "Add" to create one.'
+              ? `No quick replies in this category. Click "Add" to create one.`
               : 'No quick replies in this category.'}
           </p>
         )}

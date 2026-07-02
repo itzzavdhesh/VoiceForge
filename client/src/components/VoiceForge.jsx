@@ -22,6 +22,7 @@ export default function VoiceForge() {
   const [language, setLanguage] = useState(loadLanguage);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
+  const historyToggleRef = useRef(null);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -130,6 +131,55 @@ export default function VoiceForge() {
     }
   }, [historyOpen]);
 
+  // Restore focus to the history toggle button when drawer closes
+  const prevHistoryOpen = useRef(historyOpen);
+  useEffect(() => {
+    if (prevHistoryOpen.current && !historyOpen) {
+      historyToggleRef.current?.focus();
+    }
+    prevHistoryOpen.current = historyOpen;
+  }, [historyOpen]);
+
+  // Escape key closes the history drawer
+  useEffect(() => {
+    if (!historyOpen) return;
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setHistoryOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [historyOpen]);
+
+  // Focus trap inside the history drawer when open on mobile
+  useEffect(() => {
+    if (!historyOpen || !drawerRef.current) return;
+
+    function handleTab(event) {
+      if (event.key !== "Tab") return;
+      const focusable = drawerRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first || document.activeElement === drawerRef.current) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    window.addEventListener("keydown", handleTab);
+    return () => window.removeEventListener("keydown", handleTab);
+  }, [historyOpen]);
+
   useEffect(() => {
     if (charsLeft < 50 && !hasAnnouncedRef.current) {
       hasAnnouncedRef.current = true;
@@ -198,9 +248,11 @@ export default function VoiceForge() {
         <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
           {/* Mobile: history toggle */}
           <button
+            ref={historyToggleRef}
             className="mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 text-neutral-500 transition hover:bg-neutral-100 lg:hidden dark:border-border dark:text-neutral-400"
             onClick={() => setHistoryOpen((o) => !o)}
             aria-label={historyOpen ? "Close history" : "Open history"}
+            aria-expanded={historyOpen}
           >
             {historyOpen ? <X size={15} aria-hidden="true" /> : <History size={15} aria-hidden="true" />}
           </button>
