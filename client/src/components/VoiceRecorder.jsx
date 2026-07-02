@@ -176,6 +176,49 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       handleStopCleanup();
     }
   }
+  React.useEffect(() => {
+  function handleKeyDown(event) {
+
+    if (event.repeat) return;
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+const isInteractive =
+  target instanceof Element &&
+  target.closest(
+    "input, textarea, select, button, a, summary, [contenteditable='true'], [role='button'], [role='link'], [role='menuitem'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab']"
+  );
+if (isInteractive) return;
+
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+if (isInteractive) return;
+
+    // Space => Start/Stop recording
+    if (event.code === "Space") {
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else if (!disabled && !isInitializing) {
+      startRecording();
+      }
+    }
+
+    // Esc => Cancel recording
+    if (event.key === "Escape" && isRecording) {
+      event.preventDefault();
+      handleStopCleanup({ emitReady: false });
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [isRecording, disabled, isInitializing]);
 
   async function handleFileUpload(event) {
     const file = event.target.files?.[0];
