@@ -242,7 +242,6 @@ export async function cloneVoice(request, response, next) {
       return;
     }
 
-    // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
@@ -350,29 +349,35 @@ export async function speak(request, response, next) {
       temperature: 0.8
     };
 
-    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    
     const sanitizedSettings = {};
-    if (voice_settings && typeof voice_settings === "object") {
-      if (
-        typeof voice_settings.stability === "number" &&
-        Number.isFinite(voice_settings.stability)
-      ) {
-        sanitizedSettings.stability = clamp01(voice_settings.stability);
-      }
-      if (
-        typeof voice_settings.style === "number" &&
-        Number.isFinite(voice_settings.style)
-      ) {
-        sanitizedSettings.style = clamp01(voice_settings.style);
-      }
-      if (
-        typeof voice_settings.temperature === "number" &&
-        Number.isFinite(voice_settings.temperature)
-      ) {
-        sanitizedSettings.temperature = Math.min(5, Math.max(0.05, voice_settings.temperature));
-      }
+if (voice_settings !== undefined && voice_settings !== null) {
+  if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
+    response.status(400).json({ error: "voice_settings must be a plain object." });
+    return;
+  }
+  if (voice_settings.stability !== undefined) {
+    if (typeof voice_settings.stability !== "number" || !Number.isFinite(voice_settings.stability) || voice_settings.stability < 0 || voice_settings.stability > 1) {
+      response.status(400).json({ error: "stability must be a finite number between 0 and 1." });
+      return;
     }
-
+    sanitizedSettings.stability = voice_settings.stability;
+  }
+  if (voice_settings.style !== undefined) {
+    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 1) {
+      response.status(400).json({ error: "style must be a finite number between 0 and 1." });
+      return;
+    }
+    sanitizedSettings.style = voice_settings.style;
+  }
+  if (voice_settings.temperature !== undefined) {
+    if (typeof voice_settings.temperature !== "number" || !Number.isFinite(voice_settings.temperature) || voice_settings.temperature < 0.05 || voice_settings.temperature > 5) {
+      response.status(400).json({ error: "temperature must be a finite number between 0.05 and 5." });
+      return;
+    }
+    sanitizedSettings.temperature = voice_settings.temperature;
+  }
+}
     const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
 
     // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
@@ -428,7 +433,6 @@ export async function streamSpeech(request, response, next) {
     }
     const { speechId, text, voiceId, language_code, voice_settings } = decryptToken(token);
 
-    // --- mock mode: stream the bundled silent MP3 fixture ---
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: streaming mock audio");
       response.setHeader("Content-Type", "audio/mpeg");
