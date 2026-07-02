@@ -1,6 +1,9 @@
 // Draws the webcam and MVP lip-sync animation onto a canvas preview.
 import React from "react";
 import { useTheme } from "./ThemeContext";
+import { useEffect, useRef } from "react";
+import { AudioProcessor } from "../utils/audioProcessor";
+import { FaceProcessor } from "../utils/faceProcessor";
 
 export default React.forwardRef(function VideoPreview({
   webcamStream,
@@ -12,8 +15,12 @@ export default React.forwardRef(function VideoPreview({
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
+  const audioRef = useRef(null);   
+  const audioProcessorRef = useRef(null);
+  const faceProcessorRef = useRef(null);
+  const ortSessionRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
-    "Fallback animation ready",
+    "Audio-driven animation ready",
   );
   const { theme } = useTheme();
 
@@ -28,6 +35,24 @@ export default React.forwardRef(function VideoPreview({
     isCalibratingRef.current = isCalibrating;
   }, [isCalibrating]);
 
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      onSpeakingChange?.(false);
+    };
+  }, [onSpeakingChange]);
+
+  // Initialize AudioProcessor when audio element is ready
+  useEffect(() => {
+    if (audioUrl && audioRef.current && audioProcessorRef.current && !audioRef.current.dataset.audioProcessorInitialized) {
+      audioProcessorRef.current.initialize(audioRef.current);
+      audioRef.current.dataset.audioProcessorInitialized = "true";
+    }
+  }, [audioUrl]);
+
   React.useEffect(() => {
     async function loadModel() {
       try {
@@ -36,15 +61,34 @@ export default React.forwardRef(function VideoPreview({
         if (!modelResponse.ok || modelBytes[0] === 35) {
           throw new Error("Placeholder Wav2Lip model detected.");
         }
+        
+        // Initialize processors
+        audioProcessorRef.current = new AudioProcessor();
+        faceProcessorRef.current = new FaceProcessor();
+        await faceProcessorRef.current.initialize();
+
         const ort = await import("onnxruntime-web");
-        await ort.InferenceSession.create(modelBytes);
+        ortSessionRef.current = await ort.InferenceSession.create(modelBytes);
         setModelStatus("ONNX Wav2Lip model loaded");
-      } catch {
-        setModelStatus("Fallback mouth animation active");
-        // TODO: Replace fallback canvas mouth animation with real browser Wav2Lip ONNX inference.
+      } catch (err) {
+        console.warn("Wav2Lip initialization skipped:", err.message);
+        setModelStatus("Audio-driven animation active");
+        // TODO: Replace audio-driven mouth animation with real browser Wav2Lip ONNX inference.
       }
     }
     loadModel();
+
+    return () => {
+      if (audioProcessorRef.current) {
+        audioProcessorRef.current.dispose();
+      }
+      if (faceProcessorRef.current) {
+        faceProcessorRef.current.dispose();
+      }
+      if (ortSessionRef.current) {
+        ortSessionRef.current.release();
+      }
+    };
   }, []);
 
   React.useEffect(() => {
@@ -63,6 +107,9 @@ export default React.forwardRef(function VideoPreview({
     const bgColor   = isDark ? "#0f172a" : "#dfe8df";
     const textColor = isDark ? "#e2e8f0" : "#16201d";
     const mouthColor = isDark ? "rgba(226, 232, 240, 0.82)" : "rgba(22, 32, 29, 0.82)";
+
+    let lastSyncTime = 0;
+    let audioTimeOffset = null;
 
     function draw(timestamp) {
       context.fillStyle = bgColor;
@@ -84,29 +131,77 @@ export default React.forwardRef(function VideoPreview({
 
       const drawMouth = isSpeaking || isCalibratingRef.current;
       if (drawMouth) {
-        const mouthOpen = isSpeaking ? 14 + Math.sin(timestamp / 80) * 8 : 14;
-        const currentCalibration = calibrationRef.current || {};
-        const xOffset = typeof currentCalibration.xOffset === "number" && !isNaN(currentCalibration.xOffset)
-          ? Math.max(-400, Math.min(400, currentCalibration.xOffset))
-          : 0;
-        const yOffset = typeof currentCalibration.yOffset === "number" && !isNaN(currentCalibration.yOffset)
-          ? Math.max(-250, Math.min(150, currentCalibration.yOffset))
-          : 0;
-        const scale = typeof currentCalibration.scale === "number" && !isNaN(currentCalibration.scale)
-          ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
-          : 1.0;
+        let inferenceSucceeded = false;
 
-        const centerX = canvas.width / 2 + xOffset;
-        const centerY = canvas.height * 0.63 + yOffset;
-        const radiusX = 56 * scale;
-        const radiusY = mouthOpen * scale;
+        // Try ONNX Inference first
+        if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
+          try {
+             // 1. Get Audio Features
+             const melFeatures = audioProcessorRef.current.getLatestFeatures();
+             
+             // 2. Synchronize visual timestamp to the audio master clock to prevent drift
+             let syncTimestamp = timestamp;
+             const audioTime = audioProcessorRef.current.getAudioTime() * 1000;
+             if (audioTime > 0) {
+                if (audioTimeOffset === null) {
+                   audioTimeOffset = timestamp - audioTime;
+                }
+                const targetSyncTime = audioTime + audioTimeOffset;
+                // MediaPipe requires strictly increasing timestamps
+                syncTimestamp = targetSyncTime <= lastSyncTime ? lastSyncTime + 1 : targetSyncTime;
+                lastSyncTime = syncTimestamp;
+             }
 
-        context.save();
-        context.fillStyle = mouthColor;
-        context.beginPath();
-        context.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-        context.fill();
-        context.restore();
+             // 3. Get Face Crop
+             const landmarks = faceProcessorRef.current.detectFace(video, syncTimestamp);
+             
+             if (melFeatures && landmarks) {
+               // TODO: Construct Tensors and run inference when real model is available
+               // const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
+               // const videoCrop = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvas);
+               // const videoTensor = ... convert videoCrop to tensor ...
+               // const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
+               // ... draw results back to canvas ...
+               
+               // inferenceSucceeded = true;
+             }
+          } catch (e) {
+             console.error("Inference loop error:", e);
+          }
+        }
+
+        if (!inferenceSucceeded) {
+          let mouthOpen = 14;
+          if (isSpeaking && audioProcessorRef.current) {
+            const vol = audioProcessorRef.current.getVolume();
+            // Scale RMS volume (usually 0 to 0.3) to mouth height.
+            // vol * 150 provides a responsive map to pixels, capped at 30 extra pixels.
+            const extraOpen = Math.min(30, vol * 150);
+            mouthOpen = 14 + extraOpen;
+          }
+          const currentCalibration = calibrationRef.current || {};
+          const xOffset = typeof currentCalibration.xOffset === "number" && !isNaN(currentCalibration.xOffset)
+            ? Math.max(-400, Math.min(400, currentCalibration.xOffset))
+            : 0;
+          const yOffset = typeof currentCalibration.yOffset === "number" && !isNaN(currentCalibration.yOffset)
+            ? Math.max(-250, Math.min(150, currentCalibration.yOffset))
+            : 0;
+          const scale = typeof currentCalibration.scale === "number" && !isNaN(currentCalibration.scale)
+            ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
+            : 1.0;
+
+          const centerX = canvas.width / 2 + xOffset;
+          const centerY = canvas.height * 0.63 + yOffset;
+          const radiusX = 56 * scale;
+          const radiusY = mouthOpen * scale;
+
+          context.save();
+          context.fillStyle = mouthColor;
+          context.beginPath();
+          context.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+          context.fill();
+          context.restore();
+        }
       }
 
       animationRef.current = requestAnimationFrame(draw);
@@ -150,12 +245,15 @@ export default React.forwardRef(function VideoPreview({
       />
       {audioUrl && (
         <audio
+          ref={audioRef}
           key={audioUrl}
           className="mt-4 w-full"
           controls
           src={audioUrl}
           autoPlay
-          onPlay={() => onSpeakingChange?.(true)}
+          onPlay={() => {
+            onSpeakingChange?.(true);
+          }}
           onPause={() => onSpeakingChange?.(false)}
           onEnded={() => onSpeakingChange?.(false)}
           onError={() => onSpeakingChange?.(false)}

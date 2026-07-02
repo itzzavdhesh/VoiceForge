@@ -13,7 +13,7 @@ Thanks for helping build an assistive open source tool with care. Please keep co
 npm install
 ```
 
-4. Copy `.env.example` to `.env`. Add your ElevenLabs API key **or** enable mock mode (see [Testing Without a Paid Plan](#testing-without-a-paid-elevenlabs-plan) below).
+4. Copy `.env.example` to `.env`. No API key is required — see [Testing Locally](#testing-locally) for setup options.
 5. Start the local app:
 
 ```bash
@@ -32,56 +32,54 @@ npm run dev
 - Keep accessibility visible: labels, keyboard paths, semantic buttons, and readable contrast matter.
 - Do not commit `.env`, generated build output, or `node_modules`.
 
-## Testing Without a Paid ElevenLabs Plan
+## Testing Locally
 
-VoiceForge has two testing layers so contributors do not need a paid ElevenLabs
-subscription to verify their changes.
+VoiceForge is **100% free** to run — no paid subscription or API key is required.
+The voice engine is [ResembleAI/Chatterbox-Multilingual-TTS](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS),
+a public Hugging Face Space.
 
 ### Unit tests — always offline
 
-The server test suite stubs all ElevenLabs network calls. No API key needed.
+The server test suite stubs all Chatterbox/Gradio network calls. No credentials needed.
 
 ```bash
 npm run test --workspace server
 ```
 
-### End-to-end mock mode — full UI flow without API credits
+### End-to-end mock mode — full UI flow, no internet required
 
 Add this line to your `.env` before starting the dev server:
 
-```
-MOCK_ELEVENLABS=true
+```bash
+MOCK_CHATTERBOX=true
 ```
 
 With this flag active the server behaves as follows:
 
-| Endpoint | Real mode | Mock mode |
+| Endpoint | Live mode | Mock mode |
 |---|---|---|
-| `POST /api/voice/clone` | Calls ElevenLabs, returns real `voice_id` | Returns fixture `voice_id` instantly |
-| `POST /api/voice/speak` | Enqueues real TTS stream | Enqueues mock stream |
-| `GET /api/voice/speak/stream/:id` | Streams real MP3 from ElevenLabs | Streams a short silent MP3 locally |
+| `POST /api/voice/clone` | Stores reference audio, returns `voice_id` | Returns fixture `voice_id` instantly |
+| `POST /api/voice/speak` | Enqueues real Chatterbox TTS stream | Enqueues mock stream |
+| `GET /api/voice/speak/stream` | Proxies audio from Hugging Face | Streams a short silent MP3 locally |
 
 You can exercise the **complete UI flow** — record → clone → type text → Speak
-→ download — without any API key or ElevenLabs account.
+→ download — entirely offline.
 
-> **Safety:** `MOCK_ELEVENLABS=true` has no effect when `NODE_ENV=production`.
+> **Safety:** `MOCK_CHATTERBOX=true` has no effect when `NODE_ENV=production`.
 > The server logs a yellow warning at startup so mock mode is always visible.
 
-### When your PR needs a real API key
+### When your PR needs a live Chatterbox response
 
-Some changes genuinely require a real ElevenLabs response (audio decoding,
-lip-sync timing, voice-quality tuning). If that applies to your PR, note it
-clearly in the PR description using this template:
+Some changes (audio decoding, lip-sync timing, voice-quality tuning) genuinely
+require a real synthesis response. If that applies to your PR, note it in the
+PR description:
 
-```
+```markdown
 ## Testing Notes
-Tested clone and TTS end-to-end using MOCK_ELEVENLABS=true.
-Real ElevenLabs audio path not verified — requires a paid plan.
-UI logic confirmed with mock blob locally.
+Tested clone and TTS end-to-end using MOCK_CHATTERBOX=true.
+Live Chatterbox path verified locally with MOCK_CHATTERBOX=false.
+UI logic confirmed with mock blob in CI.
 ```
-
-Do **not** share or commit real API keys. Maintainers arrange follow-up
-testing internally when a real response is needed.
 
 
 ## Program Contributions

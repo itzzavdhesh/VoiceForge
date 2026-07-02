@@ -25,7 +25,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const reviewer     = context.payload.review.user.login;
-            const reviewState  = context.payload.review.state;   // APPROVED | CHANGES_REQUESTED | COMMENTED
+            const reviewState  = context.payload.review.state.toLowerCase();   // Normalize to lowercase: approved | changes_requested | commented
             const pr           = context.payload.pull_request;
             const owner        = context.repo.owner;
             const repo         = context.repo.repo;
@@ -40,8 +40,14 @@ jobs:
               'Anushreebasics': 'mentor:Anushreebasics',
               'itsdakshjain':   'mentor:itsdakshjain',
               'snehkris':       'mentor:snehkris',
+              '1754riya':       'mentor:1754riya',
+              'Mrigakshi-Rathore':  'mentor:Mrigakshi-Rathore',
               'joyprakashk':    'mentor:joyprakashk',
-              'rushi-k12':      'mentor:rushi-k12'
+              'rushi-k12':      'mentor:rushi-k12',
+              'itzzavdheshh':    'mentor:itzzavdheshh',
+              'Nitya-003':      'mentor:Nitya-003',
+              '4f4d':           'mentor:4f4d',
+              'lovestaco':      'mentor:lovestaco'
             };
             // Admin list — bypass guard (can always apply labels freely)
             const ADMINS = ['itzzavdhesh'];
@@ -142,3 +148,17 @@ jobs:
             if (reviewState === 'approved') {
               await removeLabel('needs revision');
             }
+
+      - name: Save PR number
+        if: always()
+        run: |
+          mkdir -p pr
+          echo "${{ github.event.pull_request.number }}" > pr/NR
+
+      - name: Upload PR number
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr_number
+          path: pr/
+          retention-days: 1

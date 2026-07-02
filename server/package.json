@@ -9,10 +9,11 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@gradio/client": "^1.19.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
-    "multer": "^2.0.2"
+    "multer": "^2.2.0"
   }
 }

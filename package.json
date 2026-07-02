@@ -16,6 +16,7 @@
     "start": "npm run start --workspace server"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@playwright/test": "^1.61.0",
+    "concurrently": "^10.0.3"
   }
 }

@@ -57,8 +57,14 @@ jobs:
               'Anushreebasics',
               'itsdakshjain',
               'snehkris',
+              '1754riya',
+              'Mrigakshi-Rathore',
               'joyprakashk',
-              'rushi-k12'
+              'rushi-k12',
+              'itzzavdheshh',
+              'Nitya-003',
+              '4f4d',
+              'lovestaco'
             ];
             const ADMINS = ['itzzavdhesh'];
 
@@ -102,14 +108,15 @@ jobs:
               return;
             }
 
-            // GitHub keeps the latest review per user. Build a map: username → latest state.
+            // GitHub keeps the latest review per user. Build a map: username → latest state (normalized to uppercase).
             const latestReviewByUser = {};
             for (const review of reviews) {
               const login = review.user?.login?.toLowerCase();
               if (!login) continue;
               // Reviews are in chronological order; later ones overwrite earlier ones.
-              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+              latestReviewByUser[login] = review.state?.toUpperCase(); // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
             }
+
 
             // Check: has any mentor reviewed the PR (APPROVED, COMMENTED, or CHANGES_REQUESTED)?
             const reviewingMentors = MENTORS.filter(m => {
@@ -131,4 +138,18 @@ jobs:
               );
               core.info(`PR #${issue_number} is not eligible to merge: no mentor reviews found.`);
             }
+
+      - name: Save PR number
+        if: always()
+        run: |
+          mkdir -p pr
+          echo "${{ github.event.pull_request.number }}" > pr/NR
+
+      - name: Upload PR number
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr_number
+          path: pr/
+          retention-days: 1
 

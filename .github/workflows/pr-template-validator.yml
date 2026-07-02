@@ -137,7 +137,7 @@ jobs:
 
             function getProgramReviewerMentions(programLabel) {
               const reviewersByProgram = {
-                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris'],
+                gssoc26: ['@sabeenaviklar', '@Anushreebasics', '@itsdakshjain', '@snehkris', '@1754riya', '@Mrigakshi-Rathore', '@itzzavdheshh', '@Nitya-003', '@4f4d', '@lovestaco'],
                 nsoc26: ['@joyprakashk', '@rushi-k12'],
                 SSoC26: ['@joyprakashk', '@rushi-k12'],
                 ELUSOC: ['@joyprakashk', '@rushi-k12']
@@ -203,31 +203,53 @@ jobs:
               const team_reviewers = targets.teamReviewers
                 .filter(team => !existingTeams.has(team.toLowerCase()));
 
-              if (reviewers.length === 0 && team_reviewers.length === 0) {
-                return {
-                  mentions: targets.mentions.join(' '),
-                  status: 'Already requested or no eligible reviewer found'
-                };
+              const succeeded = [];
+              const failed = [];
+              
+              for (const reviewer of reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    reviewers: [reviewer]
+                  });
+                  succeeded.push(reviewer);
+                } catch (error) {
+                  core.warning(`Could not request PR review from @${reviewer}: ${error.message}`);
+                  failed.push(reviewer);
+                }
               }
 
-              try {
-                const reviewRequestPayload = {
-                  owner,
-                  repo,
-                  pull_number: issue_number
-                };
-                if (reviewers.length > 0) reviewRequestPayload.reviewers = reviewers;
-                if (team_reviewers.length > 0) reviewRequestPayload.team_reviewers = team_reviewers;
-                await github.rest.pulls.requestReviewers(reviewRequestPayload);
+              for (const team of team_reviewers) {
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: issue_number,
+                    team_reviewers: [team]
+                  });
+                  succeeded.push(team);
+                } catch (error) {
+                  core.warning(`Could not request PR review from team @${team}: ${error.message}`);
+                  failed.push(team);
+                }
+              }
+
+              if (succeeded.length > 0) {
                 return {
                   mentions: targets.mentions.join(' '),
                   status: 'Review requested'
                 };
-              } catch (error) {
-                core.warning(`Could not request PR review from ${targets.mentions.join(' ')}: ${error.message}`);
+              } else if (failed.length > 0) {
                 return {
                   mentions: targets.mentions.join(' '),
                   status: 'Mentioned in review queue comment'
+                };
+              } else {
+                return {
+                  mentions: targets.mentions.join(' '),
+                  status: 'Already requested or no eligible reviewer found'
                 };
               }
             }
@@ -250,11 +272,12 @@ jobs:
             }
             function getHeadingSection(name) {
               const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const sectionMatch = body.match(new RegExp(`^\\s*#{1,6}\\s*.*${escapedName}\\b.*$`, 'im'));
+              const sectionMatch = body.match(new RegExp(`^\\s*(#{1,6})\\s*.*${escapedName}\\b.*$`, 'im'));
               if (!sectionMatch || typeof sectionMatch.index !== 'number') return '';
 
+              const level = sectionMatch[1].length;
               const sectionStart = sectionMatch.index + sectionMatch[0].length;
-              const nextHeadingMatch = body.slice(sectionStart).match(/^\s*#{1,6}\s+.+$/m);
+              const nextHeadingMatch = body.slice(sectionStart).match(new RegExp(`^\\s*#{1,${level}}\\s+.+$`, 'm'));
               const sectionEnd = nextHeadingMatch && typeof nextHeadingMatch.index === 'number'
                 ? sectionStart + nextHeadingMatch.index
                 : body.length;
@@ -285,9 +308,40 @@ jobs:
                 : 'Select a program PR template: GSSoC, NSOC, SSOC, or ELUSOC.');
             }
 
-            if (!requiredSections.every(section => hasHeading(section))) {
+            const missingSections = requiredSections.filter(section => !hasHeading(section));
+            if (missingSections.length > 0) {
               problems.push('Use the mandatory VoiceForge PR template and keep all required sections.');
               needsLabelsToAdd.push('needs-template');
+            } else {
+              const descriptionSection = getHeadingSection('Description');
+              if (!descriptionSection || descriptionSection.length < 20) {
+                problems.push('Please fill in the Description section with details about your changes (minimum 20 characters).');
+                needsLabelsToAdd.push('needs-quality');
+              }
+
+              const typeOfChangeSection = getHeadingSection('Type of Change');
+              const hasCheckedTypeOfChange = /[-*+]\s*\[\s*[xX]\s*\]/.test(typeOfChangeSection);
+              if (!hasCheckedTypeOfChange) {
+                problems.push('Please select at least one option under the Type of Change section.');
+                needsLabelsToAdd.push('needs-template');
+              }
+
+              const howToTestSection = getHeadingSection('How to Test')
+                .replace(/1\.\s*Open\s*`http:\/\/localhost:5173`\s*in\s*a\s*browser/i, '')
+                .replace(/2\.\s*\.{3}/g, '')
+                .replace(/\.\.\./g, '')
+                .trim();
+              if (!howToTestSection || howToTestSection.length < 10) {
+                problems.push('Please fill in the How to Test section with verification steps (minimum 10 characters).');
+                needsLabelsToAdd.push('needs-quality');
+              }
+
+              const checklistSection = getHeadingSection('Checklist');
+              const hasChecklistItems = /[-*+]\s*\[\s*[ xX\s]\s*\]/i.test(checklistSection);
+              if (!hasChecklistItems) {
+                problems.push('Please keep and complete the Checklist section.');
+                needsLabelsToAdd.push('needs-template');
+              }
             }
 
             if (linkedIssueNumbers.length === 0) {
@@ -346,16 +400,7 @@ jobs:
               needsLabelsToAdd.push('needs-title');
             }
 
-            const cleanedBody = body
-              .replace(/<!--[\s\S]*?-->/g, '')
-              .replace(/[#>*`\-\[\]]/g, '')
-              .replace(/\.\.\./g, '')
-              .trim();
-
-            if (cleanedBody.length < 120) {
-              problems.push('Please fill in the PR template with enough detail for maintainers to review it.');
-              needsLabelsToAdd.push('needs-quality');
-            }
+            // Individual sections are checked for quality above.
 
             const { data: files } = await github.rest.pulls.listFiles({
               owner,
@@ -380,15 +425,16 @@ jobs:
             neutralLabelsToAdd.push(sizeLabel);
 
             const changedPaths = files.map(file => file.filename);
-            const hasDocumentationChange = /documentation|docs|readme/i.test(body) || changedPaths.some(path => /\.md$/i.test(path));
+            const typeOfChangeSection = getHeadingSection('Type of Change');
+            const hasDocumentationChange = (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:documentation|docs)/i.test(typeOfChangeSection)) || changedPaths.some(path => /\.md$/i.test(path));
             if (changedPaths.some(path => path.startsWith('client/'))) neutralLabelsToAdd.push('client');
             if (changedPaths.some(path => path.startsWith('server/'))) neutralLabelsToAdd.push('server');
             if (changedPaths.some(path => path.startsWith('.github/'))) neutralLabelsToAdd.push('ci');
             if (hasDocumentationChange) neutralLabelsToAdd.push('documentation');
-            if (/accessibility|a11y/i.test(body)) neutralLabelsToAdd.push('accessibility');
-            if (/bug fix/i.test(body)) neutralLabelsToAdd.push('bug');
-            if (/new feature/i.test(body)) neutralLabelsToAdd.push('enhancement');
-            if (/refactor|cleanup/i.test(body)) neutralLabelsToAdd.push('refactor');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:accessibility|a11y)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('accessibility');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*bug/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('bug');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:new feature|enhancement)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('enhancement');
+            if (typeOfChangeSection && /[-*+]\s*\[\s*[xX]\s*\]\s*.*(?:refactor|cleanup)/i.test(typeOfChangeSection)) neutralLabelsToAdd.push('refactor');
 
             if (problems.length === 0) {
               statusLabelsToAdd.push(
@@ -409,8 +455,8 @@ jobs:
             }
             if (linkedIssueNumbers.length > 0 && !needsLabelsToAdd.includes('needs-linked-issue')) await removeLabel('needs-linked-issue');
             if (linkedIssues.length > 0 && !needsLabelsToAdd.includes('needs-assignee-match')) await removeLabel('needs-assignee-match');
-            if (requiredSections.every(section => hasHeading(section))) await removeLabel('needs-template');
-            if (cleanedBody.length >= 120) await removeLabel('needs-quality');
+            if (!needsLabelsToAdd.includes('needs-template')) await removeLabel('needs-template');
+            if (!needsLabelsToAdd.includes('needs-quality')) await removeLabel('needs-quality');
             if (validTitleRegex.test(title)) await removeLabel('needs-title');
             if (!tooManyFilesChanged) await removeLabel('large PR');
 
