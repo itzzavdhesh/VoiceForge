@@ -67,9 +67,9 @@ export default function VoiceForge() {
       return;
     }
     speak(text);
-    addMessage(text);
+    addMessage(text, language);
     showToast("Saved to history", "success");
-  }, [inputText, speak, addMessage, showToast]);
+  }, [inputText, speak, addMessage, showToast, language]);
 
   const handleReplay = useCallback((text) => {
     speak(text);
@@ -107,9 +107,9 @@ export default function VoiceForge() {
 
   const handleQuickReply = useCallback((phrase) => {
     speak(phrase);
-    addMessage(phrase);
+    addMessage(phrase, language);
     showToast("Quick reply sent", "success");
-  }, [speak, addMessage, showToast]);
+  }, [speak, addMessage, showToast, language]);
 
   const handleKeyDown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {

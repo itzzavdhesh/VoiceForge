@@ -9,7 +9,9 @@ import { useState, useEffect, useCallback } from "react";
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
 const TRANSCRIPT_KEY = "vf_transcript";
+const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
+const MAX_ANALYTICS = 2000;
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -80,6 +82,7 @@ export function useSpeechHistory() {
     () => new Set(readStorage(FAVS_KEY, []))
   );
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
+  const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
 
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,6 +109,14 @@ export function useSpeechHistory() {
     }
   }, [favorites]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(ANALYTICS_KEY, JSON.stringify(analyticsHistory));
+    } catch {
+      /* storage quota exceeded — silently skip */
+    }
+  }, [analyticsHistory]);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -118,9 +129,10 @@ export function useSpeechHistory() {
  * - moves duplicate entries to top
  * - enforces MAX_HISTORY limit
  *
- * @param {string} text - Message text to store
- */
-const addMessage = useCallback((text) => {
+   * @param {string} text - Message text to store
+   * @param {string} lang - Language code
+   */
+const addMessage = useCallback((text, lang = "en-US") => {
   const trimmed = text.trim();
 
   if (!trimmed) return;
@@ -133,8 +145,15 @@ const addMessage = useCallback((text) => {
     text: trimmed,
     timestamp,
     status: "success",
+    language: lang,
   },
 ]);
+
+  setAnalyticsHistory((prev) => {
+    const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };
+    const updated = [newEntry, ...prev];
+    return updated.slice(0, MAX_ANALYTICS);
+  });
 
   setHistory((prev) => {
     // Check existing message
@@ -186,12 +205,14 @@ const addMessage = useCallback((text) => {
     setHistory([]);
     setFavorites(new Set());
     setSessionTranscript([]);
+    setAnalyticsHistory([]);
   }, []);
 
   return {
     history,
     favorites,
     sessionTranscript,
+    analyticsHistory,
     addMessage,
     removeMessage,
     toggleFavorite,

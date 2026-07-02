@@ -27,6 +27,57 @@ export default React.forwardRef(function VideoPreview({
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
 
+  const [blurEnabled, setBlurEnabled] = React.useState(false);
+  const segmenterRef = React.useRef(null);
+  const isSegmentingRef = React.useRef(false);
+  const maskCanvasRef = React.useRef(null);
+
+  React.useEffect(() => {
+    async function initSegmenter() {
+      try {
+        const { SelfieSegmentation } = await import("@mediapipe/selfie_segmentation");
+        const segmenter = new SelfieSegmentation({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
+        });
+        segmenter.setOptions({
+          modelSelection: 1,
+        });
+        segmenter.onResults((results) => {
+          if (!maskCanvasRef.current) {
+            maskCanvasRef.current = document.createElement("canvas");
+          }
+          const mCanvas = maskCanvasRef.current;
+          mCanvas.width = results.image.width;
+          mCanvas.height = results.image.height;
+          const mCtx = mCanvas.getContext("2d");
+          
+          mCtx.save();
+          mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height);
+          
+          mCtx.drawImage(results.segmentationMask, 0, 0, mCanvas.width, mCanvas.height);
+          
+          mCtx.globalCompositeOperation = "source-in";
+          mCtx.drawImage(results.image, 0, 0, mCanvas.width, mCanvas.height);
+          
+          mCtx.globalCompositeOperation = "destination-over";
+          mCtx.filter = "blur(12px)";
+          mCtx.drawImage(results.image, 0, 0, mCanvas.width, mCanvas.height);
+          
+          mCtx.restore();
+          
+          isSegmentingRef.current = false;
+        });
+        
+        // Pre-initialize
+        await segmenter.initialize();
+        segmenterRef.current = segmenter;
+      } catch (err) {
+        console.error("Failed to load MediaPipe segmenter", err);
+      }
+    }
+    initSegmenter();
+  }, []);
+
   React.useEffect(() => {
     calibrationRef.current = calibration;
   }, [calibration]);
@@ -117,7 +168,23 @@ export default React.forwardRef(function VideoPreview({
 
       const video = videoRef.current;
       if (video?.readyState >= 2) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (blurEnabled && segmenterRef.current) {
+          if (!isSegmentingRef.current) {
+            isSegmentingRef.current = true;
+            segmenterRef.current.send({ image: video }).catch((err) => {
+              console.error(err);
+              isSegmentingRef.current = false;
+            });
+          }
+          if (maskCanvasRef.current) {
+            context.drawImage(maskCanvasRef.current, 0, 0, canvas.width, canvas.height);
+          } else {
+            // Draw video normally if first frame is not ready
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          }
+        } else {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
       } else {
         context.fillStyle = textColor;
         context.font = "600 24px Inter, sans-serif";
@@ -215,7 +282,19 @@ export default React.forwardRef(function VideoPreview({
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Lip-synced output</h2>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            Lip-synced output
+            <button
+              onClick={() => setBlurEnabled(!blurEnabled)}
+              className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                blurEnabled 
+                  ? "bg-coral text-white" 
+                  : "bg-ink/10 text-ink/70 hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
+              }`}
+            >
+              {blurEnabled ? "Blur ON" : "Blur OFF"}
+            </button>
+          </h2>
           <p className="mt-1 text-sm text-ink/65 dark:text-muted">
             {modelStatus}
           </p>
