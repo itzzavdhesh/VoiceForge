@@ -105,6 +105,15 @@ export default function VoiceForge() {
       });
   }, [inputText, showToast]);
 
+  const handleClearHistory = useCallback(() => {
+    const isConfirmed = window.confirm("Are you sure you want to clear your entire speech history?");
+    if (isConfirmed) {
+      clearHistory();
+      showToast("History cleared successfully", "success");
+    }
+  }, [clearHistory, showToast]);
+
+
   const handleQuickReply = useCallback((phrase) => {
     speak(phrase);
     addMessage(phrase);
@@ -158,6 +167,19 @@ export default function VoiceForge() {
   }
 
   return (
+feat-clear-history-195
+    <div className="flex h-screen overflow-hidden bg-white font-sans antialiased dark:bg-black">
+      <SpeechHistory
+        history={history}
+        favorites={favorites}
+        onReuse={handleReuse}
+        onReplay={handleReplay}
+        onToggleFav={toggleFavorite}
+        onDelete={removeMessage}
+        onClearHistory={handleClearHistory}
+        onCopy={handleCopy}
+      />
+=======
     <div className="relative flex h-[calc(100vh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100vh-65px)]">
       {/* Mobile history drawer overlay */}
       {historyOpen && (
@@ -193,6 +215,7 @@ export default function VoiceForge() {
           onCopy={handleCopy}
         />
       </div>
+ main
 
       <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
         <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
