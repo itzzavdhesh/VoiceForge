@@ -302,6 +302,9 @@ jobs:
                           '7. Audio Upload Constraints: If the issue reports failures or errors when uploading reference audio for cloning, recommend "suggest-needs-info" suggesting checking if the file exceeds the 12MB limit or uses an unsupported format.\n' +
                           '8. Offline Mock Testing: If the issue asks about running or testing the app offline or without internet access, recommend "suggest-already-addressed" and instruct them to set MOCK_CHATTERBOX=true in .env.\n' +
                           '9. Webcam Permissions: If the issue mentions black webcam screens, MediaDevice access errors, or camera permission failures, recommend "suggest-needs-info" suggesting verifying browser/OS permissions.\n' +
+                          '10. Documentation or Config Inconsistency: If the issue clearly identifies a specific mismatch between two files (e.g. README vs .env.example, docs vs actual code behavior, or commented-out values contradicting documented defaults), and the discrepancy is self-evident from the issue description alone, recommend "suggest-go-ahead". No additional information is needed since the fix is clear and verifiable.\n' +
+                          '11. Clear and Actionable Bug Report: If the issue describes a specific, reproducible bug with a clear expected vs actual behavior, concrete file references, or step-by-step reproduction — and it is not covered by rules 1–9 — recommend "suggest-go-ahead". Do not recommend "suggest-needs-info" for issues that are already well-described.\n' +
+                          'Tie-breaker: If you are unsure between "suggest-needs-info" and "suggest-go-ahead", choose "suggest-go-ahead" when the issue is clearly described and actionable, even if minor details are missing.\n' +
                           'Return valid JSON only.'
                       },
                       {
