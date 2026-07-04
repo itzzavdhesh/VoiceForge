@@ -38,8 +38,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
   const searchRef = useRef(null);
-  const listRef = useRef(null);
-
+  const generatedId = useId();
+  const panelId = id ?? generatedId;
   const selectedLang = getLanguageByCode(value);
   const regions = useMemo(() => getRegions(), []);
 
@@ -257,8 +257,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
         onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-controls={isOpen ? `${id || "language-selector"}-panel` : undefined}
         aria-label="Select output language"
+        aria-controls={isOpen ? `${panelId}-panel` : undefined}
         className={[
           "group inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-moss/40 dark:focus:ring-glow/40",
@@ -289,7 +289,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
           role="dialog"
           aria-label="Language selection"
           className={[
-            "z-50 flex flex-col overflow-hidden rounded-xl border shadow-lg animate-fade-in-up",
+            "flex flex-col overflow-hidden rounded-xl border shadow-lg animate-fade-in-up",
             "border-neutral-200/80 bg-white dark:border-border dark:bg-surface",
           ].join(" ")}
           style={panelStyle}
