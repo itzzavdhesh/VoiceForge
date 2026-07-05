@@ -1,3 +1,4 @@
+// adding landing page
 import { useEffect, useRef } from "react";
 
 const waveBarCount = 12;
@@ -7,15 +8,13 @@ export default function VoiceForgeLanding({ onNavigate }) {
   const waveRefs = useRef([]);
 
   useEffect(() => {
-    // Give each bar its own independent random-height loop so the
-    // waveform looks like it's actually "listening" instead of a
-    // synced, repeating pattern.
+    
     const timeouts = [];
 
     const animateBar = (bar) => {
       if (!bar) return;
-      const nextHeight = Math.random() * 26 + 8; // 8px - 34px
-      const nextDuration = Math.random() * 350 + 400; // 400ms - 750ms
+      const nextHeight = Math.random() * 26 + 8; 
+      const nextDuration = Math.random() * 350 + 400; 
       bar.style.transitionDuration = `${nextDuration}ms`;
       bar.style.height = `${nextHeight}px`;
 
@@ -26,7 +25,6 @@ export default function VoiceForgeLanding({ onNavigate }) {
     waveRefs.current.forEach((bar) => {
       if (!bar) return;
       bar.style.transition = "height 0.5s cubic-bezier(0.45, 0, 0.55, 1)";
-      // Stagger the first tick so bars don't all start their loop in lockstep
       const startDelay = Math.random() * 400;
       const timeoutId = setTimeout(() => animateBar(bar), startDelay);
       timeouts.push(timeoutId);
@@ -70,7 +68,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
         <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 text-center sm:px-6 lg:px-8">
           <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center gap-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#53e894]/30 bg-[#53e894]/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#53e894] sm:text-sm">
-              <span className="material-symbols-outlined text-[18px]">verified</span>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">verified</span>
               Privacy-first local synthesis
             </div>
 
@@ -117,7 +115,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-12 md:auto-rows-fr md:[grid-template-areas:'feature_feature_feature_feature_feature_feature_feature_feature_control_control_control_control''presence_presence_presence_presence_presence_presence_presence_presence_presence_presence_presence_presence']">
+          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-12 md:auto-rows-fr">
             <article
               ref={setCardRef(0)}
               className="group overflow-hidden rounded-2xl border border-white/10 bg-[rgba(22,22,22,0.8)] opacity-0 backdrop-blur-xl transition-all duration-700 translate-y-8 md:col-span-8"
@@ -133,7 +131,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                     }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-6xl text-[#53e894]/30 sm:text-7xl">
+                    <span className="material-symbols-outlined text-6xl text-[#53e894]/30 sm:text-7xl" aria-hidden="true">
                       analytics
                     </span>
                   </div>
@@ -160,7 +158,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
               className="rounded-2xl border border-white/10 bg-[rgba(22,22,22,0.8)] p-6 opacity-0 backdrop-blur-xl transition-all duration-700 translate-y-8 md:col-span-4 md:p-8"
             >
               <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#ffb4a5]/10 text-[#ffb4a5]">
-                <span className="material-symbols-outlined">security</span>
+                <span className="material-symbols-outlined" aria-hidden="true">security</span>
               </div>
 
               <h3 className="mb-4 text-2xl font-bold text-[#e5e2e1]">
@@ -174,13 +172,13 @@ export default function VoiceForgeLanding({ onNavigate }) {
 
               <ul className="space-y-3">
                 <li className="flex items-center gap-3 text-sm text-[#e5e2e1]">
-                  <span className="material-symbols-outlined text-[18px] text-[#53e894]">
+                  <span className="material-symbols-outlined text-[18px] text-[#53e894]" aria-hidden="true">
                     check_circle
                   </span>
                   No Cloud Uploads
                 </li>
                 <li className="flex items-center gap-3 text-sm text-[#e5e2e1]">
-                  <span className="material-symbols-outlined text-[18px] text-[#53e894]">
+                  <span className="material-symbols-outlined text-[18px] text-[#53e894]" aria-hidden="true">
                     check_circle
                   </span>
                   Offline Processing
@@ -212,7 +210,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                         "repeating-linear-gradient(45deg, transparent, transparent 10px, #53e894 10px, #53e894 11px)",
                     }}
                   />
-                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20">
+                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20" aria-hidden="true">
                     face
                   </span>
                 </div>
@@ -225,7 +223,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                         "repeating-linear-gradient(-45deg, transparent, transparent 10px, #53e894 10px, #53e894 11px)",
                     }}
                   />
-                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20">
+                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20" aria-hidden="true">
                     equalizer
                   </span>
                 </div>
@@ -239,7 +237,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                       backgroundSize: "10px 10px",
                     }}
                   />
-                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20">
+                  <span className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl text-[#53e894]/20" aria-hidden="true">
                     groups
                   </span>
                 </div>
@@ -265,7 +263,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
               <button onClick={() => onNavigate?.('onboarding')} className="inline-flex min-h-[52px] items-center justify-center gap-3 rounded-xl bg-[#53e894] px-8 py-4 text-base font-bold text-black transition duration-200 hover:scale-[1.02] hover:bg-[#69f7a7] active:scale-[0.98]">
                 Claim Your Voice
-                <span className="material-symbols-outlined">arrow_forward</span>
+                <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
               </button>
 
               <button onClick={() => onNavigate?.('about')} className="min-h-[52px] rounded-xl bg-white/10 px-8 py-4 text-base font-semibold text-[#e5e2e1] transition duration-200 hover:bg-white/15 active:scale-[0.98]">
@@ -280,35 +278,6 @@ export default function VoiceForgeLanding({ onNavigate }) {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
-        * {
-          box-sizing: border-box;
-        }
-
-        html {
-          scroll-behavior: smooth;
-        }
-
-        body {
-          font-family: 'Inter', sans-serif;
-        }
-
-        h1, h2, h3 {
-          font-family: 'Hanken Grotesk', sans-serif;
-        }
-
-        .material-symbols-outlined {
-          font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-          }
-        }
       `}</style>
     </div>
   );

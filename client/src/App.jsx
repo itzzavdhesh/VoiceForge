@@ -93,10 +93,6 @@ export default function App() {
       setActiveTab("privacy-policy");
       return;
     }
-    else {
-      setActiveTab("landing");
-      return;
-    }
     selectTab(route);
   }
 
