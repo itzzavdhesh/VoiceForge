@@ -1,35 +1,12 @@
 // adding landing page
 import { useEffect, useRef } from "react";
 
-const waveBarCount = 12;
+const waveBarCount = 5;
 
 export default function VoiceForgeLanding({ onNavigate }) {
   const cardRefs = useRef([]);
-  const waveRefs = useRef([]);
 
   useEffect(() => {
-    
-    const timeouts = [];
-
-    const animateBar = (bar) => {
-      if (!bar) return;
-      const nextHeight = Math.random() * 26 + 8; 
-      const nextDuration = Math.random() * 350 + 400; 
-      bar.style.transitionDuration = `${nextDuration}ms`;
-      bar.style.height = `${nextHeight}px`;
-
-      const timeoutId = setTimeout(() => animateBar(bar), nextDuration);
-      timeouts.push(timeoutId);
-    };
-
-    waveRefs.current.forEach((bar) => {
-      if (!bar) return;
-      bar.style.transition = "height 0.5s cubic-bezier(0.45, 0, 0.55, 1)";
-      const startDelay = Math.random() * 400;
-      const timeoutId = setTimeout(() => animateBar(bar), startDelay);
-      timeouts.push(timeoutId);
-    });
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -46,23 +23,17 @@ export default function VoiceForgeLanding({ onNavigate }) {
       if (card) observer.observe(card);
     });
 
-    return () => {
-      observer.disconnect();
-      timeouts.forEach((id) => clearTimeout(id));
-    };
+    return () => observer.disconnect();
   }, []);
 
   const setCardRef = (index) => (el) => {
     cardRefs.current[index] = el;
   };
 
-  const setWaveRef = (index) => (el) => {
-    waveRefs.current[index] = el;
-  };
 
   return (
     <div className="w-full min-h-screen overflow-x-hidden bg-[#0A0A0A] text-[#e5e2e1] antialiased">
-      
+
 
       <main>
         <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 text-center sm:px-6 lg:px-8">
@@ -90,12 +61,11 @@ export default function VoiceForgeLanding({ onNavigate }) {
             </div>
           </div>
 
-          <div className="pointer-events-none absolute bottom-10 left-1/2 z-10 flex -translate-x-1/2 items-end gap-1 opacity-60">
+          <div className="recording-wave pointer-events-none absolute bottom-10 left-1/2 z-10 flex -translate-x-1/2 items-end gap-1 opacity-60">
             {Array.from({ length: waveBarCount }).map((_, index) => (
               <span
                 key={index}
-                ref={setWaveRef(index)}
-                className="block w-[3px] rounded-full bg-[#53e894]"
+                className="block h-8 w-[3px] rounded-full bg-[#53e894]"
               />
             ))}
           </div>
@@ -201,8 +171,8 @@ export default function VoiceForgeLanding({ onNavigate }) {
                 </p>
               </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-2 md:w-2/3 md:pb-0">
-                <div className="relative aspect-square min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+              <div className="flex flex-col gap-4 md:w-2/3 md:flex-row md:overflow-x-auto md:pb-0">
+                <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] md:w-auto md:min-w-[200px]">
                   <div
                     className="absolute inset-0 opacity-10"
                     style={{
@@ -215,7 +185,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                   </span>
                 </div>
 
-                <div className="relative aspect-square min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] md:w-auto md:min-w-[200px]">
                   <div
                     className="absolute inset-0 opacity-10"
                     style={{
@@ -228,7 +198,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
                   </span>
                 </div>
 
-                <div className="relative aspect-square min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] md:w-auto md:min-w-[200px]">
                   <div
                     className="absolute inset-0 opacity-10"
                     style={{
@@ -276,9 +246,7 @@ export default function VoiceForgeLanding({ onNavigate }) {
 
       <footer className="border-t border-white/10 bg-black/30 py-6" />
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-      `}</style>
+
     </div>
   );
 }
