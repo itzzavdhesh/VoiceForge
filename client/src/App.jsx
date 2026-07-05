@@ -13,6 +13,7 @@ import ScrollToTopButton from "./components/ScrollToTopButton";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import VoiceForgeLanding from "./pages/Landing.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -23,7 +24,7 @@ const tabs = [
   { id: "about", label: "About", icon: Info },
 ];
 
-const DEFAULT_TAB = "onboarding";
+const DEFAULT_TAB = "landing";
 const tabIds = new Set(tabs.map((tab) => tab.id));
 
 // We intentionally use sessionStorage (not localStorage) here so that the
@@ -39,6 +40,7 @@ const tabIds = new Set(tabs.map((tab) => tab.id));
 function getSavedTab() {
   try {
     const saved = sessionStorage.getItem("voiceforge:activeTab");
+    if (saved === "landing") return saved;
     return tabIds.has(saved) ? saved : DEFAULT_TAB;
   } catch {
     return DEFAULT_TAB;
@@ -91,19 +93,29 @@ export default function App() {
       setActiveTab("privacy-policy");
       return;
     }
+    else {
+      setActiveTab("landing");
+      return;
+    }
     selectTab(route);
   }
 
   // On initial load, honor direct links to /privacy-policy
   React.useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && window.location?.pathname === "/privacy-policy") {
+  try {
+    if (typeof window !== "undefined") {
+      const path = window.location?.pathname;
+
+      if (path === "/privacy-policy") {
         setActiveTab("privacy-policy");
+      } else if (path === "/landing") {
+        setActiveTab("landing");
       }
-    } catch {
-      // ignore
     }
-  }, []);
+  } catch {
+    // ignore
+  }
+}, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
@@ -200,6 +212,7 @@ export default function App() {
               onBackHome={() => selectTab("onboarding")}
              />
             )}
+            {activeTab === "landing" && <VoiceForgeLanding onNavigate={selectTab} />}
           </div>
         )}
       </main>
