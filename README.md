@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 3] navigation and ui extensions - analytics, library and healthcare workspace tabs (#329)
