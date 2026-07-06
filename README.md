@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] : `voiceforge.jsx` uses `window.speechsynthesis` directly instead of `usetts`, silently ignoring the cloned voice profile on the main page (#387)
