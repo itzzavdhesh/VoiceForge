@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] missing canvas audio waveform visualizer (#453)
