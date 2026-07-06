@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] speak() always saves to history, even on failed speech synthesis or silent browser fallback (#398)
