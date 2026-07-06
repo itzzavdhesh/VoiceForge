@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 5] analytics workspace - usage metrics, cost estimator and voice frequency chart (#331)
