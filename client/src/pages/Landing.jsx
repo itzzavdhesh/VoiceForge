@@ -243,10 +243,6 @@ export default function VoiceForgeLanding({ onNavigate }) {
           </div>
         </section>
       </main>
-
-      <footer className="border-t border-white/10 bg-black/30 py-6" />
-
-
     </div>
   );
 }
