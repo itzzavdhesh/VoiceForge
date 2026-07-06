@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: feat: add github actions for automated playwright testing (#445)
