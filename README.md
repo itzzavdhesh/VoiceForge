@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 2] indexeddb schema v2 - transcripts, sessions and collections stores (#328)
