@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] parseboundednumber missing upper bound allows dangerously large environment values (#514)
