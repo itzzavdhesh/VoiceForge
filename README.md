@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] selected language does not generate native multilingual speech (#510)
