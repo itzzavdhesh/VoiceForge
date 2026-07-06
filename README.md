@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] token expiresat hardcoded to 60s ignores configurable pending_stream_ttl_ms (#512)
