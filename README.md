@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 4] voice settings - pitch and speed controls with localstorage persistence (#330)
