@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 10] healthcare governance mode - caregiver pin lock for preset protection (#336)
