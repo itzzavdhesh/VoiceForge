@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: feat: add live captions overlay on the lip-synced video preview (#392)
