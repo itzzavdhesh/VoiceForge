@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [bug] incorrect native language names for non-latin scripts in languageselector data (#515)
