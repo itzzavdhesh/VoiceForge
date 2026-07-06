@@ -124,3 +124,4 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+# TODO: [phase 11] pitch and speed sliders - real-time voice controls in quick settings (#337)
