@@ -27,19 +27,19 @@ export const SUPPORTED_LANGUAGES = [
   { code: "sv", name: "Swedish", nativeName: "Svenska", flag: "SV", region: "Europe" },
   { code: "da", name: "Danish", nativeName: "Dansk", flag: "DA", region: "Europe" },
   { code: "fi", name: "Finnish", nativeName: "Suomi", flag: "FI", region: "Europe" },
-  { code: "el", name: "Greek", nativeName: "Greek", flag: "EL", region: "Europe" },
-  { code: "ru", name: "Russian", nativeName: "Russian", flag: "RU", region: "Europe" },
+  { code: "el", name: "Greek", nativeName: "Ελληνικά", flag: "EL", region: "Europe" },
+  { code: "ru", name: "Russian", nativeName: "Русский", flag: "RU", region: "Europe" },
   { code: "no", name: "Norwegian", nativeName: "Norsk", flag: "NO", region: "Europe" },
   { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
 
-  { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
-  { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
-  { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
-  { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
+  { code: "hi", name: "Hindi", nativeName: "हिन्दी", flag: "HI", region: "Asia & Pacific" },
+  { code: "ja", name: "Japanese", nativeName: "日本語", flag: "JA", region: "Asia & Pacific" },
+  { code: "ko", name: "Korean", nativeName: "한국어", flag: "KO", region: "Asia & Pacific" },
+  { code: "zh", name: "Chinese", nativeName: "中文", flag: "ZH", region: "Asia & Pacific" },
   { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "MS", region: "Asia & Pacific" },
 
-  { code: "ar", name: "Arabic", nativeName: "Arabic", flag: "AR", region: "Middle East" },
-  { code: "he", name: "Hebrew", nativeName: "Hebrew", flag: "HE", region: "Middle East" },
+  { code: "ar", name: "Arabic", nativeName: "العربية", flag: "AR", region: "Middle East" },
+  { code: "he", name: "Hebrew", nativeName: "עברית", flag: "HE", region: "Middle East" },
 
   { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
 ];
