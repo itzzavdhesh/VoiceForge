@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #649: [BUG] : Voice Session Loss Auto-Recovery (Self-healing re-cloning)
