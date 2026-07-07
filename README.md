@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+<!-- fix: docs: add "Development Workflow & Local-First Architecture"  (#523) -->
