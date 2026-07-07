@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #647: feat: Progress Bar & 10-second Quality Guard
