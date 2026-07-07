@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #422: feat:[perf]: Throttle face detection and audio state updates to reduce main-thre
