@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #335: [Phase 9] AAC Symbol Board - Augmentative and Alternative Communication tile gri
