@@ -111,3 +111,5 @@ textarea {
 .animate-fade-in-up {
   animation: fade-in-up 0.2s ease-out;
 }
+
+/* fix: [BUG] : `VoiceForge.jsx` uses `window.speechSynthesis` direc (#387) */
