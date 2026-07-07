@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #334: [Phase 8] Emergency Phrase Presets - One-tap accessibility communication
