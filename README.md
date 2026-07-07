@@ -124,3 +124,5 @@ Screenshot placeholder: Zoom camera picker showing OBS Virtual Camera.
 ## License
 
 MIT
+
+# TODO: fix for #447: feat: Handle IndexedDB Quota and Incognito Failures
