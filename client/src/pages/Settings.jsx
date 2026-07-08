@@ -21,6 +21,9 @@ import {
   clearAllVoiceProfiles,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
+import { ProfileCard } from "../components/ProfileCard.jsx";
+import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
+import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -45,6 +48,8 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const [sharingProfile, setSharingProfile] = React.useState(null);
+  const [isReceiving, setIsReceiving] = React.useState(false);
   const { toasts, showToast } = useToast();
   React.useEffect(() => {
     async function loadProfiles() {
@@ -410,49 +415,62 @@ export default function Settings() {
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
-          {profiles.length > 0 && (
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={removeAllProfiles}
-              className="text-sm font-bold text-coral hover:underline"
+              onClick={() => setIsReceiving(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
             >
-              Clear All Profiles
+              Receive Profile
             </button>
-          )}
+            {profiles.length > 0 && (
+              <button
+                type="button"
+                onClick={removeAllProfiles}
+                className="text-sm font-bold text-coral hover:underline"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
-        <div className="mt-4 divide-y divide-ink/10 rounded-md border border-ink/10 dark:divide-border dark:border-border">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {profiles.length === 0 && (
-            <p className="p-4 text-sm text-ink/65 dark:text-muted">
+            <p className="col-span-full p-4 text-sm text-ink/65 dark:text-muted border border-ink/10 rounded-md dark:border-border">
               No saved profiles yet.
             </p>
           )}
           {profiles.map((profile) => (
-            <div
+            <ProfileCard
               key={profile.voice_id}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="font-bold">{profile.name}</p>
-                <p className="mt-1 break-all text-sm text-ink/60 dark:text-muted">
-                  {profile.voice_id}
-                </p>
-                {profile.audioBlob && <AudioPlayback blob={profile.audioBlob} />}
- 
-              </div>
-              <button
-                type="button"
-                onClick={() => removeProfile(profile.voice_id)}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-coral/40 px-3 py-2 font-bold text-coral hover:bg-coral hover:text-white"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-                Delete
-              </button>
-            </div>
+              profile={profile}
+              onDelete={removeProfile}
+              onShare={(p) => setSharingProfile(p)}
+            />
           ))}
         </div>
       </section>
+      
+      {sharingProfile && (
+        <ShareProfileModal 
+          profile={sharingProfile} 
+          onClose={() => setSharingProfile(null)} 
+        />
+      )}
+
+      {isReceiving && (
+        <ReceiveProfileModal 
+          onClose={() => setIsReceiving(false)}
+          onSuccess={async () => {
+            const loaded = await getSavedProfiles();
+            setProfiles(loaded);
+            setIsReceiving(false);
+            showToast("Profile received successfully!", "success");
+          }}
+        />
+      )}
       <ToastContainer toasts={toasts} />
     </div>
   );

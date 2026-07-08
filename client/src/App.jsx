@@ -26,9 +26,19 @@ const tabs = [
 const DEFAULT_TAB = "onboarding";
 const tabIds = new Set(tabs.map((tab) => tab.id));
 
+// We intentionally use sessionStorage (not localStorage) here so that the
+// active tab is only remembered for the lifetime of the current browser tab.
+// This keeps in-session navigation (e.g. refreshing while on Compose) smooth,
+// while making it much more likely that a fresh visit (a new tab/window
+// opened independently, or reopening after the browser was fully closed)
+// lands back on Onboarding. Note: this isn't an absolute guarantee in every
+// browser/scenario (e.g. sessionStorage is inherited when a tab is opened
+// via window.open from an existing VoiceForge tab, and some browsers'
+// session-restore features can preserve it across restarts), but it's a
+// meaningful improvement over localStorage, which persisted indefinitely.
 function getSavedTab() {
   try {
-    const saved = localStorage.getItem("voiceforge:activeTab");
+    const saved = sessionStorage.getItem("voiceforge:activeTab");
     return tabIds.has(saved) ? saved : DEFAULT_TAB;
   } catch {
     return DEFAULT_TAB;
@@ -37,7 +47,7 @@ function getSavedTab() {
 
 function saveActiveTab(tab) {
   try {
-    localStorage.setItem("voiceforge:activeTab", tab);
+    sessionStorage.setItem("voiceforge:activeTab", tab);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
