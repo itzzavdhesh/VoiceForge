@@ -135,7 +135,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     const widthTarget = compact ? 288 : Math.max(rect.width, 320);
     const width = Math.min(widthTarget, Math.max(0, viewportWidth - margin * 2));
     const maxHeight = Math.min(420, Math.max(180, viewportHeight - margin * 2));
-    const heightTarget = Math.max(availableAbove, availableBelow, 180);
+    const heightTarget = Math.max(openAbove ? availableAbove : availableBelow, 180);
     const height = Math.min(maxHeight, heightTarget);
     const top = openAbove
       ? Math.max(margin, rect.top - height - 8)
