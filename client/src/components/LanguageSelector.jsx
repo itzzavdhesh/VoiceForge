@@ -10,6 +10,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useId
 } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search, Globe, X } from "lucide-react";
@@ -40,6 +41,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const searchRef = useRef(null);
   const generatedId = useId();
   const panelId = id ?? generatedId;
+  const listRef = useRef(null);
   const selectedLang = getLanguageByCode(value);
   const regions = useMemo(() => getRegions(), []);
 
@@ -285,7 +287,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
       {isOpen && panelStyle && typeof document !== "undefined" && createPortal(
         <div
           ref={panelRef}
-          id={`${id || "language-selector"}-panel`}
+          id={panelId}
           role="dialog"
           aria-label="Language selection"
           className={[
