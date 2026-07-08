@@ -201,7 +201,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
           size={compact ? 14 : 16}
           aria-hidden="true"
           className={[
-            "flex-shrink-0 transition-transform duration-200 text-neutral-400 dark:text-neutral-500",
+            "flex-shrink-0 transition-transform duration-200 text-neutral-400 dark:text-neutral-400",
             isOpen ? "rotate-180" : "",
           ].join(" ")}
         />
@@ -226,7 +226,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
             <Search
               size={15}
               aria-hidden="true"
-              className="flex-shrink-0 text-neutral-400 dark:text-neutral-500"
+              className="flex-shrink-0 text-neutral-400 dark:text-neutral-400"
             />
             <input
               ref={searchRef}
@@ -244,7 +244,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
               <button
                 type="button"
                 onClick={() => { setSearch(""); searchRef.current?.focus(); }}
-                className="rounded p-0.5 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+                className="rounded p-0.5 text-neutral-400 hover:text-neutral-600 dark:text-neutral-400 dark:hover:text-neutral-300"
                 aria-label="Clear search"
               >
                 <X size={14} aria-hidden="true" />
@@ -261,7 +261,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
             style={{ maxHeight: "360px" }}
           >
             {filtered.length === 0 && (
-              <p className="px-4 py-8 text-center text-sm text-neutral-400 dark:text-neutral-500">
+              <p className="px-4 py-8 text-center text-sm text-neutral-400 dark:text-neutral-400">
                 No languages match "{search}"
               </p>
             )}
@@ -289,9 +289,9 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                         : "text-neutral-700 dark:text-neutral-300",
                     ].join(" ")}
                   >
-                    <Globe size={18} aria-hidden="true" className="flex-shrink-0 text-neutral-400 dark:text-neutral-500" />
+                    <Globe size={18} aria-hidden="true" className="flex-shrink-0 text-neutral-400 dark:text-neutral-400" />
                     <span className="flex-1">Auto-detect</span>
-                    <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                    <span className="text-[11px] text-neutral-400 dark:text-neutral-400">
                       Let AI detect
                     </span>
                     {isSelected && (
@@ -305,7 +305,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                 return (
                   <div
                     key={`region-${item.region}`}
-                    className="sticky top-0 z-10 bg-neutral-50/95 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-neutral-400 backdrop-blur-sm dark:bg-surface/95 dark:text-neutral-500"
+                    className="sticky top-0 z-10 bg-neutral-50/95 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-neutral-400 backdrop-blur-sm dark:bg-surface/95 dark:text-neutral-400"
                     role="presentation"
                   >
                     {item.region}
@@ -340,11 +340,11 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                   </span>
                   <span className="flex-1 truncate">
                     {item.name}
-                    <span className="ml-1.5 text-xs text-neutral-400 dark:text-neutral-500">
+                    <span className="ml-1.5 text-xs text-neutral-400 dark:text-neutral-400">
                       {item.nativeName !== item.name ? item.nativeName : ""}
                     </span>
                   </span>
-                  <span className="flex-shrink-0 font-mono text-[11px] text-neutral-300 dark:text-neutral-600">
+                  <span className="flex-shrink-0 font-mono text-[11px] text-neutral-300 dark:text-neutral-400">
                     {item.code}
                   </span>
                   {isSelected && (
@@ -357,7 +357,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
 
           {/* Footer hint */}
           <div className="border-t border-neutral-100 px-4 py-2 dark:border-border">
-            <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-400">
               <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">↑↓</kbd>{" "}
               navigate{" · "}
               <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Enter</kbd>{" "}

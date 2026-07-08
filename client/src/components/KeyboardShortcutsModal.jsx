@@ -142,7 +142,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
         <div className="divide-y divide-ink/5 px-6 py-2 dark:divide-border">
           {SHORTCUTS.map((group) => (
             <div key={group.context} className="py-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink/40 dark:text-neutral-500">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink/40 dark:text-neutral-400">
                 {group.context}
               </p>
               <div className="flex flex-col gap-2">
@@ -171,7 +171,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
           ))}
         </div>
         <div className="flex items-center justify-between border-t border-ink/10 px-6 py-3 dark:border-border">
-          <p className="text-xs text-ink/40 dark:text-neutral-500">
+          <p className="text-xs text-ink/40 dark:text-neutral-400">
             Press{" "}
             <kbd className="rounded border border-ink/15 bg-ink/5 px-1 font-mono text-[10px] dark:border-border dark:bg-white/5">
               ?

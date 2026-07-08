@@ -147,7 +147,7 @@ export default function VoiceForge() {
     if (charsLeft < 50)  return "text-red-500";
     if (charsLeft < 100) return "text-orange-500";
     if (charsLeft < 200) return "text-yellow-500";
-    return "text-neutral-400 dark:text-neutral-500";
+    return "text-neutral-400 dark:text-neutral-400";
   }
 
   function getTextareaBorder() {
@@ -207,7 +207,7 @@ export default function VoiceForge() {
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500 sm:text-sm">
+          <span className="text-xs text-neutral-400 dark:text-neutral-400 sm:text-sm">
             Speech Composer
           </span>
           {isSpeaking && (
@@ -238,7 +238,7 @@ export default function VoiceForge() {
           <div className="flex items-center justify-between">
             <label
               htmlFor="vf-compose"
-              className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500"
+              className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-400"
             >
               Compose message
             </label>
@@ -278,7 +278,7 @@ export default function VoiceForge() {
             rows={6}
           />
 
-          <p id="vf-hint" className="text-xs text-neutral-400 dark:text-neutral-600">
+          <p id="vf-hint" className="text-xs text-neutral-400 dark:text-neutral-400">
             Tip: Press <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Ctrl</kbd> +{" "}
             <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Enter</kbd> to speak quickly.
           </p>
