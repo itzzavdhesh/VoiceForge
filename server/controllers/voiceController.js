@@ -10,7 +10,7 @@ import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/language
 // ---------------------------------------------------------------------------
 const voiceStore = new Map();
 
-function parseBoundedNumber(rawValue, fallback, min) {
+export function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
   return Number.isFinite(numeric) ? Math.max(min, numeric) : fallback;
 }
@@ -194,7 +194,7 @@ async function generateClonedVoice(
   return audioUrl;
 }
 
-function clampNumber(value, min, max, fallback) {
+export function clampNumber(value, min, max, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return fallback;
@@ -214,11 +214,17 @@ function pruneVoiceStore(now = Date.now()) {
     }
   }
 
-  while (voiceStore.size >= MAX_STORED_VOICES) {
+  while (voiceStore.size > MAX_STORED_VOICES) {
     const oldestVoiceId = voiceStore.keys().next().value;
     if (!oldestVoiceId) break;
     voiceStore.delete(oldestVoiceId);
   }
+}
+
+// Test-only hook: exposes store size so tests can assert on eviction/TTL
+// behavior without reaching into the module-private Map directly.
+export function __getVoiceStoreSize() {
+  return voiceStore.size;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,16 +249,24 @@ export async function cloneVoice(request, response, next) {
     }
 
     if (getIsMock()) {
-      console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
+      const voiceId = crypto.randomUUID();
+      voiceStore.set(voiceId, {
+        name: request.body.name || "VoiceForge Voice (mock)",
+        audioBuffer: Buffer.from("mock"),
+        mimeType: "audio/webm",
+        expiresAt: Date.now() + VOICE_STORE_TTL_MS
+      });
+      pruneVoiceStore();
+      
       response.json({
-        voice_id: "mock-voice-id-00000000",
+        voice_id: voiceId,
         name: request.body.name || "VoiceForge Voice (mock)"
       });
       return;
     }
 
     // Store the audio buffer server-side so it can be used during speak/stream.
-    pruneVoiceStore();
+    
     const voiceId = crypto.randomUUID();
     voiceStore.set(voiceId, {
       name: request.body.name || "VoiceForge Voice",
@@ -260,6 +274,7 @@ export async function cloneVoice(request, response, next) {
       mimeType: audioFile.mimetype,
       expiresAt: Date.now() + VOICE_STORE_TTL_MS
     });
+    pruneVoiceStore();
 
     response.json({
       voice_id: voiceId,
