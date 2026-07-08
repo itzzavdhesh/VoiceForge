@@ -249,7 +249,7 @@ export async function cloneVoice(request, response, next) {
     }
 
     if (getIsMock()) {
-      const voiceId = crypto.randomUUID();
+      const voiceId = "mock-voice-id-00000000";
       voiceStore.set(voiceId, {
         name: request.body.name || "VoiceForge Voice (mock)",
         audioBuffer: Buffer.from("mock"),
