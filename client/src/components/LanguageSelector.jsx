@@ -287,7 +287,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
       {isOpen && panelStyle && typeof document !== "undefined" && createPortal(
         <div
           ref={panelRef}
-          id={panelId}
+          id={`${panelId}-panel`}
           role="dialog"
           aria-label="Language selection"
           className={[
