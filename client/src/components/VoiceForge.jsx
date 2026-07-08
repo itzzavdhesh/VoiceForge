@@ -92,12 +92,28 @@ export default function VoiceForge() {
     loadActiveProfile();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+    };
+  }, []);
+
   const triggerSpeechSuccess = useCallback((text, type) => {
-    addMessage(text);
     if (type === "speak") {
+      addMessage(text);
       showToast("Saved to history", "success");
     } else if (type === "quickReply") {
+      addMessage(text);
       showToast("Quick reply sent", "success");
+    } else if (type === "replay") {
+      showToast("Replaying...", "info");
     }
   }, [addMessage, showToast]);
 
@@ -162,6 +178,10 @@ export default function VoiceForge() {
         showToast("Speech synthesis is not supported in this browser", "error");
         pendingSpeechRef.current = null;
         return false;
+      }
+
+      if (useClonedVoice) {
+        showToast("Using browser voice fallback", "info");
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
