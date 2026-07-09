@@ -13,6 +13,7 @@ import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { loadVoiceSettings } from "../utils/voiceSettings.js";
 
 const MAX_CHARS = 500;
 
@@ -49,7 +50,10 @@ export default function VoiceForge() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = language;
-    utterance.rate = 0.95;
+
+    const voiceSettings = loadVoiceSettings();
+    utterance.rate = typeof voiceSettings.rate === "number" ? voiceSettings.rate : 1.0;
+
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => {

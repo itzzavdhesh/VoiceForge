@@ -76,6 +76,17 @@ export default function Settings() {
     persistVoiceSettings(newSettings);
   }
 
+  React.useEffect(() => {
+    function handleStorage(event) {
+      const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
+      if (event.key === VOICE_SETTINGS_KEY) {
+        setVoiceSettings(loadVoiceSettings());
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const handleExport = async () => {
     try {
       const storageData = {
@@ -322,6 +333,21 @@ export default function Settings() {
               className="w-full mt-2"
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
+          </div>
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="rate">
+              <span>Speech Rate</span>
+              <span className="text-ink/65">{voiceSettings.rate}x</span>
+            </label>
+            <input
+              id="rate"
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={voiceSettings.rate}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, rate: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Adjust speaking speed. Lower values are slower; higher values are faster.</p>
           </div>
         </div>
       </section>
