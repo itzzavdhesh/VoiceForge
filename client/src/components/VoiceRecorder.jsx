@@ -2,6 +2,7 @@
 import React from "react";
 import { Mic, Square, Upload, CircleAlert, Loader2, FileUp } from "lucide-react";
 import { extractAudioFromFile } from "../utils/audioExtractor.js";
+import { AudioTrimmer } from "./AudioTrimmer.jsx";
 
 export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [isRecording, setIsRecording] = React.useState(false);
@@ -12,6 +13,8 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [recorderError, setRecorderError] = React.useState("");
   const [isExtracting, setIsExtracting] = React.useState(false);
   
+  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
+
   const fileInputRef = React.useRef(null);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
@@ -56,6 +59,8 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       type: recorderRef.current?.mimeType || "audio/webm"
     });
     
+    setRawAudioBlob(blob);
+
     const url = URL.createObjectURL(blob);
     setAudioUrl((previous) => {
       if (previous) URL.revokeObjectURL(previous);
@@ -77,6 +82,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       return "";
     });
     onRecordingReady(null);
+    setRawAudioBlob(null);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -186,6 +192,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     setAudioUrl("");
     setRecorderError("");
     onRecordingReady(null);
+    setRawAudioBlob(null);
     setDuration(0);
     durationRef.current = 0;
     
@@ -193,6 +200,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     
     try {
       const { blob, duration } = await extractAudioFromFile(file);
+      setRawAudioBlob(blob);
       const url = URL.createObjectURL(blob);
       setAudioUrl(url);
       setDuration(duration);
@@ -386,6 +394,25 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           </audio>
         )}
       </div>
+
+      {rawAudioBlob && (
+        <div className="mt-5 border-t border-neutral-100 pt-5 dark:border-neutral-850">
+          <AudioTrimmer
+            audioBlob={rawAudioBlob}
+            onTrimComplete={(trimmedBlob, trimmedDuration) => {
+              const url = URL.createObjectURL(trimmedBlob);
+              setAudioUrl((previous) => {
+                if (previous) URL.revokeObjectURL(previous);
+                return url;
+              });
+              setDuration(Math.round(trimmedDuration));
+              durationRef.current = Math.round(trimmedDuration);
+              chunksRef.current = [trimmedBlob];
+              onRecordingReady(trimmedBlob, Math.round(trimmedDuration));
+            }}
+          />
+        </div>
+      )}
       
       {audioUrl && duration < 10 && (
         <div className="mt-4 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-sm font-semibold text-ink flex items-center gap-2 dark:bg-amber-900/20 dark:text-amber-300">
