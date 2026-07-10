@@ -59,6 +59,35 @@ export default React.forwardRef(function VideoPreview({
   }, [subtitleBgOpacity]);
 
   React.useEffect(() => {
+    function handleStorage(event) {
+      if (
+        (event.key === "voiceforge:voiceSettings" || event.type === "voiceforge:settingsChanged") &&
+        audioProcessorRef.current
+      ) {
+        try {
+          const saved = JSON.parse(localStorage.getItem("voiceforge:voiceSettings")) || {};
+          const proc = audioProcessorRef.current;
+          if (typeof saved.dspBass === "number") proc.setBass(saved.dspBass);
+          if (typeof saved.dspMid === "number") proc.setMid(saved.dspMid);
+          if (typeof saved.dspTreble === "number") proc.setTreble(saved.dspTreble);
+          if (typeof saved.dspPitch === "number") proc.setPitch(saved.dspPitch);
+          if (typeof saved.dspSpeed === "number" && audioRef.current) {
+            proc.setSpeed(saved.dspSpeed, audioRef.current);
+          }
+        } catch (e) {
+          console.error("Error syncing audio settings:", e);
+        }
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("voiceforge:settingsChanged", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("voiceforge:settingsChanged", handleStorage);
+    };
+  }, []);
+
+  React.useEffect(() => {
     async function initSegmenter() {
       try {
         const { SelfieSegmentation } = await import("@mediapipe/selfie_segmentation");

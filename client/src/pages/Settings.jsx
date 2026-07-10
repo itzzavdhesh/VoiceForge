@@ -75,6 +75,7 @@ export default function Settings() {
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
+    window.dispatchEvent(new Event("voiceforge:settingsChanged"));
   }
 
   const currentPresetKey = React.useMemo(() => {
@@ -82,7 +83,12 @@ export default function Settings() {
       return (
         Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
         Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
-        Math.abs(voiceSettings.style - preset.style) < 0.001
+        Math.abs(voiceSettings.style - preset.style) < 0.001 &&
+        Math.abs(voiceSettings.dspPitch - preset.dspPitch) < 0.001 &&
+        Math.abs(voiceSettings.dspSpeed - preset.dspSpeed) < 0.001 &&
+        Math.abs(voiceSettings.dspBass - preset.dspBass) < 0.001 &&
+        Math.abs(voiceSettings.dspMid - preset.dspMid) < 0.001 &&
+        Math.abs(voiceSettings.dspTreble - preset.dspTreble) < 0.001
       );
     });
     return presetEntry ? presetEntry[0] : "custom";
@@ -97,6 +103,11 @@ export default function Settings() {
         stability: preset.stability,
         temperature: preset.temperature,
         style: preset.style,
+        dspPitch: preset.dspPitch,
+        dspSpeed: preset.dspSpeed,
+        dspBass: preset.dspBass,
+        dspMid: preset.dspMid,
+        dspTreble: preset.dspTreble,
       });
     }
   }
@@ -366,6 +377,92 @@ export default function Settings() {
               className="w-full mt-2"
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
+          </div>
+
+          <hr className="border-ink/10 dark:border-border my-4" />
+          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">Real-time Voice Modifiers (DSP)</h3>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-pitch">
+              <span>Voice Pitch</span>
+              <span className="text-ink/65">{voiceSettings.dspPitch}x</span>
+            </label>
+            <input
+              id="dsp-pitch"
+              type="range"
+              min="0.5" max="1.5" step="0.05"
+              value={voiceSettings.dspPitch}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspPitch: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Pitch transposition. Lower → deeper voice; higher → higher voice.</p>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-speed">
+              <span>Speech Pace (Speed)</span>
+              <span className="text-ink/65">{voiceSettings.dspSpeed}x</span>
+            </label>
+            <input
+              id="dsp-speed"
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={voiceSettings.dspSpeed}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspSpeed: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Adjust speech speed. Lower → slower; higher → faster speech.</p>
+          </div>
+
+          <div className="pt-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">3-Band Graphic Equalizer</h4>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-bass">
+                  <span>Bass (200 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspBass} dB</span>
+                </label>
+                <input
+                  id="dsp-bass"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspBass}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspBass: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-mid">
+                  <span>Mid (1000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspMid} dB</span>
+                </label>
+                <input
+                  id="dsp-mid"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspMid}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspMid: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-treble">
+                  <span>Treble (4000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspTreble} dB</span>
+                </label>
+                <input
+                  id="dsp-treble"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspTreble}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspTreble: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/50 mt-2">Sculpt voice tone in real-time. Bass controls depth; mid controls presence; treble controls clarity.</p>
           </div>
         </div>
       </section>

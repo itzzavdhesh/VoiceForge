@@ -1,4 +1,5 @@
 import Meyda from "meyda";
+import { PitchShifter } from "./pitchShifter.js";
 
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
@@ -12,6 +13,10 @@ export class AudioProcessor {
     this.analyser = null; // AnalyserNode for audio visualization
     this.currentMelSpectrogram = null;
     this.currentVolume = 0;
+    this.bassFilter = null;
+    this.midFilter = null;
+    this.trebleFilter = null;
+    this.pitchShifter = null;
   }
 
   /**
@@ -50,9 +55,46 @@ export class AudioProcessor {
       this.source.disconnect(this.audioContext.destination);
     } catch (e) {}
 
-    // Route connections
-    this.source.connect(this.audioContext.destination); // For listening
-    this.source.connect(this.analyser); // For visualization
+    // Create filters and pitch shifter
+    this.bassFilter = this.audioContext.createBiquadFilter();
+    this.bassFilter.type = "lowshelf";
+    this.bassFilter.frequency.value = 200;
+
+    this.midFilter = this.audioContext.createBiquadFilter();
+    this.midFilter.type = "peaking";
+    this.midFilter.frequency.value = 1000;
+    this.midFilter.Q.value = 1.0;
+
+    this.trebleFilter = this.audioContext.createBiquadFilter();
+    this.trebleFilter.type = "highshelf";
+    this.trebleFilter.frequency.value = 4000;
+
+    this.pitchShifter = new PitchShifter(this.audioContext);
+
+    // Apply saved configurations
+    try {
+      const saved = JSON.parse(localStorage.getItem("voiceforge:voiceSettings")) || {};
+      this.bassFilter.gain.value = typeof saved.dspBass === "number" ? saved.dspBass : 0;
+      this.midFilter.gain.value = typeof saved.dspMid === "number" ? saved.dspMid : 0;
+      this.trebleFilter.gain.value = typeof saved.dspTreble === "number" ? saved.dspTreble : 0;
+      this.pitchShifter.setPitch(typeof saved.dspPitch === "number" ? saved.dspPitch : 1.0);
+      if (typeof saved.dspSpeed === "number") {
+        audioElement.playbackRate = saved.dspSpeed;
+      }
+    } catch (e) {
+      console.warn("Failed to load initial voice modifier values:", e);
+    }
+
+    // Connect DSP chain:
+    // source -> analyser
+    // source -> bass -> mid -> treble -> pitchShifter.input
+    // pitchShifter.output -> destination
+    this.source.connect(this.analyser);
+    this.source.connect(this.bassFilter);
+    this.bassFilter.connect(this.midFilter);
+    this.midFilter.connect(this.trebleFilter);
+    this.trebleFilter.connect(this.pitchShifter.input);
+    this.pitchShifter.output.connect(this.audioContext.destination);
 
     if (this.analyzer) {
       this.analyzer.stop();
@@ -138,9 +180,56 @@ export class AudioProcessor {
       this.analyser.disconnect();
       this.analyser = null;
     }
+    if (this.bassFilter) {
+      this.bassFilter.disconnect();
+      this.bassFilter = null;
+    }
+    if (this.midFilter) {
+      this.midFilter.disconnect();
+      this.midFilter = null;
+    }
+    if (this.trebleFilter) {
+      this.trebleFilter.disconnect();
+      this.trebleFilter = null;
+    }
+    if (this.pitchShifter) {
+      if (this.pitchShifter.input) this.pitchShifter.input.disconnect();
+      if (this.pitchShifter.output) this.pitchShifter.output.disconnect();
+      this.pitchShifter = null;
+    }
     if (this.audioContext && this.audioContext.state !== "closed") {
       this.audioContext.close();
       this.audioContext = null;
+    }
+  }
+
+  setBass(gain) {
+    if (this.bassFilter) {
+      this.bassFilter.gain.value = gain;
+    }
+  }
+
+  setMid(gain) {
+    if (this.midFilter) {
+      this.midFilter.gain.value = gain;
+    }
+  }
+
+  setTreble(gain) {
+    if (this.trebleFilter) {
+      this.trebleFilter.gain.value = gain;
+    }
+  }
+
+  setPitch(pitch) {
+    if (this.pitchShifter) {
+      this.pitchShifter.setPitch(pitch);
+    }
+  }
+
+  setSpeed(speed, audioElement) {
+    if (audioElement) {
+      audioElement.playbackRate = speed;
     }
   }
 }
