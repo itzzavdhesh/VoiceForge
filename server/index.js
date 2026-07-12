@@ -52,6 +52,9 @@ app.use("/api/voice", voiceRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
+  if (response.headersSent) {
+    return _next(error);
+  }
   response.status(error.status || 500).json({
     error: error.message || "Unexpected VoiceForge server error."
   });

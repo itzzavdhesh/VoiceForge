@@ -3,6 +3,7 @@
 const CHUNK_SIZE = 16 * 1024; // 16 KB
 
 export async function sendDataInChunks(dataChannel, data) {
+  dataChannel.binaryType = 'arraybuffer';
   const jsonStr = JSON.stringify(data);
   const encoder = new TextEncoder();
   const bytes = encoder.encode(jsonStr);
@@ -40,6 +41,7 @@ export async function sendDataInChunks(dataChannel, data) {
 }
 
 export function receiveDataInChunks(dataChannel, onComplete) {
+  dataChannel.binaryType = 'arraybuffer';
   let expectedSize = 0;
   let receivedBytes = [];
   let currentSize = 0;

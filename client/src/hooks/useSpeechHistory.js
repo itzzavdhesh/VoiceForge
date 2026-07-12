@@ -142,9 +142,12 @@ const addMessage = useCallback((text) => {
 
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
+    const uuid = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const updatedEntry = existing
       ? { ...existing, timestamp: Date.now() }
-      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
+      : { id: uuid, text: trimmed, timestamp: Date.now() };
 
     // Move duplicate to top instead of recreating
     const updated = [

@@ -54,7 +54,7 @@ export default function useTTS() {
    * @param {string} [params.language_code] Chatterbox/BCP-47 language code.
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
-  async function speak({ text, voiceId, language_code }) {
+  async function speak({ text, voiceId, language_code, onSpeakingChange }) {
     // Cancel any in-flight request before starting a new one.
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -105,7 +105,9 @@ export default function useTTS() {
       }
 
       try {
+        if (onSpeakingChange) onSpeakingChange(true);
         await browserSpeak(text, language_code);
+        if (onSpeakingChange) onSpeakingChange(false);
 
         setEngine("browser");
         setAudioUrl("");
@@ -115,7 +117,8 @@ export default function useTTS() {
           fallback: true,
           engine: "browser",
         };
-      } catch {
+      } catch (browserError) {
+        if (onSpeakingChange) onSpeakingChange(false);
         setError(ttsError?.message || String(ttsError));
         setStatus("error");
         throw ttsError;
