@@ -300,7 +300,7 @@ export default function Settings() {
             <input
               id="temperature"
               type="range"
-              min="0" max="1" step="0.01"
+              min="0.05" max="5" step="0.01"
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"

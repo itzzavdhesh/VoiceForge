@@ -12,7 +12,7 @@ import {
 } from "../utils/voiceSettings.js";
 
 /**
- * A labelled range slider for a 0–1 voice parameter.
+ * A labelled range slider for a voice parameter.
  */
 function VoiceSlider({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
@@ -137,6 +137,8 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           description="Lower values are steadier; higher values allow more variation in the generated speech."
           value={settings.temperature}
           onChange={updateSlider("temperature")}
+          min={0.05}
+          max={5}
         />
         <VoiceSlider
           id="ob-style"

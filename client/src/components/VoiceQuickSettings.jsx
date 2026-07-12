@@ -127,6 +127,8 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Lower → steadier output. Higher → more variation."
             value={settings.temperature}
             onChange={updateSetting("temperature")}
+            min={0.05}
+            max={5}
           />
           <SliderRow
             id="vqs-style"
