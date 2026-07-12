@@ -276,7 +276,7 @@ export default React.forwardRef(function VideoPreview({
 
     animationRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animationRef.current);
-  }, [ref, isSpeaking, theme]);
+  }, [ref, isSpeaking, theme, blurEnabled]);
 
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">

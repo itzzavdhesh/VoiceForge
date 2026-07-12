@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange }) {
+function SliderRow({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
     <div className="space-y-1">
       <label
@@ -28,8 +28,8 @@ function SliderRow({ id, label, description, value, onChange }) {
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
+        min={min}
+        max={max}
         step="0.01"
         value={value}
         onChange={onChange}
@@ -134,6 +134,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Higher → more stylised delivery from the reference audio."
             value={settings.style}
             onChange={updateSetting("style")}
+            max={2}
           />
 
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">

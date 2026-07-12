@@ -14,7 +14,7 @@ import {
 /**
  * A labelled range slider for a 0–1 voice parameter.
  */
-function VoiceSlider({ id, label, description, value, onChange }) {
+function VoiceSlider({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
     <div className="space-y-1.5">
       <label
@@ -33,8 +33,8 @@ function VoiceSlider({ id, label, description, value, onChange }) {
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
+        min={min}
+        max={max}
         step="0.01"
         value={value}
         onChange={onChange}
@@ -144,6 +144,7 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           description="Higher values exaggerate the style and prosody of the reference audio. Keep low for neutral delivery."
           value={settings.style}
           onChange={updateSlider("style")}
+          max={2}
         />
       </div>
 

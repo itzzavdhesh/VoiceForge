@@ -175,6 +175,7 @@ export default function Call() {
       text,
       voiceId: activeProfile.voice_id,
       language_code: language,
+      onSpeakingChange: setIsSpeaking,
     });
 
     if (result?.fallback) {

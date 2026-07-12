@@ -345,7 +345,7 @@ export async function speak(request, response, next) {
 
     const defaultVoiceSettings = {
       stability: 0.45,
-      style: 0.2,
+      style: 0.5,
       temperature: 0.8
     };
 
@@ -364,8 +364,8 @@ if (voice_settings !== undefined && voice_settings !== null) {
     sanitizedSettings.stability = voice_settings.stability;
   }
   if (voice_settings.style !== undefined) {
-    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 1) {
-      response.status(400).json({ error: "style must be a finite number between 0 and 1." });
+    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 2) {
+      response.status(400).json({ error: "style must be a finite number between 0 and 2." });
       return;
     }
     sanitizedSettings.style = voice_settings.style;
