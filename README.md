@@ -209,3 +209,6 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 ## License
 
 MIT
+
+
+<!-- GSSoC Contribution: Resolves #760 -->
