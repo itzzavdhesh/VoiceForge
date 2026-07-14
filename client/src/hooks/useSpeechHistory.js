@@ -77,7 +77,13 @@ function readSessionStorage(key, fallback) {
 
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
-  const [history, setHistory] = useState(() => readStorage(HISTORY_KEY, []));
+  const [history, setHistory] = useState(() => {
+    const raw = readStorage(HISTORY_KEY, []);
+    return raw.map((item) => ({
+      ...item,
+      tags: Array.isArray(item.tags) ? item.tags : [],
+    }));
+  });
   const [favorites, setFavorites] = useState(
     () => new Set(readStorage(FAVS_KEY, []))
   );
@@ -162,8 +168,8 @@ const addMessage = useCallback((text, lang = "en-US") => {
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
     const updatedEntry = existing
-      ? { ...existing, timestamp: Date.now() }
-      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() };
+      ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
+      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
     // Move duplicate to top instead of recreating
     const updated = [
@@ -184,7 +190,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
       const next = new Set(prev);
       next.delete(id);
       return next;
-    });
+      });
   }, []);
 
   /**
@@ -208,6 +214,52 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setAnalyticsHistory([]);
   }, []);
 
+  /**
+   * Imports a history and favorites backup.
+   * Merges imported items with the existing setup, preventing text duplicates
+   * and updating favorite relationships.
+   */
+  const importBackup = useCallback((importedHistory, importedFavorites) => {
+    const mergedMap = new Map();
+    // Add existing history
+    history.forEach(m => mergedMap.set(m.text, m));
+
+    const favIdsToAdd = [];
+    importedHistory.forEach((impMsg) => {
+      const isImportedFav = importedFavorites.includes(impMsg.id);
+      if (mergedMap.has(impMsg.text)) {
+        const existingMsg = mergedMap.get(impMsg.text);
+        if (isImportedFav) {
+          favIdsToAdd.push(existingMsg.id);
+        }
+      } else {
+        mergedMap.set(impMsg.text, impMsg);
+        if (isImportedFav) {
+          favIdsToAdd.push(impMsg.id);
+        }
+      }
+    });
+
+    const mergedList = Array.from(mergedMap.values());
+    mergedList.sort((a, b) => b.timestamp - a.timestamp);
+    const finalHistory = mergedList.slice(0, MAX_HISTORY);
+
+    const nextFavorites = new Set(favorites);
+    favIdsToAdd.forEach(id => nextFavorites.add(id));
+
+    // Clean up favorites: only keep favorites whose IDs are in the finalHistory
+    const finalHistoryIds = new Set(finalHistory.map(m => m.id));
+    const cleanedFavorites = new Set();
+    nextFavorites.forEach(id => {
+      if (finalHistoryIds.has(id)) {
+        cleanedFavorites.add(id);
+      }
+    });
+
+    setHistory(finalHistory);
+    setFavorites(cleanedFavorites);
+  }, [history, favorites]);
+
   return {
     history,
     favorites,
@@ -217,5 +269,6 @@ const addMessage = useCallback((text, lang = "en-US") => {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    importBackup,
   };
 }

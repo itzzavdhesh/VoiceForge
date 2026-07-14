@@ -1,6 +1,6 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
-import { getSavedProfiles } from "./useVoiceClone.js";
+import { getSavedProfiles, saveVoiceProfile } from "./useVoiceClone.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -46,20 +46,18 @@ export default function useTTS() {
   }
 
   /**
-   * Resolves the owner_token that authorizes use of a given voice_id.
-   * Looks up the locally saved voice profile that matches voiceId, since
-   * the server now requires proof of ownership per voice_id on /speak.
+   * Resolves the owner_token that authorizes use of a given voice_id, by
+   * looking up the locally saved voice profile that matches voiceId.
    *
    * @param {string} voiceId The voice_id to resolve an owner_token for.
-   * @returns {Promise<string|null>} The owner_token, or null if not found.
+   * @returns {Promise<object|null>} The matching saved profile, or null.
    */
-  async function resolveOwnerToken(voiceId) {
+  async function findProfileByVoiceId(voiceId) {
     if (!voiceId) {
       return null;
     }
     const profiles = await getSavedProfiles();
-    const matchingProfile = profiles.find((profile) => profile.voice_id === voiceId);
-    return matchingProfile?.ownerToken || null;
+    return profiles.find((profile) => profile.voice_id === voiceId) || null;
   }
 
   /**
@@ -91,9 +89,10 @@ export default function useTTS() {
       // Fix (Broken Voice Synthesis): the server now requires owner_token to
       // authorize use of voice_id (403 otherwise). Use the explicitly
       // passed token if given, else resolve it from the saved profile.
-      const resolvedOwnerToken = ownerToken || (await resolveOwnerToken(voiceId));
+      let activeVoiceId = voiceId;
+      let resolvedOwnerToken = ownerToken || (await findProfileByVoiceId(voiceId))?.ownerToken || null;
 
-      const response = await fetch("/api/voice/speak", {
+      let response = await fetch("/api/voice/speak", {
         method: "POST",
         signal: controller.signal,
         headers: {
@@ -101,12 +100,68 @@ export default function useTTS() {
         },
         body: JSON.stringify({
           text,
-          voice_id: voiceId,
+          voice_id: activeVoiceId,
           owner_token: resolvedOwnerToken,
           language_code,
           voice_settings: voiceSettings,
         }),
       });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        // If voice profile is missing on the backend (404), trigger auto-reclone from IndexedDB
+        if (response.status === 404 && (payload.error || "").includes("Voice profile not found")) {
+          const profile = await findProfileByVoiceId(voiceId);
+          if (profile && profile.audioBlob) {
+            const formData = new FormData();
+            formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
+            formData.append("name", profile.name);
+
+            const cloneResponse = await fetch("/api/voice/clone", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (cloneResponse.ok) {
+              const clonePayload = await cloneResponse.json();
+
+              // Fix (Broken Voice Synthesis): cloneVoice() always mints a
+              // brand-new voice_id/owner_token pair server-side — it does
+              // NOT reuse the old voice_id, even if we sent one. Retrying
+              // with the stale voiceId/resolvedOwnerToken here would just
+              // 403/404 again. Persist the new pair locally (this also
+              // updates the active-voice pointer) and use the new pair for
+              // the retry below.
+              const updatedProfile = await saveVoiceProfile(
+                {
+                  voice_id: clonePayload.voice_id,
+                  owner_token: clonePayload.owner_token,
+                  name: clonePayload.name || profile.name,
+                },
+                profile.audioBlob
+              );
+
+              activeVoiceId = updatedProfile.voice_id;
+              resolvedOwnerToken = updatedProfile.ownerToken;
+
+              // Retry the speak request after silent re-cloning succeeds
+              response = await fetch("/api/voice/speak", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  text,
+                  voice_id: activeVoiceId,
+                  owner_token: resolvedOwnerToken,
+                  language_code,
+                  voice_settings: voiceSettings,
+                }),
+              });
+            }
+          }
+        }
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));

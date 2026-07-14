@@ -195,14 +195,7 @@ const MIN_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 100;
 
 export default function Onboarding({ onReady }) {
-  const [recording, setRecording] = React.useState(null);
-  const [recordingDuration, setRecordingDuration] = React.useState(0);
-
-  function handleRecordingReady(blob, duration = 0) {
-    setRecording(blob);
-    setRecordingDuration(duration);
-  }
-
+  const [recording, setRecording] = React.useState(null); // stores { blob, duration, isValid }
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
@@ -284,31 +277,9 @@ export default function Onboarding({ onReady }) {
   }, [maxUnlockedStep]);
 
   async function handleClone() {
-    // 1. Strict validation guards: recording and a valid name are required.
-    if (!hasKey || !recording) return;
-    if (recordingDuration < 10) return;
-    if (nameError) return; // block on empty / whitespace / over-limit name
-
-    try {
-      // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(recording, voiceName.trim());
-      if (profile) {
-        setSuccessProfile(profile);
-        setMaxUnlockedStep(2);
-        showToast("Voice cloned successfully", "success");
-        setActiveStep(2); // Move user to Step 2 instantly upon real success
-      }
-    } catch (err) {
-      console.error("Voice cloning process failed:", err);
-      showToast("Voice cloning failed. Please try again.", "error");
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
-    }
-  }
-
-  function handleManualStepNavigation(targetStep) {
-    if (targetStep <= maxUnlockedStep) {
-      setActiveStep(targetStep);
-    }
+    if (!recording || !recording.isValid) return;
+    const profile = await cloneVoice(recording.blob, voiceName);
+    setSuccessProfile(profile);
   }
 
   return (
@@ -356,13 +327,56 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-      {/* REFACTORED ACCESSIBLE INTERACTIVE NAVIGATION STEP DOT TRACKS */}
-      <div className="flex items-center justify-center gap-3" role="tablist" aria-label="Onboarding step navigation">
-        {[1, 2, 3].map((stepNum) => {
-          const isAccessible = stepNum <= maxUnlockedStep;
-          const isCurrent = activeStep === stepNum;
+      <VoiceRecorder 
+        onRecordingReady={(blob, meta) => setRecording(blob ? { blob, ...meta } : null)} 
+        disabled={isCloning} 
+      />
 
-          return (
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+        <label
+          className="block text-sm font-bold text-ink dark:text-neutral-100"
+          htmlFor="voice-name"
+        >
+          Voice profile name
+        </label>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+          <input
+            id="voice-name"
+            value={voiceName}
+            onChange={(event) => setVoiceName(event.target.value)}
+            className="min-h-11 flex-1 rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+          />
+          <button
+            type="button"
+            onClick={handleClone}
+            disabled={!recording || !recording.isValid || isCloning}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isCloning && (
+              <Loader2 className="animate-spin" size={18} aria-hidden="true" />
+            )}
+            Clone voice
+          </button>
+        </div>
+        {recording && !recording.isValid && (
+          <p className="mt-3 text-sm font-semibold text-coral" role="alert">
+            Please record a voice clip of at least 10 seconds before voice cloning.
+          </p>
+        )}
+        {isCloning && (
+          <p className="mt-3 text-sm font-semibold text-moss dark:text-glow">
+            Cloning in progress. This can take a moment on the free tier.
+          </p>
+        )}
+        {error && (
+          <p className="mt-3 text-sm font-semibold text-coral">{error}</p>
+        )}
+        {successProfile && (
+          <div className="mt-4 flex flex-col gap-3 rounded-md bg-mint p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-glow/15">
+            <p className="inline-flex items-center gap-2 font-bold text-ink dark:text-neutral-50">
+              <CheckCircle2 size={20} aria-hidden="true" />
+              Voice cloned successfully
+            </p>
             <button
               key={stepNum}
               type="button"

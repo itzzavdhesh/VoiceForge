@@ -12,22 +12,113 @@ export function SpeechHistory({history,
   onDelete,
   onClearHistory,
   onCopy,
+  onImportBackup,
+  showToast,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
 
+  const fileInputRef = useRef(null);
+
+  const handleExport = () => {
+    try {
+      const backupData = {
+        history,
+        favorites: Array.from(favorites),
+      };
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "voiceforge-speech-history-backup.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast?.("Backup exported successfully", "success");
+    } catch (error) {
+      showToast?.("Failed to export history", "error");
+    }
+  };
+
+  const validateBackupSchema = (data) => {
+    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data.history)) return false;
+
+    for (const message of data.history) {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        typeof message.text !== "string" ||
+        typeof message.timestamp !== "number"
+      ) {
+        return false;
+      }
+    }
+
+    if (data.favorites !== undefined) {
+      if (!Array.isArray(data.favorites)) return false;
+      for (const favId of data.favorites) {
+        if (typeof favId !== "string") {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (validateBackupSchema(data)) {
+          onImportBackup?.(data.history, data.favorites || []);
+          showToast?.("Backup imported successfully", "success");
+        } else {
+          showToast?.("Error: Invalid backup schema", "error");
+        }
+      } catch (error) {
+        showToast?.("Error: Invalid JSON structure", "error");
+      }
+      event.target.value = "";
+    };
+    reader.onerror = () => {
+      showToast?.("Error reading backup file", "error");
+      event.target.value = "";
+    };
+    reader.readAsText(file);
+  };
+
   const visible = useMemo(() => {
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
 
+    if (selectedTag !== "All Tags") {
+      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+    }
+
     if (debouncedSearch.trim()) {
       const query = debouncedSearch.toLowerCase();
-      messages = messages.filter((message) => message.text.toLowerCase().includes(query));
+      messages = messages.filter((message) => 
+        message.text.toLowerCase().includes(query) ||
+        (message.tags && message.tags.some(t => t.toLowerCase().includes(query)))
+      );
     }
 
     return messages;
-  }, [history, favorites, tab, debouncedSearch]);
+  }, [history, favorites, tab, selectedTag, debouncedSearch]);
 
   const tabs = ["all", "pinned"];
 
@@ -149,6 +240,78 @@ function handleExportJson() {
             </div>
           </div>
 
+          {/* Collapsible Analytics Section */}
+          <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border">
+            <button
+              onClick={() => setAnalyticsOpen(!analyticsOpen)}
+              aria-expanded={analyticsOpen}
+              className="flex w-full items-center justify-between text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
+            >
+              <span className="flex items-center gap-1">📊 Conversation Stats</span>
+              <span>{analyticsOpen ? "Hide ▲" : "Show ▼"}</span>
+            </button>
+            
+            {analyticsOpen && (
+              <div className="mt-2 rounded bg-neutral-100 p-2.5 text-[11px] text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400 space-y-2 border border-neutral-200 dark:border-border">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalSentences}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Phrases</p>
+                  </div>
+                  <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalWords}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Total Words</p>
+                  </div>
+                </div>
+                {analyticsData.top.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Top Phrases:</p>
+                    <ul className="space-y-1">
+                      {analyticsData.top.map(({ text, count }) => (
+                        <li key={text} className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0">
+                          <span className="truncate flex-1" title={text}>{text}</span>
+                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">{count}x</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Dynamic Tag Filters Row */}
+          {allUniqueTags.length > 0 && (
+            <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border overflow-x-auto no-scrollbar flex items-center gap-1.5 scroll-smooth">
+              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">Tags:</span>
+              <button
+                onClick={() => setSelectedTag("All Tags")}
+                className={[
+                  "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
+                  selectedTag === "All Tags"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                ].join(" ")}
+              >
+                All
+              </button>
+              {allUniqueTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTag(tag)}
+                  className={[
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
+                    selectedTag === tag
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                  ].join(" ")}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div
             className="flex flex-shrink-0 gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-border"
             role="tablist"
@@ -202,6 +365,9 @@ function handleExportJson() {
                       onToggleFav={onToggleFav}
                       onDelete={onDelete}
                       onCopy={onCopy}
+                      onAddTag={onAddTag}
+                      onRemoveTag={onRemoveTag}
+                      onAddToQuickReplies={onAddToQuickReplies}
                     />
                   </li>
                 ))}
