@@ -9,7 +9,7 @@ export class AudioProcessor {
     this.audioContext = null;
     this.source = null;
     this.analyzer = null;
-    this.currentMelSpectrogram = null;
+    this.melBuffer = []; // stores last 16 frames
     this.currentVolume = 0;
   }
 
@@ -39,18 +39,24 @@ export class AudioProcessor {
       this.analyzer.stop();
     }
 
-    // Configure Meyda to extract the melSpectrogram
-    // Typical Wav2Lip uses specific mel bands and FFT sizes,
-    // this will need tuning to match the exact ONNX model requirements.
+    // Configure Meyda for 80 mel bands
+    Meyda.melBands = 80;
+
     this.analyzer = Meyda.createMeydaAnalyzer({
       audioContext: this.audioContext,
       source: this.source,
       bufferSize: 512, // Must be a power of 2
-      featureExtractors: ["melSpectrogram", "rms"],
+      featureExtractors: ["melBands", "rms"], // Using melBands for Wav2Lip
       callback: (features) => {
         if (features) {
-          if (features.melSpectrogram) {
-            this.currentMelSpectrogram = features.melSpectrogram;
+          // Meyda returns melBands as an array/Float32Array
+          const melData = features.melBands || features.melSpectrogram;
+          if (melData) {
+            // Push a copy to avoid mutation
+            this.melBuffer.push(new Float32Array(melData));
+            if (this.melBuffer.length > 16) {
+              this.melBuffer.shift();
+            }
           }
           if (features.rms !== undefined) {
             this.currentVolume = features.rms;
@@ -64,11 +70,30 @@ export class AudioProcessor {
 
   /**
    * Returns the most recently extracted mel-spectrogram.
-   * Format expected by Wav2Lip ONNX is usually [batch_size, 1, 80, 16] (example).
+   * Format expected by Wav2Lip ONNX is usually [1, 1, 80, 16] 
+   * which flattens to a Float32Array of length 1280.
    * @returns {Float32Array|null}
    */
   getLatestFeatures() {
-    return this.currentMelSpectrogram;
+    if (this.melBuffer.length < 16) {
+      return null; // Wait until we have enough frames
+    }
+    
+    // Wav2Lip expects shape [batch_size, 1, 80, 16]
+    // which in memory is 80 rows (mel bands), 16 columns (time frames).
+    const tensorData = new Float32Array(80 * 16);
+    
+    for (let timeStep = 0; timeStep < 16; timeStep++) {
+      const frameData = this.melBuffer[timeStep];
+      for (let band = 0; band < 80; band++) {
+        // Safe access in case Meyda returns less than 80 bands
+        const val = band < frameData.length ? frameData[band] : 0;
+        // Memory layout: [band * 16 + timeStep]
+        tensorData[band * 16 + timeStep] = val;
+      }
+    }
+    
+    return tensorData;
   }
 
   /**
