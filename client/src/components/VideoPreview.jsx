@@ -32,6 +32,11 @@ export default React.forwardRef(function VideoPreview({
   const isSegmentingRef = React.useRef(false);
   const maskCanvasRef = React.useRef(null);
 
+  const tempCanvasRef = React.useRef(null);
+  const outCanvasRef = React.useRef(null);
+  const isInferencingRef = React.useRef(false);
+  const latestOutputRef = React.useRef(null);
+
   React.useEffect(() => {
     async function initSegmenter() {
       try {
@@ -223,14 +228,55 @@ export default React.forwardRef(function VideoPreview({
              const landmarks = faceProcessorRef.current.detectFace(video, syncTimestamp);
              
              if (melFeatures && landmarks) {
-               // TODO: Construct Tensors and run inference when real model is available
-               // const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
-               // const videoCrop = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvas);
-               // const videoTensor = ... convert videoCrop to tensor ...
-               // const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
-               // ... draw results back to canvas ...
+               if (!tempCanvasRef.current) tempCanvasRef.current = document.createElement("canvas");
+               if (!outCanvasRef.current) outCanvasRef.current = document.createElement("canvas");
                
-               // inferenceSucceeded = true;
+               const cropResult = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvasRef.current);
+               
+               if (cropResult && !isInferencingRef.current) {
+                 isInferencingRef.current = true;
+                 const { tensorData, box } = cropResult;
+                 
+                 (async () => {
+                   try {
+                     const ort = await import("onnxruntime-web");
+                     const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
+                     const videoTensor = new ort.Tensor('float32', tensorData, [1, 6, 96, 96]);
+                     
+                     // Use 'audio' and 'video' as standard input names
+                     const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
+                     const outputTensor = results[Object.keys(results)[0]];
+                     const outData = outputTensor.data;
+                     
+                     // Convert [1, 3, 96, 96] back to ImageData
+                     const outImg = new ImageData(96, 96);
+                     for (let y = 0; y < 96; y++) {
+                       for (let x = 0; x < 96; x++) {
+                         const outIdx = (y * 96 + x) * 4;
+                         outImg.data[outIdx] = Math.max(0, Math.min(255, outData[0 * 96 * 96 + y * 96 + x] * 255));
+                         outImg.data[outIdx + 1] = Math.max(0, Math.min(255, outData[1 * 96 * 96 + y * 96 + x] * 255));
+                         outImg.data[outIdx + 2] = Math.max(0, Math.min(255, outData[2 * 96 * 96 + y * 96 + x] * 255));
+                         outImg.data[outIdx + 3] = 255;
+                       }
+                     }
+                     
+                     latestOutputRef.current = { img: outImg, box };
+                   } catch (err) {
+                     console.error("ONNX Inference Error:", err);
+                   } finally {
+                     isInferencingRef.current = false;
+                   }
+                 })();
+               }
+
+               if (latestOutputRef.current) {
+                 const { img, box } = latestOutputRef.current;
+                 outCanvasRef.current.width = 96;
+                 outCanvasRef.current.height = 96;
+                 outCanvasRef.current.getContext("2d").putImageData(img, 0, 0);
+                 context.drawImage(outCanvasRef.current, box.x, box.y, box.w, box.h);
+                 inferenceSucceeded = true;
+               }
              }
           } catch (e) {
              console.error("Inference loop error:", e);
