@@ -14,13 +14,49 @@ export function SpeechHistory({history,
   onCopy,
   onImportBackup,
   showToast,
+  onAddTag,
+  onRemoveTag,
+  onAddToQuickReplies,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
 
-  const fileInputRef = useRef(null);
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((m) => {
+      if (m.tags && Array.isArray(m.tags)) {
+        m.tags.forEach((t) => tagsSet.add(t));
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  const analyticsData = useMemo(() => {
+    const dataSource = sessionTranscript.length > 0 ? sessionTranscript : history;
+    const totalSentences = dataSource.length;
+    const totalWords = dataSource.reduce((acc, m) => {
+      const words = m.text.trim().split(/\s+/).filter(Boolean).length;
+      return acc + words;
+    }, 0);
+    
+    const counts = {};
+    dataSource.forEach((m) => {
+      counts[m.text] = (counts[m.text] || 0) + 1;
+    });
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+
+    return { totalSentences, totalWords, top };
+  }, [history, sessionTranscript]);
+
+  const fileInputRef = React.useRef(null);
 
   const handleExport = () => {
     try {

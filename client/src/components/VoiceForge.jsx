@@ -40,7 +40,7 @@ export default function VoiceForge() {
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
-  const { speak: ttsSpeak, audioUrl: ttsAudioUrl } = useTTS();
+  const { speak: ttsSpeak, audioUrl, playbackId } = useTTS();
   const [activeProfile, setActiveProfile] = useState(null);
   const [useClonedVoice, setUseClonedVoice] = useState(() => {
     try {
@@ -50,6 +50,9 @@ export default function VoiceForge() {
       return true;
     }
   });
+
+  const audioRef = useRef(null);
+  const pendingSpeechRef = useRef(null);
 
   const handleAddToQuickReplies = useCallback((text) => {
     try {
@@ -77,9 +80,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
-
   useEffect(() => {
     async function loadActiveProfile() {
       try {
@@ -92,61 +92,133 @@ export default function VoiceForge() {
     loadActiveProfile();
   }, []);
 
-  const speak = useCallback(async (text) => {
-    if (!text.trim()) return;
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+    };
+  }, []);
 
-    if (useClonedVoice && activeProfile?.voice_id) {
+  const triggerSpeechSuccess = useCallback((text, type) => {
+    if (type === "speak") {
+      addMessage(text);
+      showToast("Saved to history", "success");
+    } else if (type === "quickReply") {
+      addMessage(text);
+      showToast("Quick reply sent", "success");
+    } else if (type === "replay") {
+      showToast("Replaying...", "info");
+    }
+  }, [addMessage, showToast]);
+
+  const speak = useCallback(async (text, type = "speak") => {
+    if (!text.trim()) return false;
+
+    // 1. Cancel any active native speech synthesis
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    // 2. Pause/reset our local audio playback if it exists
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+
+    // Refresh active profile on demand to catch profile switches immediately
+    let profile = activeProfile;
+    try {
+      profile = await getActiveVoiceProfile();
+      setActiveProfile(profile);
+    } catch (err) {
+      console.error("Failed to refresh active profile on speak:", err);
+    }
+
+    // Track the speech details that should be saved upon playback start
+    pendingSpeechRef.current = { text, type };
+
+    if (useClonedVoice && profile?.voice_id) {
       try {
         setIsSpeaking(true);
         const result = await ttsSpeak({
           text,
-          voiceId: activeProfile.voice_id,
+          voiceId: profile.voice_id,
           language_code: language,
         });
+
+        if (result?.aborted) {
+          if (pendingSpeechRef.current?.text === text) {
+            pendingSpeechRef.current = null;
+          }
+          return false;
+        }
+
         if (result?.fallback) {
           showToast("Using browser voice fallback", "info");
+          setIsSpeaking(false);
+          triggerSpeechSuccess(text, type);
         }
+        return true;
       } catch (err) {
-        console.error("TTS speech error:", err);
+        console.error("TTS synthesis error:", err);
         showToast("Speech generation failed", "error");
         setIsSpeaking(false);
+        if (pendingSpeechRef.current?.text === text) {
+          pendingSpeechRef.current = null;
+        }
+        return false;
       }
     } else {
       if (!("speechSynthesis" in window)) {
         showToast("Speech synthesis is not supported in this browser", "error");
-        return;
+        pendingSpeechRef.current = null;
+        return false;
       }
 
-      window.speechSynthesis.cancel();
+      if (useClonedVoice) {
+        showToast("Using browser voice fallback", "info");
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = language;
       utterance.rate = 0.95;
-      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        if (pendingSpeechRef.current) {
+          const { text: pendingText, type: pendingType } = pendingSpeechRef.current;
+          triggerSpeechSuccess(pendingText, pendingType);
+          pendingSpeechRef.current = null;
+        }
+      };
       utterance.onend = () => setIsSpeaking(false);
       utterance.onerror = () => {
         setIsSpeaking(false);
         showToast("Speech playback failed", "error");
+        pendingSpeechRef.current = null;
       };
       window.speechSynthesis.speak(utterance);
+      return true;
     }
-  }, [ttsSpeak, activeProfile, language, useClonedVoice, showToast]);
+  }, [ttsSpeak, activeProfile, language, useClonedVoice, showToast, triggerSpeechSuccess]);
 
-  const handleSpeak = useCallback(() => {
+  const handleSpeak = useCallback(async () => {
     const text = inputText.trim();
     if (!text) {
       showToast("Please type a message first", "error");
       textareaRef.current?.focus();
       return;
     }
-    speak(text);
-    addMessage(text, language);
-    showToast("Saved to history", "success");
-  }, [inputText, speak, addMessage, showToast, language]);
+    await speak(text, "speak");
+  }, [inputText, speak, showToast]);
 
-  const handleReplay = useCallback((text) => {
-    speak(text);
-    showToast("Replaying...", "info");
-  }, [speak, showToast]);
+  const handleReplay = useCallback(async (text) => {
+    await speak(text, "replay");
+  }, [speak]);
 
   const handleReuse = useCallback((text) => {
     setInputText(text);
@@ -177,11 +249,9 @@ export default function VoiceForge() {
       });
   }, [inputText, showToast]);
 
-  const handleQuickReply = useCallback((phrase) => {
-    speak(phrase);
-    addMessage(phrase, language);
-    showToast("Quick reply sent", "success");
-  }, [speak, addMessage, showToast, language]);
+  const handleQuickReply = useCallback(async (phrase) => {
+    await speak(phrase, "quickReply");
+  }, [speak]);
 
   const handleKeyDown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -191,8 +261,6 @@ export default function VoiceForge() {
   }, [handleSpeak]);
 
   const charsLeft = MAX_CHARS - inputText.length;
-
-  
   const hasAnnouncedRef = useRef(false);
 
   // Move focus into the history drawer when it opens (a11y)
@@ -211,6 +279,7 @@ export default function VoiceForge() {
       setAnnouncement("");
     }
   }, [charsLeft]);
+
   useEffect(() => {
     persistLanguage(language);
   }, [language]);
@@ -422,8 +491,7 @@ export default function VoiceForge() {
 
             <button
               onClick={handleSpeak}
-              disabled={!inputText.trim() || isSpeaking}
-              aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
+              disabled={isSpeaking}
               className={[
                 "ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-black",
@@ -438,24 +506,30 @@ export default function VoiceForge() {
         </div>
       </main>
 
-      {ttsAudioUrl && useClonedVoice && activeProfile?.voice_id && (
+      {audioUrl && (
         <audio
-          key={ttsAudioUrl}
-          src={ttsAudioUrl}
-          autoPlay
+          ref={audioRef}
+          key={`${audioUrl}-${playbackId}`}
+          src={audioUrl}
           className="hidden"
-          onPlay={() => setIsSpeaking(true)}
+          autoPlay
+          onPlay={() => {
+            setIsSpeaking(true);
+            if (pendingSpeechRef.current) {
+              const { text, type } = pendingSpeechRef.current;
+              triggerSpeechSuccess(text, type);
+              pendingSpeechRef.current = null;
+            }
+          }}
           onPause={() => setIsSpeaking(false)}
           onEnded={() => setIsSpeaking(false)}
           onError={() => {
             setIsSpeaking(false);
             showToast("Speech playback failed", "error");
+            pendingSpeechRef.current = null;
           }}
-        >
-          <track kind="captions" />
-        </audio>
+        />
       )}
-
       <ToastContainer toasts={toasts} />
     </div>
   );
