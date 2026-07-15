@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
+import { getIsMock } from "./utils/mock.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,11 +13,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 // Warn clearly when mock mode is active so it is never silently enabled.
-if (process.env.MOCK_CHATTERBOX === "true" && process.env.NODE_ENV !== "production") {
+if (getIsMock()) {
   console.warn(
     "\x1b[33m[VoiceForge] Mock mode active — Chatterbox calls are stubbed." +
     " Voice clone returns a fixture voice_id; TTS streams silent audio." +
-    " Unset MOCK_CHATTERBOX to use the real Hugging Face engine.\x1b[0m"
+    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine.\x1b[0m"
   );
 }
 
