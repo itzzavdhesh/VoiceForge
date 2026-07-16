@@ -174,6 +174,7 @@ export default React.forwardRef(function VideoPreview({
         await faceProcessorRef.current.initialize();
 
         const ort = await import("onnxruntime-web");
+        ortRef.current = ort;
         ortSessionRef.current = await ort.InferenceSession.create(modelBytes);
         setModelStatus("ONNX Wav2Lip model loaded");
       } catch (err) {
@@ -321,6 +322,7 @@ export default React.forwardRef(function VideoPreview({
       const drawMouth = isSpeaking || isCalibratingRef.current;
       if (drawMouth) {
         let inferenceSucceeded = false;
+        const useONNX = isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current;
 
         // Try ONNX Inference first
         if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
@@ -379,10 +381,10 @@ export default React.forwardRef(function VideoPreview({
             ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
             : 1.0;
 
-          const centerX = canvas.width / 2 + xOffset;
-          const centerY = canvas.height * 0.63 + yOffset;
-          const radiusX = 56 * scale;
-          const radiusY = mouthOpen * scale;
+          const centerX = Math.max(0, Math.min(canvas.width, canvas.width / 2 + xOffset));
+          const centerY = Math.max(0, Math.min(canvas.height, canvas.height * 0.63 + yOffset));
+          const radiusX = Math.max(0.01, 56 * scale);
+          const radiusY = Math.max(0.01, mouthOpen * scale);
 
           context.save();
           context.fillStyle = mouthColor;

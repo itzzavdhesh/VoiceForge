@@ -8,7 +8,7 @@ import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/language
 // In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
 // In production you would persist this to a database or object store.
 // ---------------------------------------------------------------------------
-const voiceStore = new Map();
+export const voiceStore = new Map();
 
 function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
@@ -33,6 +33,23 @@ const PENDING_STREAM_TTL_MS = parseBoundedNumber(
   60_000,
   1
 );
+
+// Fix: bound the size of reference-audio uploads so a single (or repeated)
+// request cannot exhaust process memory, since uploaded buffers are held
+// in-memory in `voiceStore`. Also restrict to audio MIME types since the
+// buffer is forwarded to the Chatterbox space as a reference recording.
+//
+// This must stay in sync with the multer file-size limit configured on the
+// /api/voice/clone route (12 MB) - otherwise files between the two limits
+// pass multer but get rejected here with a different status/message, which
+// is confusing for callers. If you change the multer limit, change this
+// default too (or vice versa).
+const MAX_VOICE_UPLOAD_BYTES = parseBoundedNumber(
+  process.env.MAX_VOICE_UPLOAD_BYTES,
+  12 * 1024 * 1024, // 12 MB - matches the multer limit on the clone route
+  1
+);
+const ALLOWED_AUDIO_MIME_PREFIX = "audio/";
 
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
@@ -242,10 +259,26 @@ export async function cloneVoice(request, response, next) {
       return;
     }
 
+    // Fix: reject oversized or non-audio uploads before persisting them to
+    // voiceStore. Multer has already buffered the file into memory by this
+    // point, but without this check any client could still push
+    // MAX_STORED_VOICES worth of arbitrarily large files (or non-audio
+    // files) into `voiceStore`, where they'd be retained for VOICE_STORE_TTL_MS.
+    if (!audioFile.mimetype || !audioFile.mimetype.startsWith(ALLOWED_AUDIO_MIME_PREFIX)) {
+      response.status(400).json({ error: "Reference audio must be an audio file." });
+      return;
+    }
+    if (audioFile.buffer.length > MAX_VOICE_UPLOAD_BYTES) {
+      response.status(413).json({
+        error: `Reference audio exceeds maximum allowed size of ${MAX_VOICE_UPLOAD_BYTES} bytes.`
+      });
+      return;
+    }
+
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
-        voice_id: "mock-voice-id-00000000",
+        voice_id: request.body.voice_id || "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
       });
       return;
@@ -254,15 +287,27 @@ export async function cloneVoice(request, response, next) {
     // Store the audio buffer server-side so it can be used during speak/stream.
     pruneVoiceStore();
     const voiceId = crypto.randomUUID();
+
+    // Fix (IDOR): voice_id alone used to be sufficient to use someone else's
+    // cloned voice, since voiceStore has no per-user access control and
+    // voice_id can leak via logs, referrers, shared links, etc. We now mint
+    // a separate high-entropy owner token at clone time and only store its
+    // hash; speak() must present the matching plaintext token to use this
+    // voice. The plaintext token is returned once, here, and never again.
+    const ownerToken = crypto.randomBytes(24).toString("base64url");
+    const ownerTokenHash = crypto.createHash("sha256").update(ownerToken).digest("hex");
+
     voiceStore.set(voiceId, {
       name: request.body.name || "VoiceForge Voice",
       audioBuffer: audioFile.buffer,
       mimeType: audioFile.mimetype,
+      ownerTokenHash,
       expiresAt: Date.now() + VOICE_STORE_TTL_MS
     });
 
     response.json({
       voice_id: voiceId,
+      owner_token: ownerToken,
       name: request.body.name || "VoiceForge Voice"
     });
   } catch (error) {
@@ -304,6 +349,7 @@ export async function speak(request, response, next) {
     const {
       text,
       voice_id: voiceId,
+      owner_token: ownerToken,
       language_code,
       voice_settings
     } = request.body;
@@ -332,6 +378,11 @@ export async function speak(request, response, next) {
       response.status(400).json({ error: "voice_id is required and must not be blank." });
       return;
     }
+    pruneVoiceStore();
+    if (!getIsMock() && !voiceStore.has(trimmedVoiceId)) {
+      response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+      return;
+    }
     if (trimmedText.length > 300) {
       response.status(400).json({ error: "Text too long; maximum 300 characters for Chatterbox TTS." });
       return;
@@ -341,6 +392,30 @@ export async function speak(request, response, next) {
         error: `Unsupported language code "${language_code}". See Chatterbox Multilingual docs for supported codes.`
       });
       return;
+    }
+
+    // Fix (IDOR): verify the caller actually owns this voice_id before
+    // queuing any synthesis work. Skipped in mock mode since cloneVoice
+    // never persists a real voiceStore entry (or owner token) there.
+    if (!getIsMock()) {
+      pruneVoiceStore();
+      const voiceEntry = voiceStore.get(trimmedVoiceId);
+      if (!voiceEntry) {
+        response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+        return;
+      }
+      const trimmedOwnerToken = typeof ownerToken === "string" ? ownerToken.trim() : "";
+      const providedHash = trimmedOwnerToken
+        ? crypto.createHash("sha256").update(trimmedOwnerToken).digest("hex")
+        : null;
+      const isAuthorized =
+        !!providedHash &&
+        providedHash.length === voiceEntry.ownerTokenHash.length &&
+        crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(voiceEntry.ownerTokenHash));
+      if (!isAuthorized) {
+        response.status(403).json({ error: "Invalid or missing owner_token for this voice_id." });
+        return;
+      }
     }
 
     const defaultVoiceSettings = {
@@ -433,8 +508,31 @@ export async function streamSpeech(request, response, next) {
     }
     const { speechId, text, voiceId, language_code, voice_settings } = decryptToken(token);
 
+    // Fix (replay protection): decryptToken only checks that the token is
+    // authentic and not expired - it does not check that it hasn't already
+    // been consumed. Previously this only *checked* pendingStreams.has(),
+    // and the entry wasn't removed until the `finally` block after
+    // generation completed - so two replays arriving within that window
+    // (or within the 60s token validity window generally) could both pass
+    // the check and each trigger a full, costly Chatterbox generation.
+    //
+    // Fix: consume (delete) the pending entry atomically right here, before
+    // any async work starts. A missing/undefined entry means the token was
+    // already redeemed (or never existed), so we 410. The later cleanup
+    // calls to deletePendingStream() elsewhere in this handler are now
+    // no-ops for the happy path, but are kept as a safety net for the
+    // abort/mock code paths.
+    const pendingEntry = speechId ? deletePendingStream(speechId) : undefined;
+    if (!pendingEntry) {
+      response.status(410).json({
+        error: "This speech token has already been used or has expired. Please request a new one."
+      });
+      return;
+    }
+
     if (getIsMock()) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: streaming mock audio");
+      deletePendingStream(speechId);
       response.setHeader("Content-Type", "audio/mpeg");
       response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
       response.end(MOCK_AUDIO_MP3);

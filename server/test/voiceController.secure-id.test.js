@@ -4,6 +4,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRequest, createResponse, invoke } from "./helpers.js";
+import { voiceStore } from "../controllers/voiceController.js";
+
+// Seed voiceStore with a mock entry for the tests to pass speak validations
+voiceStore.set("voice_1", {
+  name: "voice_1",
+  audioBuffer: Buffer.from("fake-audio"),
+  mimeType: "audio/webm",
+  expiresAt: Date.now() + 2 * 60 * 60 * 1000
+});
+
+// Fix (Broken Server Unit Tests): these tests exercise token generation,
+// uniqueness, and expiration behavior only — they don't (and shouldn't need
+// to) go through the real cloneVoice flow to get a voiceStore entry +
+// owner_token. Enable mock mode so speak() skips the voiceStore lookup /
+// owner_token authorization check added for the IDOR fix, matching how
+// voiceController.mock-mode.test.js is set up. Without this, every
+// callSpeak() below 404s with "Voice profile not found".
+process.env.MOCK_CHATTERBOX = "true";
 
 async function callSpeak(speak, overrides = {}) {
   const request = createRequest({

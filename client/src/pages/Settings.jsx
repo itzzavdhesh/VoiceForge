@@ -71,6 +71,29 @@ export default function Settings() {
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
 
+  const currentPresetKey = React.useMemo(() => {
+    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
+      return (
+        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
+        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
+        Math.abs(voiceSettings.style - preset.style) < 0.001
+      );
+    });
+    return presetEntry ? presetEntry[0] : "custom";
+  }, [voiceSettings]);
+
+  function handlePresetChange(presetKey) {
+    if (presetKey === "custom") return;
+    const preset = VOICE_PRESETS[presetKey];
+    if (preset) {
+      saveVoiceSettings({
+        ...voiceSettings,
+        stability: preset.stability,
+        temperature: preset.temperature,
+        style: preset.style,
+      });
+    }
+  }
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
@@ -202,15 +225,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({
@@ -310,6 +334,25 @@ export default function Settings() {
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
         
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">

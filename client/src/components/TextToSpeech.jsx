@@ -62,17 +62,17 @@ if (estimatedDuration > 30) {
     {characterCount} / {MAX_CHARS}
   </span>
 
-  <p
-  aria-live="polite"
-  className="mt-2 text-xs text-ink/60 dark:text-muted"
->
-  Est. Duration: {estimatedDuration}s ({durationCategory})
-</p>
-</div>
+          <p
+            aria-live="polite"
+            className="mt-2 text-xs text-ink/60 dark:text-muted"
+          >
+            Est. Duration: {estimatedDuration}s ({durationCategory})
+          </p>
+        </div>
       </div>
       <textarea
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => setText(event.target.value.slice(0, 300))}
         onKeyDown={handleKeyDown}
         disabled={disabled}
         aria-describedby="tts-char-hint"
