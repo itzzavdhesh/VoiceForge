@@ -1,9 +1,10 @@
 // Coordinates top-level navigation, saved voice state, and page rendering for VoiceForge.
 import React from "react";
-import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info } from "lucide-react";
+import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2 } from "lucide-react";
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
+import Analytics from "./pages/Analytics.jsx";
 import VoiceForge from "./components/VoiceForge";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
@@ -18,6 +19,7 @@ const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
   { id: "call",         label: "Call",          icon: Camera },
   { id: "compose",      label: "Compose",       icon: MessageSquare },
+  { id: "analytics",    label: "Analytics",     icon: BarChart2 },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "about", label: "About", icon: Info },
@@ -194,6 +196,7 @@ export default function App() {
             {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}
+            {activeTab === "analytics"  && <Analytics />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy

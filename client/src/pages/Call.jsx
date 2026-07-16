@@ -20,6 +20,23 @@ export default function Call() {
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
+  
+  const [activeText, setActiveText] = React.useState("");
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitlesEnabled") !== "false";
+    } catch { return true; }
+  });
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
+    } catch { return "medium"; }
+  });
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
+    } catch { return "0.6"; }
+  });
 
   React.useEffect(() => {
     persistLanguage(language);
@@ -171,6 +188,7 @@ export default function Call() {
   if (!activeProfile?.voice_id) return;
 
   try {
+    setActiveText(text);
     const result = await speak({
       text,
       voiceId: activeProfile.voice_id,
@@ -342,6 +360,72 @@ export default function Call() {
           onChange={setLanguage}
         />
       </section>
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold">Subtitles Overlay Settings</h2>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">Overlay spoken words on the webcam video preview sent to the virtual camera.</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={subtitlesEnabled}
+              onChange={(e) => {
+                setSubtitlesEnabled(e.target.checked);
+                localStorage.setItem("voiceforge:subtitlesEnabled", e.target.checked.toString());
+              }}
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-neutral-600 peer-checked:bg-coral"></div>
+            <span className="ml-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+              Enabled
+            </span>
+          </label>
+        </div>
+        
+        {subtitlesEnabled && (
+          <div className="grid gap-4 sm:grid-cols-2 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+            <div>
+              <label htmlFor="sub-font-size" className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">
+                Font Size
+              </label>
+              <select
+                id="sub-font-size"
+                value={subtitleFontSize}
+                onChange={(e) => {
+                  setSubtitleFontSize(e.target.value);
+                  localStorage.setItem("voiceforge:subtitleFontSize", e.target.value);
+                }}
+                className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
+              >
+                <option value="small">Small (18px)</option>
+                <option value="medium">Medium (24px)</option>
+                <option value="large">Large (32px)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="sub-bg-opacity" className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">
+                Background Box Opacity
+              </label>
+              <select
+                id="sub-bg-opacity"
+                value={subtitleBgOpacity}
+                onChange={(e) => {
+                  setSubtitleBgOpacity(e.target.value);
+                  localStorage.setItem("voiceforge:subtitleBgOpacity", e.target.value);
+                }}
+                className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
+              >
+                <option value="0">Transparent (0%)</option>
+                <option value="0.3">Light (30%)</option>
+                <option value="0.6">Medium (60%)</option>
+                <option value="0.85">Dark (85%)</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
@@ -384,6 +468,10 @@ export default function Call() {
           onSpeakingChange={setIsSpeaking}
           calibration={calibration}
           isCalibrating={isCalibrationOpen}
+          activeText={activeText}
+          subtitlesEnabled={subtitlesEnabled}
+          subtitleFontSize={subtitleFontSize}
+          subtitleBgOpacity={parseFloat(subtitleBgOpacity)}
         />
       </div>
 

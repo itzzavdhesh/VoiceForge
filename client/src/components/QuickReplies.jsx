@@ -55,6 +55,30 @@ export function QuickReplies({ onSelect, showToast }) {
     }
   }, [replies]);
 
+  useEffect(() => {
+    function handleSync() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setReplies(parsed);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync quick replies:", err);
+      }
+    }
+
+    window.addEventListener("storage", handleSync);
+    window.addEventListener("voiceforge:quickRepliesChanged", handleSync);
+
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener("voiceforge:quickRepliesChanged", handleSync);
+    };
+  }, []);
+
   const handleAdd = (e) => {
     e.preventDefault();
     const cleanPhrase = newPhrase.trim();
@@ -355,7 +379,7 @@ export function QuickReplies({ onSelect, showToast }) {
         {filteredReplies.length === 0 && !isAdding && (
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
             {isEditing
-              ? 'No quick replies in this category. Click "Add" to create one.'
+              ? `No quick replies in this category. Click "Add" to create one.`
               : 'No quick replies in this category.'}
           </p>
         )}
