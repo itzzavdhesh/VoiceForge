@@ -2,6 +2,19 @@ import React, { useMemo, useState } from 'react';
 import { useSpeechHistory } from '../hooks/useSpeechHistory';
 import { Download, BarChart2, MessageSquare, Clock, Globe, ChevronDown } from 'lucide-react';
 
+const STOP_WORDS = new Set([
+  "the", "and", "is", "a", "of", "to", "in", "it", "i", "you", "that", "he", "was",
+  "for", "on", "are", "as", "with", "his", "they", "i'm", "at", "be", "this", "have",
+  "from", "or", "one", "had", "by", "word", "but", "not", "what", "all", "were",
+  "we", "when", "your", "can", "said", "there", "use", "an", "each", "which", "she",
+  "do", "how", "their", "if", "will", "up", "other", "about", "out", "many", "then",
+  "them", "these", "so", "some", "her", "would", "make", "like", "him", "into",
+  "has", "look", "two", "more", "write", "go", "see", "number", "no", "way", "could",
+  "people", "my", "than", "first", "water", "been", "call", "who", "oil", "its",
+  "now", "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
+  "please", "would", "could", "should", "will", "can", "shall", "must", "done", "take"
+]);
+
 export default function Analytics() {
   const { analyticsHistory, sessionTranscript } = useSpeechHistory();
   const [dateRange, setDateRange] = useState("7days");
@@ -102,6 +115,58 @@ export default function Analytics() {
 
     return slices;
   }, [filteredHistory]);
+
+  // Word Cloud Data Calculation
+  const wordCloudData = useMemo(() => {
+    const counts = {};
+    filteredHistory.forEach((msg) => {
+      if (!msg.text) return;
+      const words = msg.text
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "")
+        .split(/\s+/)
+        .filter(Boolean);
+
+      words.forEach((w) => {
+        if (w.length > 2 && !STOP_WORDS.has(w)) {
+          counts[w] = (counts[w] || 0) + 1;
+        }
+      });
+    });
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 35)
+      .map(([text, value]) => ({ text, value }));
+  }, [filteredHistory]);
+
+  const { wordCloudMax, wordCloudMin } = useMemo(() => {
+    if (wordCloudData.length === 0) return { wordCloudMax: 1, wordCloudMin: 1 };
+    const values = wordCloudData.map((w) => w.value);
+    return {
+      wordCloudMax: Math.max(...values),
+      wordCloudMin: Math.min(...values),
+    };
+  }, [wordCloudData]);
+
+  const getWordFontSize = (val) => {
+    if (wordCloudMax === wordCloudMin) return "1.25rem";
+    const scale = (val - wordCloudMin) / (wordCloudMax - wordCloudMin);
+    return `${0.9 + scale * 1.6}rem`; // scales between 0.9rem and 2.5rem
+  };
+
+  const wordColors = [
+    "text-moss dark:text-glow font-bold",
+    "text-coral font-bold",
+    "text-blue-500 dark:text-blue-400 font-semibold",
+    "text-emerald-500 dark:text-emerald-400 font-semibold",
+    "text-purple-500 dark:text-purple-400 font-medium",
+    "text-amber-500 dark:text-amber-400 font-medium",
+    "text-sky-500 dark:text-sky-400 font-medium"
+  ];
+  const getWordColorClass = (idx) => {
+    return wordColors[idx % wordColors.length];
+  };
 
   // Usage data adapted dynamically by time scale
   const usageData = useMemo(() => {
@@ -460,6 +525,29 @@ export default function Analytics() {
         ) : (
           <div className="h-48 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
             No language data available.
+          </div>
+        )}
+      </div>
+
+      {/* Vocabulary Diversity Word Cloud */}
+      <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-6">Vocabulary Diversity (Word Cloud)</h3>
+        {wordCloudData.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-4 py-8 px-4 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl min-h-[160px]">
+            {wordCloudData.map((word, idx) => (
+              <span
+                key={word.text}
+                title={`Spoken ${word.value} time${word.value !== 1 ? "s" : ""}`}
+                className={`${getWordColorClass(idx)} hover:scale-110 hover:opacity-80 transition-all duration-150 cursor-help whitespace-nowrap inline-block`}
+                style={{ fontSize: getWordFontSize(word.value) }}
+              >
+                {word.text}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="h-40 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+            No vocabulary data available for this period.
           </div>
         )}
       </div>
