@@ -25,6 +25,7 @@ import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { PitchShifter } from "../utils/pitchShifter.js";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -76,6 +77,161 @@ export default function Settings() {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
     window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const [playingPreset, setPlayingPreset] = React.useState(null);
+  const audioRef = React.useRef(null);
+  const audioContextRef = React.useRef(null);
+  const sourceRef = React.useRef(null);
+  const bassFilterRef = React.useRef(null);
+  const midFilterRef = React.useRef(null);
+  const trebleFilterRef = React.useRef(null);
+  const pitchShifterRef = React.useRef(null);
+
+  const cleanupPreview = React.useCallback(() => {
+    setPlayingPreset(null);
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch (e) {}
+      sourceRef.current = null;
+    }
+    if (bassFilterRef.current) {
+      try { bassFilterRef.current.disconnect(); } catch (e) {}
+      bassFilterRef.current = null;
+    }
+    if (midFilterRef.current) {
+      try { midFilterRef.current.disconnect(); } catch (e) {}
+      midFilterRef.current = null;
+    }
+    if (trebleFilterRef.current) {
+      try { trebleFilterRef.current.disconnect(); } catch (e) {}
+      trebleFilterRef.current = null;
+    }
+    if (pitchShifterRef.current) {
+      try {
+        pitchShifterRef.current.input.disconnect();
+        pitchShifterRef.current.output.disconnect();
+      } catch (e) {}
+      pitchShifterRef.current = null;
+    }
+    audioRef.current = null;
+  }, []);
+
+  const stopPreview = React.useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch (e) {}
+    }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    cleanupPreview();
+  }, [cleanupPreview]);
+
+  React.useEffect(() => {
+    return () => {
+      stopPreview();
+    };
+  }, [stopPreview]);
+
+  async function playPresetPreview(presetKey, preset) {
+    if (playingPreset) {
+      stopPreview();
+      if (playingPreset === presetKey) return;
+    }
+    
+    const activeProfileId = localStorage.getItem("voiceforge:activeVoiceId") || (profiles[0]?.voice_id);
+    if (!activeProfileId) {
+      showToast("Please clone or select a voice profile first to hear previews.", "error");
+      return;
+    }
+    
+    setPlayingPreset(presetKey);
+    
+    try {
+      const response = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Testing VoiceForge presets.",
+          voice_id: activeProfileId,
+          language_code: language,
+          voice_settings: {
+            stability: preset.stability,
+            style: preset.style,
+            temperature: preset.temperature
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Speech synthesis failed");
+      }
+      
+      const payload = await response.json();
+      const audioUrl = payload.audioUrl;
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.playbackRate = preset.dspSpeed;
+      
+      const source = audioCtx.createMediaElementSource(audio);
+      sourceRef.current = source;
+      
+      const bass = audioCtx.createBiquadFilter();
+      bass.type = "lowshelf";
+      bass.frequency.value = 200;
+      bass.gain.value = preset.dspBass;
+      bassFilterRef.current = bass;
+      
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking";
+      mid.frequency.value = 1000;
+      mid.Q.value = 1.0;
+      mid.gain.value = preset.dspMid;
+      midFilterRef.current = mid;
+      
+      const treble = audioCtx.createBiquadFilter();
+      treble.type = "highshelf";
+      treble.frequency.value = 4000;
+      treble.gain.value = preset.dspTreble;
+      trebleFilterRef.current = treble;
+      
+      const shifter = new PitchShifter(audioCtx);
+      shifter.setPitch(preset.dspPitch);
+      pitchShifterRef.current = shifter;
+      
+      source.connect(bass);
+      bass.connect(mid);
+      mid.connect(treble);
+      treble.connect(shifter.input);
+      shifter.output.connect(audioCtx.destination);
+      
+      audio.onended = () => {
+        cleanupPreview();
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.error("Failed to play preset preview:", err);
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance("Testing VoiceForge presets.");
+        utterance.lang = language;
+        utterance.pitch = preset.dspPitch;
+        utterance.rate = preset.dspSpeed;
+        utterance.onend = () => setPlayingPreset(null);
+        utterance.onerror = () => setPlayingPreset(null);
+        window.speechSynthesis.speak(utterance);
+      } catch (fallbackErr) {
+        showToast("Preview play failed", "error");
+        setPlayingPreset(null);
+      }
+    }
   }
 
   const currentPresetKey = React.useMemo(() => {
@@ -311,23 +467,62 @@ export default function Settings() {
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
         
-        <div className="mb-5">
-          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
-            Voice Preset
+        <div className="mb-6">
+          <label className="mb-3 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Presets & Previews
           </label>
-          <select
-            id="voice-preset"
-            value={currentPresetKey}
-            onChange={(e) => handlePresetChange(e.target.value)}
-            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
-          >
-            <option value="custom" disabled>Custom</option>
-            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
-              <option key={key} value={key}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2.5">
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => {
+              const isActive = currentPresetKey === key;
+              const isPlaying = playingPreset === key;
+              return (
+                <div
+                  key={key}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold transition duration-150 ${
+                    isActive
+                      ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:border-moss/40 hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-300 dark:hover:border-glow/40 dark:hover:bg-glow/5"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange(key)}
+                    className="outline-none text-left font-bold"
+                  >
+                    {preset.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => playPresetPreview(key, preset)}
+                    aria-label={isPlaying ? `Stop previewing ${preset.name}` : `Preview ${preset.name} voice`}
+                    className={`ml-1 flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150 ${
+                      isPlaying
+                        ? "bg-coral text-white scale-105"
+                        : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <span className="block h-2 w-2 rounded-sm bg-white" />
+                    ) : (
+                      <svg className="h-3 w-3 fill-current ml-0.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+            
+            <div
+              className={`inline-flex items-center rounded-lg border px-3.5 py-2 text-sm font-semibold ${
+                currentPresetKey === "custom"
+                  ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                  : "border-dashed border-neutral-300 bg-transparent text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
+              }`}
+            >
+              Custom Settings
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
