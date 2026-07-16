@@ -77,6 +77,13 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
+  const handleToggleFavorite = useCallback((id) => {
+    const applied = toggleFavorite(id);
+    if (!applied) {
+      showToast("Pin limit reached — unpin a phrase to pin a new one", "error");
+    }
+  }, [toggleFavorite, showToast]);
+
   const speak = useCallback((text) => {
     if (!text.trim()) return;
 
@@ -259,7 +266,7 @@ export default function VoiceForge() {
           sessionTranscript={sessionTranscript}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
-          onToggleFav={toggleFavorite}
+          onToggleFav={handleToggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
           onCopy={handleCopy}

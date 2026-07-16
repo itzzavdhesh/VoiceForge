@@ -201,7 +201,10 @@ export default function Onboarding({ onReady }) {
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    hasServerKey: false,
+  });
 
   React.useEffect(() => {
     fetch("/api/voice/status")
