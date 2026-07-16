@@ -1,8 +1,8 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
 import React from "react";
-import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
+import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw, Upload } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
-import useVoiceClone from "../hooks/useVoiceClone.js";
+import useVoiceClone, { saveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 
 import {
@@ -305,6 +305,64 @@ export default function Onboarding({ onReady }) {
     }
   }
 
+  const handleImportVFP = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".vfp")) {
+      showToast("Invalid file format. Please upload a .vfp file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (
+        parsed.type !== "voiceforge_profile" ||
+        !parsed.voice_id ||
+        !parsed.name ||
+        !parsed.audioDataUrl
+      ) {
+        throw new Error("Missing or invalid profile fields.");
+      }
+
+      const arr = parsed.audioDataUrl.split(",");
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "audio/wav";
+      
+      if (!mime.startsWith("audio/")) {
+        throw new Error("Embedded file is not a valid audio format.");
+      }
+
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const audioBlob = new Blob([u8arr], { type: mime });
+
+      const nextProfile = await saveVoiceProfile({
+        voice_id: parsed.voice_id,
+        name: parsed.name
+      }, audioBlob);
+
+      if (nextProfile) {
+        showToast(`Imported ${parsed.name} successfully!`, "success");
+        setSuccessProfile(nextProfile);
+        setMaxUnlockedStep(2);
+        setActiveStep(2);
+      }
+      event.target.value = "";
+    } catch (err) {
+      console.error("VFP Import failed:", err);
+      showToast("VFP import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
+
   function handleManualStepNavigation(targetStep) {
     if (targetStep <= maxUnlockedStep) {
       setActiveStep(targetStep);
@@ -394,6 +452,27 @@ export default function Onboarding({ onReady }) {
           )}
 
           <VoiceRecorder onRecordingReady={handleRecordingReady} disabled={isCloning} />
+
+          <div className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-ink dark:text-neutral-100">Import Voice Profile Backup</h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">Restore a previously saved voice clone profile (.vfp file) instantly.</p>
+            </div>
+            <label
+              htmlFor="onboarding-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black shrink-0"
+            >
+              <Upload size={14} />
+              Import .vfp File
+              <input
+                id="onboarding-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
+          </div>
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <label className="block text-sm font-bold text-ink dark:text-neutral-100" htmlFor="voice-name">

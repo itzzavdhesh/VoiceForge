@@ -20,6 +20,7 @@ import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
+  saveVoiceProfile,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
@@ -64,6 +65,10 @@ export default function Settings() {
       }
     }
     loadProfiles();
+    window.addEventListener("voiceforge:profileChanged", loadProfiles);
+    return () => {
+      window.removeEventListener("voiceforge:profileChanged", loadProfiles);
+    };
   }, []);
 
 
@@ -418,6 +423,97 @@ export default function Settings() {
     }
   };
 
+  const handleExportProfile = async (profile) => {
+    try {
+      let base64Audio = null;
+      if (profile.audioBlob) {
+        base64Audio = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(profile.audioBlob);
+        });
+      }
+      
+      const vfpData = {
+        type: "voiceforge_profile",
+        version: 1,
+        voice_id: profile.voice_id,
+        name: profile.name,
+        createdAt: profile.createdAt,
+        audioDataUrl: base64Audio
+      };
+      
+      const jsonContent = JSON.stringify(vfpData, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${profile.name.replace(/\s+/g, "_")}.vfp`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported backup for ${profile.name}`, "success");
+    } catch (err) {
+      console.error("Failed to export profile:", err);
+      showToast("Failed to export voice profile", "error");
+    }
+  };
+
+  const handleImportVFP = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".vfp")) {
+      showToast("Invalid file format. Please upload a .vfp file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (
+        parsed.type !== "voiceforge_profile" ||
+        !parsed.voice_id ||
+        !parsed.name ||
+        !parsed.audioDataUrl
+      ) {
+        throw new Error("Missing or invalid profile fields.");
+      }
+
+      const arr = parsed.audioDataUrl.split(",");
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "audio/wav";
+      
+      if (!mime.startsWith("audio/")) {
+        throw new Error("Embedded file is not a valid audio format.");
+      }
+
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const audioBlob = new Blob([u8arr], { type: mime });
+
+      await saveVoiceProfile({
+        voice_id: parsed.voice_id,
+        name: parsed.name
+      }, audioBlob);
+
+      showToast(`Imported ${parsed.name} successfully!`, "success");
+      event.target.value = "";
+    } catch (err) {
+      console.error("VFP Import failed:", err);
+      showToast("VFP import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
+
   async function removeProfile(voiceId) {
     try {
       const next = await deleteVoiceProfile(voiceId);
@@ -754,6 +850,20 @@ export default function Settings() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
           <div className="flex items-center gap-3">
+            <label
+              htmlFor="settings-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
+            >
+              <Upload size={14} />
+              Import Profile (.vfp)
+              <input
+                id="settings-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
             <button
               type="button"
               onClick={() => setIsReceiving(true)}
@@ -784,6 +894,7 @@ export default function Settings() {
               profile={profile}
               onDelete={removeProfile}
               onShare={(p) => setSharingProfile(p)}
+              onExport={handleExportProfile}
             />
           ))}
         </div>
