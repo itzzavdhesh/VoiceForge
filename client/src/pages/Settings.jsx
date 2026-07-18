@@ -71,29 +71,7 @@ export default function Settings() {
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
 
-  const currentPresetKey = React.useMemo(() => {
-    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
-      return (
-        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
-        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
-        Math.abs(voiceSettings.style - preset.style) < 0.001
-      );
-    });
-    return presetEntry ? presetEntry[0] : "custom";
-  }, [voiceSettings]);
 
-  function handlePresetChange(presetKey) {
-    if (presetKey === "custom") return;
-    const preset = VOICE_PRESETS[presetKey];
-    if (preset) {
-      saveVoiceSettings({
-        ...voiceSettings,
-        stability: preset.stability,
-        temperature: preset.temperature,
-        style: preset.style,
-      });
-    }
-  }
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
