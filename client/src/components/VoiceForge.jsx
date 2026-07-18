@@ -77,9 +77,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
-
   useEffect(() => {
     async function loadActiveProfile() {
       try {
