@@ -189,18 +189,22 @@ export default function Call() {
 
   try {
     setActiveText(text);
+    setIsSpeaking(true);
     const result = await speak({
       text,
       voiceId: activeProfile.voice_id,
       language_code: language,
+      audioProcessor: canvasRef.current?._audioProcessor
     });
+    setIsSpeaking(false);
 
     if (result?.fallback) {
       showToast("Using browser voice fallback", "info");
     }
   } catch (err) {
     console.error("TTS streaming error:", err);
-    showToast("Speech generation failed", "error");
+    showToast(err?.message || "Speech generation failed", "error");
+    setIsSpeaking(false);
   }
 }
 
@@ -464,6 +468,7 @@ export default function Call() {
           ref={canvasRef}
           webcamStream={webcamStream}
           audioUrl={audioUrl}
+          engine={engine}
           isSpeaking={isSpeaking}
           onSpeakingChange={setIsSpeaking}
           calibration={calibration}

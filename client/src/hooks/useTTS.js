@@ -16,6 +16,23 @@ export default function useTTS() {
   const [engine, setEngine] = React.useState("chatterbox");
   const abortControllerRef = React.useRef(null);
 
+  const workerRef = React.useRef(null);
+  const audioSourcesRef = React.useRef([]);
+  const playbackTimeRef = React.useRef(0);
+
+  React.useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+      }
+      audioSourcesRef.current.forEach((src) => {
+        try {
+          src.stop();
+        } catch (e) {}
+      });
+    };
+  }, []);
+
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
    *
@@ -72,13 +89,26 @@ export default function useTTS() {
    *   it is looked up from the locally saved profile matching voiceId.
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
-  async function speak({ text, voiceId, language_code, ownerToken }) {
+  async function speak({ text, voiceId, language_code, ownerToken, audioProcessor }) {
     // Cancel any in-flight request before starting a new one.
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    // Stop all currently playing audio sources
+    audioSourcesRef.current.forEach((src) => {
+      try {
+        src.stop();
+      } catch (e) {}
+    });
+    audioSourcesRef.current = [];
+
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
 
     setError("");
     setStatus("speaking");
@@ -207,8 +237,129 @@ export default function useTTS() {
 
       setEngine("chatterbox");
       setAudioUrl(nextAudioUrl);
-      setStatus("ready");
 
+      // Initialize the worker
+      const worker = new Worker(
+        new URL("../workers/audioDecoder.worker.js", import.meta.url),
+        { type: "module" }
+      );
+      workerRef.current = worker;
+
+      // Initialize the audio context and route it
+      let audioContext;
+      if (audioProcessor) {
+        await audioProcessor.initialize(null);
+        audioContext = audioProcessor.audioContext;
+      } else {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      playbackTimeRef.current = audioContext.currentTime;
+
+      // Start the stream fetch
+      const streamResponse = await fetch(nextAudioUrl, { signal: controller.signal });
+      if (!streamResponse.ok) {
+        const errPayload = await streamResponse.json().catch(() => ({}));
+        throw new Error(errPayload.error || `Stream fetch failed with status ${streamResponse.status}`);
+      }
+
+      const reader = streamResponse.body.getReader();
+      let chunkIndex = 0;
+
+      await new Promise((resolve, reject) => {
+        const cleanupAndReject = (err) => {
+          worker.terminate();
+          audioSourcesRef.current.forEach((src) => {
+            try {
+              src.stop();
+            } catch (e) {}
+          });
+          audioSourcesRef.current = [];
+          reject(err);
+        };
+
+        controller.signal.addEventListener("abort", () => {
+          cleanupAndReject(new DOMException("Aborted", "AbortError"));
+        });
+
+        worker.onmessage = (event) => {
+          const { status: msgStatus, chunkIndex: msgIndex, pcmData, sampleRate, isLast, error } = event.data;
+
+          if (msgStatus === "error") {
+            cleanupAndReject(new Error(error));
+            return;
+          }
+
+          if (msgStatus === "success" && pcmData && pcmData.length > 0) {
+            const audioBuffer = audioContext.createBuffer(1, pcmData.length, sampleRate);
+            audioBuffer.copyToChannel(pcmData, 0);
+
+            const sourceNode = audioContext.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+
+            if (audioProcessor && audioProcessor.inputNode) {
+              sourceNode.connect(audioProcessor.inputNode);
+            } else {
+              sourceNode.connect(audioContext.destination);
+            }
+
+            const now = audioContext.currentTime;
+            if (playbackTimeRef.current < now) {
+              playbackTimeRef.current = now;
+            }
+
+            sourceNode.start(playbackTimeRef.current);
+            playbackTimeRef.current += audioBuffer.duration;
+
+            audioSourcesRef.current.push(sourceNode);
+
+            if (isLast) {
+              sourceNode.onended = () => {
+                worker.terminate();
+                resolve();
+              };
+            }
+          } else if (msgStatus === "success" && isLast) {
+            if (audioSourcesRef.current.length > 0) {
+              const lastSource = audioSourcesRef.current[audioSourcesRef.current.length - 1];
+              lastSource.onended = () => {
+                worker.terminate();
+                resolve();
+              };
+            } else {
+              worker.terminate();
+              resolve();
+            }
+          }
+        };
+
+        async function readStream() {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                worker.postMessage({ chunk: null, chunkIndex, isLast: true });
+                break;
+              }
+              const arrayBuffer = value.buffer;
+              worker.postMessage({ chunk: arrayBuffer, chunkIndex, isLast: false }, [arrayBuffer]);
+              chunkIndex++;
+            }
+          } catch (err) {
+            if (err.name !== "AbortError") {
+              cleanupAndReject(err);
+            }
+          }
+        }
+
+        readStream();
+      });
+
+      setStatus("ready");
       return {
         audioUrl: nextAudioUrl,
         engine: "chatterbox",
