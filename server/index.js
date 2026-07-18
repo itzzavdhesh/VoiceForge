@@ -5,6 +5,7 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
+import helmet from "helmet";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -24,6 +25,34 @@ if (getIsMock()) {
 const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: [
+        "'self'",
+        clientUrl,
+        "https://huggingface.co",
+        "https://*.hf.space",
+        "ws://localhost:*",
+        "ws://127.0.0.1:*"
+      ],
+      mediaSrc: ["'self'", "blob:"],
+      workerSrc: ["'self'", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+    }
+  },
+  crossOriginOpenerPolicy: { policy: "same-origin" },
+  crossOriginEmbedderPolicy: { policy: "require-corp" }
+}));
+
+app.use((req, res, next) => {
+  res.setHeader("Permissions-Policy", "microphone=(self), camera=(self)");
+  next();
+});
 
 // Global rate limiter: 100 requests per 15 minutes per IP
 const globalLimiter = rateLimit({
@@ -57,6 +86,10 @@ app.use((error, _request, response, _next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`VoiceForge API listening on http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(port, () => {
+    console.log(`VoiceForge API listening on http://localhost:${port}`);
+  });
+}
+
+export default app;
