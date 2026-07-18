@@ -13,7 +13,6 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [duration, setDuration] = React.useState(0);
   const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
-  const durationRef = React.useRef(0);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);

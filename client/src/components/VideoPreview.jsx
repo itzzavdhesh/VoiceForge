@@ -216,6 +216,8 @@ export default React.forwardRef(function VideoPreview({
     const textColor = isDark ? "#e2e8f0" : "#16201d";
     const mouthColor = isDark ? "rgba(226, 232, 240, 0.82)" : "rgba(22, 32, 29, 0.82)";
 
+    let isUnmounted = false;
+    let fallbackTimer;
     let lastSyncTime = 0;
     let audioTimeOffset = null;
 
@@ -285,7 +287,9 @@ export default React.forwardRef(function VideoPreview({
       ctx.restore();
     }
 
-    function draw(timestamp) {
+    function draw(now, metadata) {
+      if (isUnmounted) return;
+      const timestamp = metadata ? metadata.mediaTime * 1000 : now;
       context.fillStyle = bgColor;
       context.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -414,11 +418,29 @@ export default React.forwardRef(function VideoPreview({
         });
       }
 
-      animationRef.current = requestAnimationFrame(draw);
+      if (!isUnmounted) {
+        if (video && typeof video.requestVideoFrameCallback === "function" && video.readyState >= 2) {
+          animationRef.current = video.requestVideoFrameCallback(draw);
+        } else {
+          fallbackTimer = requestAnimationFrame(draw);
+        }
+      }
     }
 
-    animationRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animationRef.current);
+    const video = videoRef.current;
+    if (video && typeof video.requestVideoFrameCallback === "function" && video.readyState >= 2) {
+      animationRef.current = video.requestVideoFrameCallback(draw);
+    } else {
+      fallbackTimer = requestAnimationFrame(draw);
+    }
+
+    return () => {
+      isUnmounted = true;
+      if (video && typeof video.cancelVideoFrameCallback === "function" && animationRef.current) {
+        video.cancelVideoFrameCallback(animationRef.current);
+      }
+      if (fallbackTimer) cancelAnimationFrame(fallbackTimer);
+    };
   }, [ref, isSpeaking, theme]);
 
   return (
