@@ -182,19 +182,13 @@ export default function Call() {
     if (!activeProfile?.voice_id) return;
 
     try {
+      setActiveText(text);
       const result = await speak({
         text,
         voiceId: activeProfile.voice_id,
         language_code: language,
         voice_settings_override,
       });
-  try {
-    setActiveText(text);
-    const result = await speak({
-      text,
-      voiceId: activeProfile.voice_id,
-      language_code: language,
-    });
 
       if (result?.fallback) {
         showToast("Using browser voice fallback", "info");

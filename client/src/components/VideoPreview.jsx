@@ -237,7 +237,6 @@ export default React.forwardRef(function VideoPreview({
       context.fillRect(0, 0, canvas.width, canvas.height);
 
       const video = videoRef.current;
-      if (video?.readyState >= 2) {
 
       // Privacy mode: draw static avatar image with object-fit cover
       if (avatarImage && avatarImage.complete && avatarImage.naturalWidth) {

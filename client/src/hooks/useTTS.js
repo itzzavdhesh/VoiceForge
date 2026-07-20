@@ -16,7 +16,7 @@ export default function useTTS() {
   const [engine, setEngine] = React.useState("chatterbox");
   const abortControllerRef = React.useRef(null);
 
-  async function speak({ text, voiceId, language_code, voice_settings_override }) {
+
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
    *
@@ -73,7 +73,7 @@ export default function useTTS() {
    *   it is looked up from the locally saved profile matching voiceId.
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
-  async function speak({ text, voiceId, language_code, ownerToken }) {
+  async function speak({ text, voiceId, language_code, ownerToken, voice_settings_override }) {
     // Cancel any in-flight request before starting a new one.
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
