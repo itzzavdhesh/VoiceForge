@@ -16,12 +16,12 @@ import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const tabs = [
-  { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
-  { id: "call",         label: "Call",          icon: Camera },
-  { id: "compose",      label: "Compose",       icon: MessageSquare },
-  { id: "analytics",    label: "Analytics",     icon: BarChart2 },
-  { id: "settings",     label: "Settings",      icon: SettingsIcon },
-  { id: "contributors", label: "Contributors",  icon: Users },
+  { id: "onboarding", label: "Onboarding", icon: Mic2 },
+  { id: "call", label: "Call", icon: Camera },
+  { id: "compose", label: "Compose", icon: MessageSquare },
+  { id: "analytics", label: "Analytics", icon: BarChart2 },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
+  { id: "contributors", label: "Contributors", icon: Users },
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -83,17 +83,29 @@ export default function App() {
 
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
+
     saveActiveTab(tab);
     setActiveTab(tab);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "auto", // ya "smooth" agar smooth scrolling chahiye
+    });
   }
 
   // Support navigation to non-tab routes such as the privacy policy.
   function navigateTo(route) {
     if (route === "privacy-policy") {
       setActiveTab("privacy-policy");
-      return;
+    } else {
+      selectTab(route);
+      return; 
     }
-    selectTab(route);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
   }
 
   // On initial load, honor direct links to /privacy-policy
@@ -109,24 +121,24 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
-      
+
       {/* Global Header */}
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-white/70 backdrop-blur-md dark:border-border dark:bg-surface/70">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {/* Logo + Title */}
-            <div
-              className="flex items-center gap-3 min-w-0 cursor-pointer"
-              onClick={() => selectTab("onboarding")}
-              role="button"
-              tabIndex={0}
-              aria-label="Go to home"
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectTab("onboarding")}
-            >
-              <img
-                src="/models/logo5.png"
-                alt="VoiceForge Logo"
-                className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
-              />
+          <div
+            className="flex items-center gap-3 min-w-0 cursor-pointer"
+            onClick={() => selectTab("onboarding")}
+            role="button"
+            tabIndex={0}
+            aria-label="Go to home"
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectTab("onboarding")}
+          >
+            <img
+              src="/models/logo5.png"
+              alt="VoiceForge Logo"
+              className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
+            />
             <div className="min-w-0">
               <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow sm:block">
                 Open source assistive video
@@ -159,11 +171,10 @@ export default function App() {
                     key={tab.id}
                     type="button"
                     onClick={() => selectTab(tab.id)}
-                    className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
-                      selected
-                        ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
-                        : "border-ink/15 bg-white text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
-                    }`}
+                    className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${selected
+                      ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
+                      : "border-ink/15 bg-white text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+                      }`}
                   >
                     <Icon aria-hidden="true" size={17} />
                     {tab.label}
@@ -194,14 +205,14 @@ export default function App() {
         {activeTab !== "compose" && (
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
-            {activeTab === "call"       && <Call />}
-            {activeTab === "settings"   && <Settings />}
-            {activeTab === "analytics"  && <Analytics />}
+            {activeTab === "call" && <Call />}
+            {activeTab === "settings" && <Settings />}
+            {activeTab === "analytics" && <Analytics />}
             {activeTab === "contributors" && <Contributors />}
-            {activeTab === "about" && <About onNavigate={selectTab} />}
+            {activeTab === "about" && <About onNavigate={navigateTo} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
               onBackHome={() => selectTab("onboarding")}
-             />
+            />
             )}
           </div>
         )}
@@ -221,11 +232,10 @@ export default function App() {
               type="button"
               onClick={() => selectTab(tab.id)}
               aria-current={selected ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
-                selected
-                  ? "text-moss dark:text-glow"
-                  : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
-              }`}
+              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${selected
+                ? "text-moss dark:text-glow"
+                : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
+                }`}
             >
               <Icon size={22} aria-hidden="true" />
               <span>{tab.label}</span>
@@ -236,7 +246,7 @@ export default function App() {
 
       {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
       <div className="h-16 sm:hidden" aria-hidden="true" />
-      
+
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ScrollToBottomButton activeTab={activeTab} />
       <ScrollToTopButton activeTab={activeTab} />
