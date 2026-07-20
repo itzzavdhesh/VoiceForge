@@ -1,11 +1,11 @@
 // Starts the local Express API that proxies VoiceForge voice synthesis through Chatterbox Multilingual TTS.
+import helmet from "helmet";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
-import helmet from "helmet";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -25,17 +25,19 @@ if (getIsMock()) {
 const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = process.env.NODE_ENV === "development";
 
 app.use(
   helmet({
+    crossOriginEmbedderPolicy: true,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : [])],
         styleSrc: ["'self'", ...(isDev ? ["'unsafe-inline'"] : [])],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", clientUrl, ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
+        connectSrc: ["'self'", clientUrl, "https://api-inference.huggingface.co", ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
+        workerSrc: ["'self'", "blob:"],
       },
     },
   })
@@ -73,6 +75,13 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.use("/api/voice", voiceRoutes);
+
+// Serve the React client in production so CSP headers apply to it
+if (!isDev) {
+  const clientDistPath = path.resolve(__dirname, "../client/dist");
+  app.use(express.static(clientDistPath));
+  app.get("*", (_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
+}
 
 app.use((error, _request, response, _next) => {
   console.error(error);
