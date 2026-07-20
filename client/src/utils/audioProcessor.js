@@ -21,7 +21,7 @@ export class AudioProcessor {
 
   /**
    * Initializes the audio processor with a given audio element.
-   * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
+   * @param {HTMLMediaElement|null} audioElement The <audio> or <video> element to analyze (optional).
    */
   async initialize(audioElement) {
     if (!this.audioContext) {
@@ -31,6 +31,11 @@ export class AudioProcessor {
     
     if (this.audioContext.state === "suspended") {
       await this.audioContext.resume();
+    }
+
+    if (!this.inputNode) {
+      this.inputNode = this.audioContext.createGain();
+      this.inputNode.connect(this.audioContext.destination);
     }
 
     if (this.analyzer) {
@@ -44,20 +49,22 @@ export class AudioProcessor {
       this.source = null;
     }
 
-    // Prevent re-creating the source node if it already exists for this element.
-    // We map the node to the element's lifecycle using a direct property.
-    if (audioElement._audioSourceNode) {
-      this.source = audioElement._audioSourceNode;
-      try {
-        this.source.connect(this.audioContext.destination);
-      } catch (e) {
-        // Safe fallback if already connected
+    if (audioElement) {
+      // Prevent re-creating the source node if it already exists for this element.
+      // We map the node to the element's lifecycle using a direct property.
+      if (audioElement._audioSourceNode) {
+        this.source = audioElement._audioSourceNode;
+        try {
+          this.source.connect(this.inputNode);
+        } catch (e) {
+          // Safe fallback if already connected
+        }
+      } else {
+        this.source = this.audioContext.createMediaElementSource(audioElement);
+        // Connect to central inputNode
+        this.source.connect(this.inputNode);
+        audioElement._audioSourceNode = this.source;
       }
-    } else {
-      this.source = this.audioContext.createMediaElementSource(audioElement);
-      // Connect to destination so we can still hear it
-      this.source.connect(this.audioContext.destination);
-      audioElement._audioSourceNode = this.source;
     }
 
     // Reset history when initialized/re-initialized
@@ -66,7 +73,7 @@ export class AudioProcessor {
     // Configure Meyda to extract the melSpectrogram with 80 bands
     this.analyzer = Meyda.createMeydaAnalyzer({
       audioContext: this.audioContext,
-      source: this.source,
+      source: this.source || this.inputNode,
       bufferSize: 512, // Must be a power of 2
       featureExtractors: ["melSpectrogram", "rms"],
       callback: (features) => {

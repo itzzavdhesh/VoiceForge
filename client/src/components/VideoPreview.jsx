@@ -8,6 +8,7 @@ import { FaceProcessor } from "../utils/faceProcessor";
 export default React.forwardRef(function VideoPreview({
   webcamStream,
   audioUrl,
+  engine,
   isSpeaking,
   onSpeakingChange,
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
@@ -204,6 +205,12 @@ export default React.forwardRef(function VideoPreview({
       videoRef.current.srcObject = webcamStream;
     }
   }, [webcamStream]);
+
+  React.useEffect(() => {
+    if (ref.current && audioProcessorRef.current) {
+      ref.current._audioProcessor = audioProcessorRef.current;
+    }
+  }, [ref, audioProcessorRef.current]);
 
   React.useEffect(() => {
     const canvas = ref.current;
@@ -466,7 +473,7 @@ export default React.forwardRef(function VideoPreview({
         height="540"
         className="aspect-video w-full rounded-md bg-black object-cover"
       />
-      {audioUrl && (
+      {audioUrl && engine !== "chatterbox" && (
         <audio
           ref={audioRef}
           key={audioUrl}

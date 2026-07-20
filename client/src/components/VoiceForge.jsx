@@ -77,9 +77,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
-
   useEffect(() => {
     async function loadActiveProfile() {
       try {
@@ -106,9 +103,10 @@ export default function VoiceForge() {
         if (result?.fallback) {
           showToast("Using browser voice fallback", "info");
         }
+        setIsSpeaking(false);
       } catch (err) {
         console.error("TTS speech error:", err);
-        showToast("Speech generation failed", "error");
+        showToast(err?.message || "Speech generation failed", "error");
         setIsSpeaking(false);
       }
     } else {
@@ -438,23 +436,6 @@ export default function VoiceForge() {
         </div>
       </main>
 
-      {ttsAudioUrl && useClonedVoice && activeProfile?.voice_id && (
-        <audio
-          key={ttsAudioUrl}
-          src={ttsAudioUrl}
-          autoPlay
-          className="hidden"
-          onPlay={() => setIsSpeaking(true)}
-          onPause={() => setIsSpeaking(false)}
-          onEnded={() => setIsSpeaking(false)}
-          onError={() => {
-            setIsSpeaking(false);
-            showToast("Speech playback failed", "error");
-          }}
-        >
-          <track kind="captions" />
-        </audio>
-      )}
 
       <ToastContainer toasts={toasts} />
     </div>
