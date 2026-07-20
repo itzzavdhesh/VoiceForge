@@ -179,6 +179,35 @@ async function generateClonedVoice(
   const spaceIdentifier =
     process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
 
+  // Check if space is running to avoid infinite stalls on cold-starts
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const hfRes = await fetch(`https://huggingface.co/api/spaces/${spaceIdentifier}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    
+    if (hfRes.ok) {
+      const hfData = await hfRes.json();
+      const stage = hfData.runtime?.stage;
+      if (stage && stage !== "RUNNING") {
+        const { client } = await import("@gradio/client");
+        // Trigger client initialization asynchronously in background to wake it up
+        client(spaceIdentifier).catch(() => {});
+        
+        const error = new Error(`Voice engine is warming up (current status: ${stage}). Please try again shortly.`);
+        error.status = 503;
+        throw error;
+      }
+    }
+  } catch (err) {
+    if (err.status === 503) {
+      throw err;
+    }
+    console.warn("[VoiceForge] Failed to check space status:", err.message);
+  }
+
   const { client } = await import("@gradio/client");
   const app = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
 
@@ -576,6 +605,10 @@ export async function streamSpeech(request, response, next) {
       }
       if (error.message.includes("timed out")) {
         response.status(504).json({ error: error.message });
+        return;
+      }
+      if (error.status === 503) {
+        response.status(503).json({ error: error.message });
         return;
       }
       throw error;

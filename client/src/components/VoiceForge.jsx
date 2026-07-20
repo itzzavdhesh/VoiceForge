@@ -77,9 +77,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
-
   useEffect(() => {
     async function loadActiveProfile() {
       try {
@@ -108,7 +105,7 @@ export default function VoiceForge() {
         }
       } catch (err) {
         console.error("TTS speech error:", err);
-        showToast("Speech generation failed", "error");
+        showToast(err?.message || "Speech generation failed", "error");
         setIsSpeaking(false);
       }
     } else {
