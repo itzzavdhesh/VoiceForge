@@ -387,6 +387,16 @@ export default React.forwardRef(function VideoPreview({
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             Lip-synced output
+            <button
+              onClick={() => setBlurEnabled(!blurEnabled)}
+              className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                blurEnabled 
+                  ? "bg-coral text-white" 
+                  : "bg-ink/10 text-ink/70 hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
+              }`}
+            >
+              {blurEnabled ? "Blur ON" : "Blur OFF"}
+            </button>
             {!avatarImage && (
               <button
                 onClick={() => setBlurEnabled(!blurEnabled)}
