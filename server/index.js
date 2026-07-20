@@ -5,6 +5,7 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
+import helmet from "helmet";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -24,17 +25,17 @@ if (getIsMock()) {
 const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-import helmet from "helmet";
+const isDev = process.env.NODE_ENV !== "production";
 
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : [])],
+        styleSrc: ["'self'", ...(isDev ? ["'unsafe-inline'"] : [])],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", clientUrl, "ws://localhost:5173", "http://localhost:5173"],
+        connectSrc: ["'self'", clientUrl, ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
       },
     },
   })
