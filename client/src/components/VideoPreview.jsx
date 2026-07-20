@@ -20,6 +20,7 @@ export default React.forwardRef(function VideoPreview({
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
   const ortSessionRef = useRef(null);
+  const waveRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
     "Audio-driven animation ready",
   );
@@ -120,11 +121,13 @@ export default React.forwardRef(function VideoPreview({
         await faceProcessorRef.current.initialize();
 
         const ort = await import("onnxruntime-web");
+        ortRef.current = ort;
         ortSessionRef.current = await ort.InferenceSession.create(modelBytes);
         setModelStatus("ONNX Wav2Lip model loaded");
       } catch (err) {
         console.warn("Wav2Lip initialization skipped:", err.message);
         setModelStatus("Audio-driven animation active");
+        audioProcessorRef.current = new AudioProcessor();
         // TODO: Replace audio-driven mouth animation with real browser Wav2Lip ONNX inference.
       }
     }
@@ -162,6 +165,72 @@ export default React.forwardRef(function VideoPreview({
 
     let lastSyncTime = 0;
     let audioTimeOffset = null;
+
+    function drawSubtitles(ctx, text, fontSettings, bgOpacity) {
+      if (!text) return;
+      
+      const canvasWidth = ctx.canvas.width;
+      const canvasHeight = ctx.canvas.height;
+      
+      let fontSize = 24;
+      if (fontSettings === "small") fontSize = 18;
+      if (fontSettings === "large") fontSize = 32;
+      
+      ctx.save();
+      ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      
+      const maxTextWidth = canvasWidth * 0.8;
+      const words = text.split(" ");
+      const lines = [];
+      let currentLine = "";
+      
+      for (let n = 0; n < words.length; n++) {
+        const testLine = currentLine + words[n] + " ";
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxTextWidth && n > 0) {
+          lines.push(currentLine.trim());
+          currentLine = words[n] + " ";
+        } else {
+          currentLine = testLine;
+        }
+      }
+      lines.push(currentLine.trim());
+      
+      const lineHeight = fontSize * 1.35;
+      const totalHeight = lines.length * lineHeight;
+      const paddingX = 24;
+      const paddingY = 14;
+      
+      const boxWidth = Math.min(canvasWidth * 0.9, maxTextWidth + paddingX * 2);
+      const boxHeight = totalHeight + paddingY * 2;
+      
+      const boxX = (canvasWidth - boxWidth) / 2;
+      const boxY = canvasHeight * 0.82 - boxHeight / 2;
+      
+      if (bgOpacity > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${bgOpacity})`;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8);
+        } else {
+          ctx.rect(boxX, boxY, boxWidth, boxHeight);
+        }
+        ctx.fill();
+      }
+      
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+      ctx.shadowBlur = 4;
+      
+      lines.forEach((line, index) => {
+        const lineY = boxY + paddingY + (index + 0.5) * lineHeight;
+        ctx.fillText(line, canvasWidth / 2, lineY);
+      });
+      
+      ctx.restore();
+    }
 
     function draw(timestamp) {
       context.fillStyle = bgColor;
@@ -213,6 +282,7 @@ export default React.forwardRef(function VideoPreview({
       const drawMouth = isSpeaking || isCalibratingRef.current;
       if (drawMouth) {
         let inferenceSucceeded = false;
+        const useONNX = isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current;
 
         // Try ONNX Inference first
         if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
@@ -271,10 +341,10 @@ export default React.forwardRef(function VideoPreview({
             ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
             : 1.0;
 
-          const centerX = canvas.width / 2 + xOffset;
-          const centerY = canvas.height * 0.63 + yOffset;
-          const radiusX = 56 * scale;
-          const radiusY = mouthOpen * scale;
+          const centerX = Math.max(0, Math.min(canvas.width, canvas.width / 2 + xOffset));
+          const centerY = Math.max(0, Math.min(canvas.height, canvas.height * 0.63 + yOffset));
+          const radiusX = Math.max(0.01, 56 * scale);
+          const radiusY = Math.max(0.01, mouthOpen * scale);
 
           context.save();
           context.fillStyle = mouthColor;
@@ -283,6 +353,25 @@ export default React.forwardRef(function VideoPreview({
           context.fill();
           context.restore();
         }
+      }
+
+      if (isSpeaking && subtitlesEnabledRef.current) {
+        drawSubtitles(
+          context,
+          activeTextRef.current,
+          subtitleFontSizeRef.current,
+          subtitleBgOpacityRef.current
+        );
+      }
+
+      if (waveRef.current && audioProcessorRef.current) {
+        const frequencies = audioProcessorRef.current.getFrequencyData();
+        const spans = waveRef.current.querySelectorAll("span");
+        spans.forEach((span, index) => {
+          const freq = frequencies[index] || 0;
+          const height = 4 + (freq / 255.0) * 16;
+          span.style.height = `${height}px`;
+        });
       }
 
       animationRef.current = requestAnimationFrame(draw);
@@ -317,15 +406,16 @@ export default React.forwardRef(function VideoPreview({
         </div>
         {isSpeaking && (
           <div
+            ref={waveRef}
             className="recording-wave flex h-5 items-center gap-0.5"
             role="status"
             aria-label="Avatar speech active"
           >
-            {[14, 20, 16, 18, 12].map((height, index) => (
+            {[0, 0, 0, 0, 0].map((_, index) => (
               <span
                 key={index}
                 className="block w-[3px] bg-coral rounded-full"
-                style={{ height: `${height}px` }}
+                style={{ height: "4px" }}
               />
             ))}
           </div>
