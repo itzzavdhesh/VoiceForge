@@ -204,14 +204,16 @@ export default function Call() {
   }
 }
 
+  const isSpeechActive = status === "speaking" || isSpeaking;
+
   return (
     <div className="space-y-5">
-      {/* ── Header card ───────────────────────────────────────────────────── */}
-      {engine === "browser" && (
-      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
-        Using Browser Voice (Offline Mode)
-      </div>
-    )}
+      <div inert={isSpeechActive ? "" : undefined} className="space-y-5">
+        {engine === "browser" && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+          Using Browser Voice (Offline Mode)
+        </div>
+      )}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -426,9 +428,11 @@ export default function Call() {
           </div>
         )}
       </section>
+      </div> {/* Closes top settings inert wrapper */}
+
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
-        <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+        <section inert={isSpeechActive ? "" : undefined} className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
           <div className="mb-4 flex items-center gap-2">
             <Camera
               size={19}
@@ -460,33 +464,38 @@ export default function Call() {
           status={status}
         />
 
-        <VideoPreview
-          ref={canvasRef}
-          webcamStream={webcamStream}
-          audioUrl={audioUrl}
-          isSpeaking={isSpeaking}
-          onSpeakingChange={setIsSpeaking}
-          calibration={calibration}
-          isCalibrating={isCalibrationOpen}
-          activeText={activeText}
-          subtitlesEnabled={subtitlesEnabled}
-          subtitleFontSize={subtitleFontSize}
-          subtitleBgOpacity={parseFloat(subtitleBgOpacity)}
-        />
+        <div inert={isSpeechActive ? "" : undefined}>
+          <VideoPreview
+            ref={canvasRef}
+            webcamStream={webcamStream}
+            audioUrl={audioUrl}
+            isSpeaking={isSpeaking}
+            onSpeakingChange={setIsSpeaking}
+            calibration={calibration}
+            isCalibrating={isCalibrationOpen}
+            activeText={activeText}
+            subtitlesEnabled={subtitlesEnabled}
+            subtitleFontSize={subtitleFontSize}
+            subtitleBgOpacity={parseFloat(subtitleBgOpacity)}
+          />
+        </div>
       </div>
 
-      <VirtualCamera
-        isLive={virtualCamera.isLive}
-        status={virtualCamera.status}
-        onStart={virtualCamera.start}
-        onStop={virtualCamera.stop}
-      />
+      <div inert={isSpeechActive ? "" : undefined} className="space-y-5">
+        <VirtualCamera
+          isLive={virtualCamera.isLive}
+          status={virtualCamera.status}
+          onStart={virtualCamera.start}
+          onStop={virtualCamera.stop}
+        />
 
-      {error && (
-        <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
+            {error}
+          </p>
+        )}
+      </div>
+
       <ToastContainer toasts={toasts} />
     </div>
   );
