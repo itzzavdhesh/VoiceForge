@@ -182,7 +182,6 @@ export default function Call() {
     if (!activeProfile?.voice_id) return;
 
     try {
-      setActiveText(text);
       const result = await speak({
         text,
         voiceId: activeProfile.voice_id,
