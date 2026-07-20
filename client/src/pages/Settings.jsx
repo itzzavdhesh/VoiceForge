@@ -4,6 +4,7 @@ import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
   persistVoiceSettings,
+  VOICE_PRESETS,
 } from "../utils/voiceSettings.js";
 import {
   loadLanguage,
@@ -21,6 +22,9 @@ import {
   clearAllVoiceProfiles,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
+import { ProfileCard } from "../components/ProfileCard.jsx";
+import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
+import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -45,6 +49,8 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const [sharingProfile, setSharingProfile] = React.useState(null);
+  const [isReceiving, setIsReceiving] = React.useState(false);
   const { toasts, showToast } = useToast();
   React.useEffect(() => {
     async function loadProfiles() {
@@ -65,10 +71,68 @@ export default function Settings() {
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
 
+  const currentPresetKey = React.useMemo(() => {
+    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
+      return (
+        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
+        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
+        Math.abs(voiceSettings.style - preset.style) < 0.001
+      );
+    });
+    return presetEntry ? presetEntry[0] : "custom";
+  }, [voiceSettings]);
+
+  function handlePresetChange(presetKey) {
+    if (presetKey === "custom") return;
+    const preset = VOICE_PRESETS[presetKey];
+    if (preset) {
+      saveVoiceSettings({
+        ...voiceSettings,
+        stability: preset.stability,
+        temperature: preset.temperature,
+        style: preset.style,
+      });
+    }
+  }
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
+    window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const currentPresetKey = React.useMemo(() => {
+    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
+      return (
+        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
+        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
+        Math.abs(voiceSettings.style - preset.style) < 0.001 &&
+        Math.abs(voiceSettings.dspPitch - preset.dspPitch) < 0.001 &&
+        Math.abs(voiceSettings.dspSpeed - preset.dspSpeed) < 0.001 &&
+        Math.abs(voiceSettings.dspBass - preset.dspBass) < 0.001 &&
+        Math.abs(voiceSettings.dspMid - preset.dspMid) < 0.001 &&
+        Math.abs(voiceSettings.dspTreble - preset.dspTreble) < 0.001
+      );
+    });
+    return presetEntry ? presetEntry[0] : "custom";
+  }, [voiceSettings]);
+
+  function handlePresetChange(presetKey) {
+    if (presetKey === "custom") return;
+    const preset = VOICE_PRESETS[presetKey];
+    if (preset) {
+      saveVoiceSettings({
+        ...voiceSettings,
+        stability: preset.stability,
+        temperature: preset.temperature,
+        style: preset.style,
+        dspPitch: preset.dspPitch,
+        dspSpeed: preset.dspSpeed,
+        dspBass: preset.dspBass,
+        dspMid: preset.dspMid,
+        dspTreble: preset.dspTreble,
+      });
+    }
   }
 
   const handleExport = async () => {
@@ -161,15 +225,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({
@@ -269,7 +334,45 @@ export default function Settings() {
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
         
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-4">
           <div>
             <label className="flex justify-between text-sm font-bold" htmlFor="stability">
@@ -317,6 +420,92 @@ export default function Settings() {
               className="w-full mt-2"
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
+          </div>
+
+          <hr className="border-ink/10 dark:border-border my-4" />
+          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">Real-time Voice Modifiers (DSP)</h3>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-pitch">
+              <span>Voice Pitch</span>
+              <span className="text-ink/65">{voiceSettings.dspPitch}x</span>
+            </label>
+            <input
+              id="dsp-pitch"
+              type="range"
+              min="0.5" max="1.5" step="0.05"
+              value={voiceSettings.dspPitch}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspPitch: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Pitch transposition. Lower → deeper voice; higher → higher voice.</p>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-speed">
+              <span>Speech Pace (Speed)</span>
+              <span className="text-ink/65">{voiceSettings.dspSpeed}x</span>
+            </label>
+            <input
+              id="dsp-speed"
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={voiceSettings.dspSpeed}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspSpeed: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Adjust speech speed. Lower → slower; higher → faster speech.</p>
+          </div>
+
+          <div className="pt-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">3-Band Graphic Equalizer</h4>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-bass">
+                  <span>Bass (200 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspBass} dB</span>
+                </label>
+                <input
+                  id="dsp-bass"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspBass}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspBass: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-mid">
+                  <span>Mid (1000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspMid} dB</span>
+                </label>
+                <input
+                  id="dsp-mid"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspMid}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspMid: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-treble">
+                  <span>Treble (4000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspTreble} dB</span>
+                </label>
+                <input
+                  id="dsp-treble"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspTreble}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspTreble: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/50 mt-2">Sculpt voice tone in real-time. Bass controls depth; mid controls presence; treble controls clarity.</p>
           </div>
         </div>
       </section>
@@ -410,49 +599,62 @@ export default function Settings() {
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
-          {profiles.length > 0 && (
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={removeAllProfiles}
-              className="text-sm font-bold text-coral hover:underline"
+              onClick={() => setIsReceiving(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
             >
-              Clear All Profiles
+              Receive Profile
             </button>
-          )}
+            {profiles.length > 0 && (
+              <button
+                type="button"
+                onClick={removeAllProfiles}
+                className="text-sm font-bold text-coral hover:underline"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
-        <div className="mt-4 divide-y divide-ink/10 rounded-md border border-ink/10 dark:divide-border dark:border-border">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {profiles.length === 0 && (
-            <p className="p-4 text-sm text-ink/65 dark:text-muted">
+            <p className="col-span-full p-4 text-sm text-ink/65 dark:text-muted border border-ink/10 rounded-md dark:border-border">
               No saved profiles yet.
             </p>
           )}
           {profiles.map((profile) => (
-            <div
+            <ProfileCard
               key={profile.voice_id}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="font-bold">{profile.name}</p>
-                <p className="mt-1 break-all text-sm text-ink/60 dark:text-muted">
-                  {profile.voice_id}
-                </p>
-                {profile.audioBlob && <AudioPlayback blob={profile.audioBlob} />}
- 
-              </div>
-              <button
-                type="button"
-                onClick={() => removeProfile(profile.voice_id)}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-coral/40 px-3 py-2 font-bold text-coral hover:bg-coral hover:text-white"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-                Delete
-              </button>
-            </div>
+              profile={profile}
+              onDelete={removeProfile}
+              onShare={(p) => setSharingProfile(p)}
+            />
           ))}
         </div>
       </section>
+      
+      {sharingProfile && (
+        <ShareProfileModal 
+          profile={sharingProfile} 
+          onClose={() => setSharingProfile(null)} 
+        />
+      )}
+
+      {isReceiving && (
+        <ReceiveProfileModal 
+          onClose={() => setIsReceiving(false)}
+          onSuccess={async () => {
+            const loaded = await getSavedProfiles();
+            setProfiles(loaded);
+            setIsReceiving(false);
+            showToast("Profile received successfully!", "success");
+          }}
+        />
+      )}
       <ToastContainer toasts={toasts} />
     </div>
   );

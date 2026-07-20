@@ -17,6 +17,12 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
     id: profile.voice_id,
     voice_id: profile.voice_id,
     name: profile.name || `Voice ${profiles.length + 1}`,
+    // Fix (Broken Voice Synthesis): persist the owner_token returned by
+    // POST /api/voice/clone alongside the profile. The server now requires
+    // this token on /api/voice/speak to prove ownership of voice_id, so it
+    // must be retrievable later from the saved profile, not just held in
+    // memory during the clone flow.
+    ownerToken: profile.ownerToken || profile.owner_token || null,
     createdAt: new Date().toISOString(),
     audioBlob // Store the binary reference audio Blob
   };
@@ -96,8 +102,12 @@ export default function useVoiceClone() {
         throw new Error(payload.error || "Voice cloning failed.");
       }
 
+      // Fix (Broken Voice Synthesis): forward the owner_token returned by
+      // the server into saveVoiceProfile so it lands in the stored profile
+      // (see ownerToken field above) instead of being silently dropped.
       const profile = await saveVoiceProfile({
         voice_id: payload.voice_id,
+        owner_token: payload.owner_token,
         name: payload.name || name
       }, audioBlob);
 

@@ -64,8 +64,71 @@ export class FaceProcessor {
    * @param {HTMLCanvasElement} sourceCanvas The canvas containing the full frame
    * @param {Array} landmarks The detected face landmarks
    * @param {HTMLCanvasElement} targetCanvas The canvas to draw the crop onto
-   * @returns {ImageData|null} The cropped image data
+   * @returns {Object|null} The cropped image data and original crop coordinates
    */
+  cropMouthRegion(sourceCanvas, landmarks, targetCanvas) {
+    if (!landmarks || !sourceCanvas || !targetCanvas) return null;
+
+    // Mouth landmarks indices in MediaPipe FaceMesh
+    const MOUTH_LANDMARKS = [
+      0, 13, 14, 17, 37, 39, 40, 61, 78, 80, 81, 82, 83, 84, 87, 88, 91, 95, 96, 146,
+      178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 313, 314, 317, 318,
+      321, 324, 326, 375, 402, 405, 409, 415
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const idx of MOUTH_LANDMARKS) {
+      const lm = landmarks[idx];
+      if (lm) {
+        minX = Math.min(minX, lm.x);
+        maxX = Math.max(maxX, lm.x);
+        minY = Math.min(minY, lm.y);
+        maxY = Math.max(maxY, lm.y);
+      }
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const mouthWidth = maxX - minX;
+    const mouthHeight = maxY - minY;
+
+    // We want a square crop centered around the mouth
+    const cropSize = Math.max(mouthWidth, mouthHeight) * 1.8;
+
+    const srcW = sourceCanvas.width;
+    const srcH = sourceCanvas.height;
+
+    let w = Math.floor(cropSize * srcW);
+    let h = Math.floor(cropSize * srcH);
+    let x = Math.floor((centerX - cropSize / 2) * srcW);
+    let y = Math.floor((centerY - cropSize / 2) * srcH);
+
+    // Clamp coordinates to stay within canvas boundaries
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x + w > srcW) w = srcW - x;
+    if (y + h > srcH) h = srcH - y;
+
+    const ctx = targetCanvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+    ctx.drawImage(
+      sourceCanvas,
+      x, y, w, h,
+      0, 0, targetCanvas.width, targetCanvas.height
+    );
+
+    const imageData = ctx.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+    return {
+      imageData,
+      coords: { x, y, w, h }
+    };
+  }
   /**
    * Cleans up resources and closes the FaceLandmarker.
    */

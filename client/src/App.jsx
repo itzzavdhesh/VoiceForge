@@ -1,9 +1,10 @@
 // Coordinates top-level navigation, saved voice state, and page rendering for VoiceForge.
 import React from "react";
-import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info } from "lucide-react";
+import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2 } from "lucide-react";
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
+import Analytics from "./pages/Analytics.jsx";
 import VoiceForge from "./components/VoiceForge";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
@@ -18,6 +19,7 @@ const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
   { id: "call",         label: "Call",          icon: Camera },
   { id: "compose",      label: "Compose",       icon: MessageSquare },
+  { id: "analytics",    label: "Analytics",     icon: BarChart2 },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "about", label: "About", icon: Info },
@@ -26,9 +28,19 @@ const tabs = [
 const DEFAULT_TAB = "onboarding";
 const tabIds = new Set(tabs.map((tab) => tab.id));
 
+// We intentionally use sessionStorage (not localStorage) here so that the
+// active tab is only remembered for the lifetime of the current browser tab.
+// This keeps in-session navigation (e.g. refreshing while on Compose) smooth,
+// while making it much more likely that a fresh visit (a new tab/window
+// opened independently, or reopening after the browser was fully closed)
+// lands back on Onboarding. Note: this isn't an absolute guarantee in every
+// browser/scenario (e.g. sessionStorage is inherited when a tab is opened
+// via window.open from an existing VoiceForge tab, and some browsers'
+// session-restore features can preserve it across restarts), but it's a
+// meaningful improvement over localStorage, which persisted indefinitely.
 function getSavedTab() {
   try {
-    const saved = localStorage.getItem("voiceforge:activeTab");
+    const saved = sessionStorage.getItem("voiceforge:activeTab");
     return tabIds.has(saved) ? saved : DEFAULT_TAB;
   } catch {
     return DEFAULT_TAB;
@@ -37,7 +49,7 @@ function getSavedTab() {
 
 function saveActiveTab(tab) {
   try {
-    localStorage.setItem("voiceforge:activeTab", tab);
+    sessionStorage.setItem("voiceforge:activeTab", tab);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
@@ -184,6 +196,7 @@ export default function App() {
             {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}
+            {activeTab === "analytics"  && <Analytics />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
