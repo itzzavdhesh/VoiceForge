@@ -81,6 +81,8 @@ npm run dev
 
 6. Open `http://localhost:5173` in Chrome or Edge.
 
+For more details on how to develop locally, including Docker instructions and our mock architecture, see the [Development Workflow & Local-First Architecture Guide](docs/development-workflow.md).
+
 ---
 
 ## Environment Variables
