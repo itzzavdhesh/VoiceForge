@@ -186,6 +186,91 @@ export default function Call() {
   }
 }
 
+  const playSoundEffect = (type) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const destination = audioCtx.destination;
+
+      if (type === "ping") {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+        osc.connect(gain);
+        gain.connect(destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      } else if (type === "chime") {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        const gain2 = audioCtx.createGain();
+        
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime);
+        gain1.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+        osc1.connect(gain1);
+        gain1.connect(destination);
+        osc1.start();
+        osc1.stop(audioCtx.currentTime + 0.6);
+        
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.4);
+        gain2.gain.setValueAtTime(0.4, audioCtx.currentTime + 0.4);
+        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+        osc2.connect(gain2);
+        gain2.connect(destination);
+        osc2.start(audioCtx.currentTime + 0.4);
+        osc2.stop(audioCtx.currentTime + 1.2);
+      } else if (type === "alert") {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(460, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } else if (type === "applaud") {
+        const bufferSize = audioCtx.sampleRate * 1.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.value = 1000;
+        filter.Q.value = 1.0;
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(destination);
+        noise.start();
+        noise.stop(audioCtx.currentTime + 1.5);
+      }
+      showToast(`Triggered ${type} sound effect`, "success");
+    } catch (err) {
+      console.error("Failed to play sound effect:", err);
+      showToast("Sound effect trigger failed", "error");
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* ── Header card ───────────────────────────────────────────────────── */}
@@ -344,31 +429,74 @@ export default function Call() {
       </section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
-        <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
-          <div className="mb-4 flex items-center gap-2">
-            <Camera
-              size={19}
-              aria-hidden="true"
-              className="dark:text-neutral-300"
+        <div className="space-y-5">
+          <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+            <div className="mb-4 flex items-center gap-2">
+              <Camera
+                size={19}
+                aria-hidden="true"
+                className="dark:text-neutral-300"
+              />
+              <h2 className="text-lg font-bold dark:text-neutral-100">
+                Live webcam
+              </h2>
+            </div>
+            {/* Video element: bg-black already looks fine in dark mode */}
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="aspect-video w-full rounded-md bg-black object-cover"
             />
-            <h2 className="text-lg font-bold dark:text-neutral-100">
-              Live webcam
-            </h2>
-          </div>
-          {/* Video element: bg-black already looks fine in dark mode */}
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="aspect-video w-full rounded-md bg-black object-cover"
-          />
-          {cameraError && (
-            <p className="mt-3 text-sm font-semibold text-coral">
-              {cameraError}
+            {cameraError && (
+              <p className="mt-3 text-sm font-semibold text-coral">
+                {cameraError}
+              </p>
+            )}
+          </section>
+
+          {/* Sound Board & Chimes Board */}
+          <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+            <div className="mb-3 flex items-center gap-2">
+              <Sliders size={18} className="text-moss dark:text-glow" />
+              <h2 className="text-lg font-bold dark:text-neutral-100">Sound Board &amp; Chimes</h2>
+            </div>
+            <p className="text-xs text-ink/65 dark:text-muted mb-4">
+              Play quick alerts and expressions to other call participants.
             </p>
-          )}
-        </section>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => playSoundEffect("ping")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                🔔 Ping Attention
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("chime")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                🚪 Doorbell Chime
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("alert")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                ⚠️ Warning Beep
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("applaud")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                👏 Applaud Tone
+              </button>
+            </div>
+          </section>
+        </div>
 
         <TextToSpeech
           onSpeak={handleSpeak}
