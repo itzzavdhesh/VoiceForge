@@ -13,7 +13,6 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [duration, setDuration] = React.useState(0);
   const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
-  const durationRef = React.useRef(0);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -25,6 +24,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const rafRef = React.useRef(null);
   const errorTimerRef = React.useRef(null);
   const didFinalizeRef = React.useRef(false);
+  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+  const [isExtracting, setIsExtracting] = React.useState(false);
 
   // Common stop cleanup function
   function handleStopCleanup({ emitReady = true } = {}) {
@@ -185,6 +187,39 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       if (!confirmStop) return;
     }
     recorderRef.current?.stop();
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setRecorderError("");
+    setIsExtracting(true);
+
+    try {
+      const { blob, duration: extractedDuration } = await extractAudioFromFile(file);
+
+      const roundedDuration = Math.round(extractedDuration || 0);
+      setDuration(roundedDuration);
+      durationRef.current = roundedDuration;
+
+      chunksRef.current = [blob];
+      setRawAudioBlob(blob);
+
+      const url = URL.createObjectURL(blob);
+      setAudioUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return url;
+      });
+
+      onRecordingReady(blob, roundedDuration);
+    } catch (err) {
+      console.error("Failed to extract audio from file:", err);
+      setRecorderError(err?.message || "Could not process that file. Please try a different audio or video file.");
+    } finally {
+      setIsExtracting(false);
+      event.target.value = "";
+    }
   }
 
   React.useEffect(() => {
