@@ -1,6 +1,6 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Download } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
@@ -20,6 +20,7 @@ export default function Call() {
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
+  const [sessionHistory, setSessionHistory] = React.useState([]);
 
   React.useEffect(() => {
     persistLanguage(language);
@@ -168,23 +169,67 @@ export default function Call() {
 }, [showToast]);
 
   async function handleSpeak(text) {
-  if (!activeProfile?.voice_id) return;
+    if (!activeProfile?.voice_id) return;
 
-  try {
-    const result = await speak({
-      text,
-      voiceId: activeProfile.voice_id,
-      language_code: language,
-    });
+    try {
+      const result = await speak({
+        text,
+        voiceId: activeProfile.voice_id,
+        language_code: language,
+      });
 
-    if (result?.fallback) {
-      showToast("Using browser voice fallback", "info");
+      setSessionHistory((prev) => [
+        ...prev,
+        {
+          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+          text,
+          timestamp: new Date().toISOString(),
+          voiceName: activeProfile?.name || "Default Voice",
+        },
+      ]);
+
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+      }
+    } catch (err) {
+      console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
-  } catch (err) {
-    console.error("TTS streaming error:", err);
-    showToast("Speech generation failed", "error");
   }
-}
+
+  function handleExportTranscript() {
+    if (sessionHistory.length === 0) {
+      showToast("No speech history in current session to export", "info");
+      return;
+    }
+
+    const dateStr = new Date().toISOString().split("T")[0];
+    const header = `# VoiceForge Call Session Transcript\n**Date:** ${new Date().toLocaleString()}\n**Voice Profile:** ${activeProfile?.name || "Default Voice"}\n**Total Messages:** ${sessionHistory.length}\n\n---\n\n`;
+
+    const lines = sessionHistory
+      .map((item) => {
+        const time = new Date(item.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        return `- **[${time}]** ${item.text}`;
+      })
+      .join("\n");
+
+    const content = header + lines;
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `VoiceForge-Call-Transcript-${dateStr}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast("Call transcript exported successfully", "success");
+  }
 
   return (
     <div className="space-y-5">
@@ -204,13 +249,23 @@ export default function Call() {
               Call control room
             </h2>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span className="rounded-md bg-mint px-3 py-2 text-ink dark:bg-glow/20 dark:text-glow">
               Voice: {activeProfile?.name || "No profile selected"}
             </span>
             <span className="rounded-md bg-cloud px-3 py-2 text-ink dark:bg-black dark:text-neutral-200">
               Virtual camera: {virtualCamera.isLive ? "Live" : "Idle"}
             </span>
+            <button
+              type="button"
+              onClick={handleExportTranscript}
+              disabled={sessionHistory.length === 0}
+              title={sessionHistory.length === 0 ? "No speech history in current session" : "Download call transcript (.md)"}
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-2 text-ink shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-surface dark:text-neutral-200 dark:hover:bg-black"
+            >
+              <Download size={15} aria-hidden="true" />
+              <span>Export Transcript ({sessionHistory.length})</span>
+            </button>
           </div>
         </div>
       </section>
