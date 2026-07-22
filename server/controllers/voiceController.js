@@ -189,22 +189,61 @@ async function generateClonedVoice(
   const temperature = clampNumber(normalizedVoiceSettings.temperature, 0.05, 5, 0.8);
   const seed = Number.isInteger(normalizedVoiceSettings.seed) ? normalizedVoiceSettings.seed : 0;
 
-  const result = await withTimeout(
-    app.predict("/generate_tts_audio", [
-      targetText,       // Text string to synthesize (max 300 chars)
-      languageCode,     // Language code string (e.g. "en", "hi")
-      referenceBlob,    // Reference audio Blob
-      exaggeration,     // Exaggeration intensity float (Default: 0.5)
-      temperature,      // Generation temperature float (Default: 0.8)
-      seed,             // Seed integer (0 = randomised)
-      cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
-    ]),
-    30000,
-    "Chatterbox predict",
-    abortSignal
-  );
+  const inputs = [
+    targetText,       // Text string to synthesize (max 300 chars)
+    languageCode,     // Language code string (e.g. "en", "hi")
+    referenceBlob,    // Reference audio Blob
+    exaggeration,     // Exaggeration intensity float (Default: 0.5)
+    temperature,      // Generation temperature float (Default: 0.8)
+    seed,             // Seed integer (0 = randomised)
+    cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
+  ];
 
-  const audioUrl = result.data[0].url;
+  const job = app.submit("/generate_tts_audio", inputs);
+
+  let timeoutId;
+  const promise = new Promise((resolve, reject) => {
+    job.on("data", (event) => resolve(event));
+    job.on("error", (err) => reject(err));
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try {
+        job.cancel();
+      } catch (e) {
+        console.error("[VoiceForge] Error cancelling job on timeout:", e);
+      }
+      reject(new Error("Chatterbox predict timed out after 30000ms"));
+    }, 30000);
+  });
+
+  const abortPromise = new Promise((_, reject) => {
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        try {
+          job.cancel();
+        } catch (e) {}
+        reject(new Error("Request aborted by client"));
+      } else {
+        abortSignal.addEventListener("abort", () => {
+          try {
+            job.cancel();
+          } catch (e) {}
+          reject(new Error("Request aborted by client"));
+        });
+      }
+    }
+  });
+
+  let result;
+  try {
+    result = await Promise.race([promise, timeoutPromise, abortPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const audioUrl = result?.data?.[0]?.url;
   if (!audioUrl) {
     throw new Error("Chatterbox returned no audio URL.");
   }
