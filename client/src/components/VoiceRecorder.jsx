@@ -212,7 +212,10 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
         return url;
       });
 
-      onRecordingReady(blob, roundedDuration);
+      onRecordingReady(blob, {
+        duration: roundedDuration,
+        isValid: roundedDuration >= MIN_DURATION,
+      });
     } catch (err) {
       console.error("Failed to extract audio from file:", err);
       setRecorderError(err?.message || "Could not process that file. Please try a different audio or video file.");
