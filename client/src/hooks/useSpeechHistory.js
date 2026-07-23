@@ -123,6 +123,45 @@ export function useSpeechHistory() {
     }
   }, [analyticsHistory]);
 
+  useEffect(() => {
+    async function syncSpeechHistory() {
+      try {
+        const res = await fetch("/api/speech-history");
+        if (res.ok) {
+          const remoteHistory = await res.json();
+          setHistory((prev) => {
+            const mergedMap = new Map();
+            prev.forEach(item => mergedMap.set(item.id, item));
+            remoteHistory.forEach(remote => {
+              const localMatch = prev.find(p => p.id === remote.id || p.text === remote.text);
+              const mergedItem = {
+                id: remote.id,
+                text: remote.text,
+                timestamp: remote.timestamp,
+                language: remote.language_code || "en-US",
+                tags: localMatch ? (localMatch.tags || []) : []
+              };
+              if (remote.is_favorite) {
+                setFavorites(prevFavs => {
+                  const next = new Set(prevFavs);
+                  next.add(remote.id);
+                  return next;
+                });
+              }
+              mergedMap.set(remote.id, mergedItem);
+            });
+
+            const sorted = Array.from(mergedMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+            return sorted.slice(0, MAX_HISTORY);
+          });
+        }
+      } catch (err) {
+        console.error("Failed to sync speech history:", err);
+      }
+    }
+    syncSpeechHistory();
+  }, []);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -171,6 +210,19 @@ const addMessage = useCallback((text, lang = "en-US") => {
       ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
       : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
+    // Sync to backend database
+    fetch("/api/speech-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updatedEntry.id,
+        text: updatedEntry.text,
+        language_code: lang,
+        timestamp: updatedEntry.timestamp,
+        is_favorite: favorites.has(updatedEntry.id) ? 1 : 0
+      })
+    }).catch(err => console.error("Failed to save speech log:", err));
+
     // Move duplicate to top instead of recreating
     const updated = [
       updatedEntry,
@@ -179,7 +231,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
 
     return updated.slice(0, MAX_HISTORY);
   });
-}, []);
+}, [favorites]);
 
   /**
    * Removes a message by id and also removes it from favorites.
@@ -190,7 +242,10 @@ const addMessage = useCallback((text, lang = "en-US") => {
       const next = new Set(prev);
       next.delete(id);
       return next;
-      });
+    });
+    fetch(`/api/speech-history/${id}`, {
+      method: "DELETE"
+    }).catch(err => console.error("Failed to delete speech log:", err));
   }, []);
 
   /**
@@ -199,10 +254,27 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const toggleFavorite = useCallback((id) => {
     setFavorites((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      const isFav = next.has(id);
+      isFav ? next.delete(id) : next.add(id);
+
+      const msg = history.find(m => m.id === id);
+      if (msg) {
+        fetch("/api/speech-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: msg.id,
+            text: msg.text,
+            language_code: msg.language || "en-US",
+            timestamp: msg.timestamp,
+            is_favorite: !isFav ? 1 : 0
+          })
+        }).catch(err => console.error("Failed to toggle favorite:", err));
+      }
+
       return next;
     });
-  }, []);
+  }, [history]);
 
   /**
    * Wipes all history and favorites.
