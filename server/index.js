@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
+import dbRoutes from "./routes/dbRoutes.js";
+import { getDatabase } from "./utils/db.js";
 import { getIsMock } from "./utils/mock.js";
 
 import path from "path";
@@ -11,6 +13,13 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
+// Initialize SQLite database
+getDatabase().then(() => {
+  console.log("[VoiceForge] SQLite Database initialized successfully.");
+}).catch((err) => {
+  console.error("[VoiceForge] Failed to initialize database:", err);
+});
 
 // Warn clearly when mock mode is active so it is never silently enabled.
 if (getIsMock()) {
@@ -49,6 +58,7 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.use("/api/voice", voiceRoutes);
+app.use("/api", dbRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
