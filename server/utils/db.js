@@ -36,7 +36,7 @@ export async function getDatabase() {
       driver: sqlite3.Database,
     });
 
-    // Create tables with row-level user ownership
+    // Create tables with row-level user ownership and refresh token tracking
     await db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -65,23 +65,38 @@ export async function getDatabase() {
         timestamp INTEGER,
         user_id TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        token TEXT PRIMARY KEY,
+        user_id TEXT,
+        created_at TEXT
+      );
     `);
 
-    // Handle column additions gracefully if table already exists (migrations)
+    // Handle column additions gracefully (ignore duplicate column, rethrow any other migration failure)
     try {
       await db.run("ALTER TABLE voices ADD COLUMN user_id TEXT");
     } catch (err) {
-      // Column already exists, ignore
+      if (!/duplicate column/i.test(err.message)) {
+        throw err;
+      }
     }
 
     try {
       await db.run("ALTER TABLE speech_history ADD COLUMN user_id TEXT");
     } catch (err) {
-      // Column already exists, ignore
+      if (!/duplicate column/i.test(err.message)) {
+        throw err;
+      }
     }
 
     return db;
   })();
+
+  // Clear dbPromise if database setup fails, allowing subsequent calls to retry
+  dbPromise.catch(() => {
+    dbPromise = null;
+  });
 
   return dbPromise;
 }

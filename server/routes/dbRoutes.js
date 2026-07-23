@@ -113,6 +113,13 @@ router.post("/speech-history", authMiddleware, async (req, res, next) => {
       return res.status(400).json({ error: "id and text are required" });
     }
     const db = await getDatabase();
+    
+    // Protect against cross-user record overwriting on ID conflicts
+    const existing = await db.get("SELECT user_id FROM speech_history WHERE id = ?", [id]);
+    if (existing && existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: "Unauthorized: ID collision with another user's record" });
+    }
+
     // Save is_favorite properly in the database query
     await db.run(
       `INSERT OR REPLACE INTO speech_history (id, text, voice_id, language_code, is_favorite, timestamp, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,

@@ -15,9 +15,14 @@ const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const PBKDF2_ITERATIONS = 310000;
 
-if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+if (
+  !JWT_SECRET ||
+  !JWT_REFRESH_SECRET ||
+  JWT_SECRET === "replace_with_a_secure_jwt_access_secret_string" ||
+  JWT_REFRESH_SECRET === "replace_with_a_secure_jwt_refresh_secret_string"
+) {
   throw new Error(
-    "CRITICAL CONFIGURATION ERROR: Both JWT_SECRET and JWT_REFRESH_SECRET environment variables must be defined."
+    "CRITICAL CONFIGURATION ERROR: Both JWT_SECRET and JWT_REFRESH_SECRET environment variables must be defined and changed from placeholder values."
   );
 }
 
@@ -58,7 +63,7 @@ export function verifyPassword(password, storedHash) {
  */
 export function generateAccessToken(user) {
   return jwt.sign(
-    { id: user.id, username: user.username },
+    { id: user.id, username: user.username, jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
@@ -71,7 +76,7 @@ export function generateAccessToken(user) {
  */
 export function generateRefreshToken(user) {
   return jwt.sign(
-    { id: user.id, username: user.username },
+    { id: user.id, username: user.username, jti: crypto.randomUUID() },
     JWT_REFRESH_SECRET,
     { expiresIn: REFRESH_TOKEN_EXPIRY }
   );

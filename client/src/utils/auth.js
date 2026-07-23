@@ -31,13 +31,15 @@ export function logout() {
 /**
  * Custom fetch wrapper that automatically attaches the access token
  * and handles token refresh/rotation if it receives a 401 response.
+ * Normalizes headers using standard Headers object to prevent 401 failures on custom instances.
  */
 export async function authFetch(url, options = {}) {
-  options.headers = options.headers || {};
+  const headers = new Headers(options.headers || {});
   const token = getAccessToken();
   if (token) {
-    options.headers["Authorization"] = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
+  options.headers = headers;
 
   let res = await fetch(url, options);
 
@@ -54,11 +56,13 @@ export async function authFetch(url, options = {}) {
           const data = await refreshRes.json();
           setTokens(data.accessToken, data.refreshToken);
           
-          // Retry the request with the newly rotated access token
-          options.headers["Authorization"] = `Bearer ${data.accessToken}`;
+          // Retry the request with the newly rotated access token using normalized headers
+          const retryHeaders = new Headers(options.headers);
+          retryHeaders.set("Authorization", `Bearer ${data.accessToken}`);
+          options.headers = retryHeaders;
+          
           res = await fetch(url, options);
         } else {
-          // Refresh token expired or invalid, trigger logout
           logout();
         }
       } catch (err) {

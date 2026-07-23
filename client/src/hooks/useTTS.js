@@ -120,14 +120,14 @@ export default function useTTS() {
           formData.append("name", profile.name);
           formData.append("voice_id", voiceId);
 
-          const cloneResponse = await fetch("/api/voice/clone", {
+          const cloneResponse = await authFetch("/api/voice/clone", {
             method: "POST",
             body: formData,
           });
 
           if (cloneResponse.ok) {
             // 3. Retry the speak request
-            response = await fetch("/api/voice/speak", {
+            response = await authFetch("/api/voice/speak", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -135,6 +135,7 @@ export default function useTTS() {
               body: JSON.stringify({
                 text,
                 voice_id: voiceId,
+                owner_token: resolvedOwnerToken,
                 language_code,
                 voice_settings: voiceSettings,
               }),
@@ -153,7 +154,7 @@ export default function useTTS() {
             formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
             formData.append("name", profile.name);
 
-            const cloneResponse = await fetch("/api/voice/clone", {
+            const cloneResponse = await authFetch("/api/voice/clone", {
               method: "POST",
               body: formData,
             });
@@ -181,7 +182,7 @@ export default function useTTS() {
               resolvedOwnerToken = updatedProfile.ownerToken;
 
               // Retry the speak request after silent re-cloning succeeds
-              response = await fetch("/api/voice/speak", {
+              response = await authFetch("/api/voice/speak", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",

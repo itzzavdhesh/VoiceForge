@@ -1,6 +1,6 @@
 // Coordinates top-level navigation, saved voice state, and page rendering for VoiceForge.
 import React, { useState, useEffect } from "react";
-import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2 } from "lucide-react";
+import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2, LogOut } from "lucide-react";
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
@@ -16,6 +16,7 @@ import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import { isAuthenticated, logout } from "./utils/auth.js";
 import AuthView from "./components/AuthView.jsx";
+import { clearStorage } from "./utils/db.js";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -73,7 +74,23 @@ export default function App() {
     };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await clearStorage();
+    } catch (e) {
+      console.error("Failed to clear local IndexedDB on logout:", e);
+    }
+    const keysToClear = [
+      "vf_history",
+      "vf_favorites",
+      "vf_transcript",
+      "vf_analytics_history",
+      "voiceforge:activeVoiceId",
+      "voiceforge:useClonedVoice",
+      "voiceforge:onboardingStep",
+      "voiceforge:maxUnlockedStep"
+    ];
+    keysToClear.forEach(key => localStorage.removeItem(key));
     logout();
   };
 
@@ -265,6 +282,14 @@ export default function App() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium text-red-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            >
+              <LogOut size={22} aria-hidden="true" />
+              <span>Log Out</span>
+            </button>
           </nav>
 
           {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
@@ -275,7 +300,9 @@ export default function App() {
           <ScrollToTopButton activeTab={activeTab} />
         </>
       )}
-      <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      {isLoggedIn && (
+        <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      )}
     </div>
   );
 }

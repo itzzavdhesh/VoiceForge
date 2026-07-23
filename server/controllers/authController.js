@@ -48,6 +48,12 @@ export async function register(req, res, next) {
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
+    // Save refresh token to database
+    await db.run(
+      "INSERT INTO refresh_tokens (token, user_id, created_at) VALUES (?, ?, ?)",
+      [refreshToken, id, new Date().toISOString()]
+    );
+
     res.status(201).json({
       message: "Registration successful",
       user,
@@ -81,6 +87,12 @@ export async function login(req, res, next) {
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
+    // Save refresh token to database
+    await db.run(
+      "INSERT INTO refresh_tokens (token, user_id, created_at) VALUES (?, ?, ?)",
+      [refreshToken, user.id, new Date().toISOString()]
+    );
+
     res.json({
       message: "Login successful",
       user: payload,
@@ -93,7 +105,7 @@ export async function login(req, res, next) {
 }
 
 /**
- * Verify refresh token and issue a new access token + new rotated refresh token.
+ * Verify refresh token, rotate it, and issue a new access + refresh token pair.
  */
 export async function refresh(req, res, next) {
   try {
@@ -105,11 +117,26 @@ export async function refresh(req, res, next) {
 
     try {
       const decoded = verifyRefreshToken(refreshToken);
+      const db = await getDatabase();
+
+      // Check if refresh token exists in database (has not been rotated or revoked)
+      const storedToken = await db.get("SELECT token FROM refresh_tokens WHERE token = ?", [refreshToken]);
+      if (!storedToken) {
+        return res.status(401).json({ error: "Invalid or expired refresh token" });
+      }
+
+      // Delete the consumed refresh token
+      await db.run("DELETE FROM refresh_tokens WHERE token = ?", [refreshToken]);
+
       const payload = { id: decoded.id, username: decoded.username };
-      
-      // Perform token rotation: issue both a new access token and a new refresh token
       const newAccessToken = generateAccessToken(payload);
       const newRefreshToken = generateRefreshToken(payload);
+
+      // Insert new rotated refresh token
+      await db.run(
+        "INSERT INTO refresh_tokens (token, user_id, created_at) VALUES (?, ?, ?)",
+        [newRefreshToken, decoded.id, new Date().toISOString()]
+      );
 
       res.json({
         accessToken: newAccessToken,
