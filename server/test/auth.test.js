@@ -1,22 +1,43 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getDatabase } from "../utils/db.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { getDatabase, clearDatabaseCache } from "../utils/db.js";
 import { createRequest, createResponse, invoke } from "./helpers.js";
 import { register, login, refresh } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import jwt from "jsonwebtoken";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test("Authentication flow tests", async (t) => {
+  // Isolate tests using a temporary test SQLite database file
+  const testDbFile = path.resolve(__dirname, `test_auth_${Date.now()}.sqlite`);
+  process.env.TEST_DB_PATH = testDbFile;
+  clearDatabaseCache();
+
+  t.after(async () => {
+    try {
+      await db.close();
+    } catch (err) {
+      // Ignore errors if database connection is already closed
+    }
+    clearDatabaseCache();
+    delete process.env.TEST_DB_PATH;
+    try {
+      if (fs.existsSync(testDbFile)) {
+        fs.unlinkSync(testDbFile);
+      }
+    } catch (err) {
+      console.error("Failed to delete test database file:", err);
+    }
+  });
+
   const db = await getDatabase();
   const testUsername = `user_${Date.now()}`;
   const testPassword = "securePassword123";
   let savedRefreshToken;
   let savedAccessToken;
-
-  // Cleanup test users after tests run
-  t.after(async () => {
-    await db.run("DELETE FROM users WHERE username LIKE 'user_%'");
-  });
 
   await t.test("Register: successfully registers a new user", async () => {
     const req = createRequest({
@@ -26,6 +47,7 @@ test("Authentication flow tests", async (t) => {
 
     const err = await invoke(register, req, res);
     assert.equal(err, undefined);
+    assert.equal(res.statusCode, 201); // 201 Created
     assert.ok(res.jsonBody.accessToken, "Should return an access token");
     assert.ok(res.jsonBody.refreshToken, "Should return a refresh token");
     assert.equal(res.jsonBody.user.username, testUsername);
@@ -54,7 +76,7 @@ test("Authentication flow tests", async (t) => {
 
     await invoke(register, req, res);
     assert.equal(res.statusCode, 400);
-    assert.equal(res.jsonBody.error, "Username and password are required");
+    assert.equal(res.jsonBody.error, "Username and password must be valid strings");
   });
 
   await t.test("Login: successfully logs in with correct credentials", async () => {
@@ -81,7 +103,7 @@ test("Authentication flow tests", async (t) => {
     assert.equal(res.jsonBody.error, "Invalid credentials");
   });
 
-  await t.test("Refresh Token: successfully issues a new access token", async () => {
+  await t.test("Refresh Token: successfully issues a new access token and rotated refresh token", async () => {
     const req = createRequest({
       body: { refreshToken: savedRefreshToken }
     });
@@ -91,6 +113,8 @@ test("Authentication flow tests", async (t) => {
     assert.equal(err, undefined);
     assert.equal(res.statusCode, 200);
     assert.ok(res.jsonBody.accessToken, "Should return a new access token");
+    assert.ok(res.jsonBody.refreshToken, "Should return a new rotated refresh token");
+    assert.notEqual(res.jsonBody.refreshToken, savedRefreshToken, "Refresh token should be rotated");
   });
 
   await t.test("Refresh Token: fails with invalid refresh token", async () => {

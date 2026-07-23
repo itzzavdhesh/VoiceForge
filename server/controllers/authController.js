@@ -13,10 +13,10 @@ import {
  */
 export async function register(req, res, next) {
   try {
-    const { username, password } = req.body;
+    const { username, password } = req.body || {};
 
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password are required" });
+    if (!username || !password || typeof username !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Username and password must be valid strings" });
     }
 
     const db = await getDatabase();
@@ -31,16 +31,24 @@ export async function register(req, res, next) {
     const password_hash = hashPassword(password);
     const created_at = new Date().toISOString();
 
-    await db.run(
-      "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-      [id, username, password_hash, created_at]
-    );
+    try {
+      await db.run(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
+        [id, username, password_hash, created_at]
+      );
+    } catch (dbErr) {
+      // Gracefully handle SQLite unique constraint violations (e.g., race conditions)
+      if (dbErr.code === "SQLITE_CONSTRAINT" || dbErr.message?.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "Username is already taken" });
+      }
+      throw dbErr;
+    }
 
     const user = { id, username };
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    res.status(211 || 201).json({
+    res.status(201).json({
       message: "Registration successful",
       user,
       accessToken,
@@ -56,10 +64,10 @@ export async function register(req, res, next) {
  */
 export async function login(req, res, next) {
   try {
-    const { username, password } = req.body;
+    const { username, password } = req.body || {};
 
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password are required" });
+    if (!username || !password || typeof username !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Username and password must be valid strings" });
     }
 
     const db = await getDatabase();
@@ -85,22 +93,28 @@ export async function login(req, res, next) {
 }
 
 /**
- * Verify refresh token and issue a new access token.
+ * Verify refresh token and issue a new access token + new rotated refresh token.
  */
 export async function refresh(req, res, next) {
   try {
-    const { refreshToken } = req.body;
+    const { refreshToken } = req.body || {};
 
-    if (!refreshToken) {
-      return res.status(400).json({ error: "Refresh token is required" });
+    if (!refreshToken || typeof refreshToken !== "string") {
+      return res.status(400).json({ error: "Refresh token is required and must be a string" });
     }
 
     try {
       const decoded = verifyRefreshToken(refreshToken);
       const payload = { id: decoded.id, username: decoded.username };
-      const accessToken = generateAccessToken(payload);
+      
+      // Perform token rotation: issue both a new access token and a new refresh token
+      const newAccessToken = generateAccessToken(payload);
+      const newRefreshToken = generateRefreshToken(payload);
 
-      res.json({ accessToken });
+      res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+      });
     } catch (error) {
       return res.status(401).json({ error: "Invalid or expired refresh token" });
     }

@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { authFetch } from "../utils/auth.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -126,7 +127,7 @@ export function useSpeechHistory() {
   useEffect(() => {
     async function syncSpeechHistory() {
       try {
-        const res = await fetch("/api/speech-history");
+        const res = await authFetch("/api/speech-history");
         if (res.ok) {
           const remoteHistory = await res.json();
           setHistory((prev) => {
@@ -211,7 +212,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
       : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
     // Sync to backend database
-    fetch("/api/speech-history", {
+    authFetch("/api/speech-history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -243,7 +244,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
       next.delete(id);
       return next;
     });
-    fetch(`/api/speech-history/${id}`, {
+    authFetch(`/api/speech-history/${id}`, {
       method: "DELETE"
     }).catch(err => console.error("Failed to delete speech log:", err));
   }, []);
@@ -259,7 +260,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
 
       const msg = history.find(m => m.id === id);
       if (msg) {
-        fetch("/api/speech-history", {
+        authFetch("/api/speech-history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

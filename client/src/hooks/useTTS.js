@@ -1,6 +1,7 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 import { getSavedProfiles, saveVoiceProfile } from "./useVoiceClone.js";
+import { authFetch } from "../utils/auth.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -93,7 +94,7 @@ export default function useTTS() {
       let activeVoiceId = voiceId;
       let resolvedOwnerToken = ownerToken || (await findProfileByVoiceId(voiceId))?.ownerToken || null;
 
-      let response = await fetch("/api/voice/speak", {
+      let response = await authFetch("/api/voice/speak", {
         method: "POST",
         signal: controller.signal,
         headers: {

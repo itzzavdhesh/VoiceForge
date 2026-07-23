@@ -1,6 +1,7 @@
 // Provides a small client-side API for uploading a recording and saving cloned voice profiles.
 import React from "react";
 import { getAllProfiles, saveProfile, deleteProfile, clearStorage } from "../utils/db.js";
+import { authFetch } from "../utils/auth.js";
 
 // Fix (Issue 2): must match the server-side Multer limit in server/middleware/upload.js.
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
@@ -13,7 +14,7 @@ export function getSavedProfiles() {
 
 export async function syncVoices() {
   try {
-    const res = await fetch("/api/voices");
+    const res = await authFetch("/api/voices");
     if (!res.ok) return;
     const remoteVoices = await res.json();
 
@@ -22,7 +23,7 @@ export async function syncVoices() {
 
     for (const remote of remoteVoices) {
       if (!localIds.has(remote.voice_id)) {
-        const detailRes = await fetch(`/api/voices/${remote.voice_id}`);
+        const detailRes = await authFetch(`/api/voices/${remote.voice_id}`);
         if (detailRes.ok) {
           const detail = await detailRes.json();
           let audioBlob = null;
@@ -59,7 +60,7 @@ export async function syncVoices() {
         if (local.audioBlob) {
           formData.append("audio", local.audioBlob, "voiceforge-reference.webm");
         }
-        await fetch("/api/voices", {
+        await authFetch("/api/voices", {
           method: "POST",
           body: formData
         });
@@ -100,7 +101,7 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
     if (audioBlob) {
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
     }
-    await fetch("/api/voices", {
+    await authFetch("/api/voices", {
       method: "POST",
       body: formData
     });
@@ -115,6 +116,13 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
 
 export async function deleteVoiceProfile(voiceId) {
   await deleteProfile(voiceId);
+  try {
+    await authFetch(`/api/voices/${voiceId}`, {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete voice profile from server:", err);
+  }
   const nextProfiles = await getSavedProfiles();
   if (localStorage.getItem(ACTIVE_KEY) === voiceId) {
     localStorage.setItem(ACTIVE_KEY, nextProfiles[0]?.voice_id || "");
@@ -125,6 +133,13 @@ export async function deleteVoiceProfile(voiceId) {
 
 export async function clearAllVoiceProfiles() {
   await clearStorage();
+  try {
+    await authFetch("/api/voices", {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete all voice profiles from server:", err);
+  }
   localStorage.setItem(ACTIVE_KEY, "");
   window.dispatchEvent(new CustomEvent("voiceforge:profileChanged"));
   return [];
@@ -171,7 +186,7 @@ export default function useVoiceClone() {
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
 
-      const response = await fetch("/api/voice/clone", {
+      const response = await authFetch("/api/voice/clone", {
         method: "POST",
         body: formData
       });
