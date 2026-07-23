@@ -5,6 +5,7 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import voiceRoutes from "./routes/voice.js";
 import dbRoutes from "./routes/dbRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import { getDatabase } from "./utils/db.js";
 import { getIsMock } from "./utils/mock.js";
 
@@ -57,6 +58,7 @@ app.get("/api/health", (_request, response) => {
   response.json({ ok: true, service: "voiceforge-api" });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/voice", voiceRoutes);
 app.use("/api", dbRoutes);
 

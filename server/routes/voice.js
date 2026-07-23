@@ -3,6 +3,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { cloneVoice, speak, streamSpeech, getStatus } from "../controllers/voiceController.js";
 import upload from "../middleware/upload.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
@@ -24,8 +25,8 @@ const speakRateLimit = rateLimit({
   message: { error: "Too many speech requests. Please slow down." },
 });
 
-router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
-router.post("/speak", speakRateLimit, speak);
+router.post("/clone", authMiddleware, cloneRateLimit, upload.single("audio"), cloneVoice);
+router.post("/speak", authMiddleware, speakRateLimit, speak);
 router.get("/speak/stream", streamSpeech);
 router.get("/status", getStatus);
 

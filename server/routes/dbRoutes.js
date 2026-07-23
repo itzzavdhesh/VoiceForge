@@ -1,11 +1,12 @@
 import { Router } from "express";
 import upload from "../middleware/upload.js";
 import { getDatabase } from "../utils/db.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
 // Voices endpoints
-router.post("/voices", upload.single("audio"), async (req, res, next) => {
+router.post("/voices", authMiddleware, upload.single("audio"), async (req, res, next) => {
   try {
     const { voice_id, name, owner_token } = req.body;
     const db = await getDatabase();
@@ -19,7 +20,7 @@ router.post("/voices", upload.single("audio"), async (req, res, next) => {
   }
 });
 
-router.get("/voices", async (req, res, next) => {
+router.get("/voices", authMiddleware, async (req, res, next) => {
   try {
     const db = await getDatabase();
     const voices = await db.all("SELECT voice_id, name, owner_token, created_at FROM voices");
@@ -29,7 +30,7 @@ router.get("/voices", async (req, res, next) => {
   }
 });
 
-router.get("/voices/:id", async (req, res, next) => {
+router.get("/voices/:id", authMiddleware, async (req, res, next) => {
   try {
     const db = await getDatabase();
     const voice = await db.get("SELECT * FROM voices WHERE voice_id = ?", [req.params.id]);
