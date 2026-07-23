@@ -10,7 +10,7 @@ import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
-import { useSpeechHistory } from "../hooks/useSpeechHistory";
+import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
 import useTTS from "../hooks/useTTS.js";
@@ -77,8 +77,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-  const speak = useCallback((text) => {
-    if (!text.trim()) return;
 
   useEffect(() => {
     async function loadActiveProfile() {

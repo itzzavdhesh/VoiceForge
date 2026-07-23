@@ -178,25 +178,25 @@ export default function Call() {
   };
 }, [showToast, privacyMode]);
 
-  async function handleSpeak(text) {
-  if (!activeProfile?.voice_id) return;
+  async function handleSpeak(text, voice_settings_override) {
+    if (!activeProfile?.voice_id) return;
 
-  try {
-    setActiveText(text);
-    const result = await speak({
-      text,
-      voiceId: activeProfile.voice_id,
-      language_code: language,
-    });
+    try {
+      const result = await speak({
+        text,
+        voiceId: activeProfile.voice_id,
+        language_code: language,
+        voice_settings_override,
+      });
 
-    if (result?.fallback) {
-      showToast("Using browser voice fallback", "info");
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+      }
+    } catch (err) {
+      console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
-  } catch (err) {
-    console.error("TTS streaming error:", err);
-    showToast("Speech generation failed", "error");
   }
-}
 
   return (
     <div className="space-y-5">
