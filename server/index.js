@@ -25,7 +25,7 @@ if (getIsMock()) {
 const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-const isDev = process.env.NODE_ENV === "development";
+const isDev = process.env.NODE_ENV !== "production";
 
 app.use(
   helmet({
@@ -36,7 +36,7 @@ app.use(
         scriptSrc: ["'self'", ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : [])],
         styleSrc: ["'self'", ...(isDev ? ["'unsafe-inline'"] : [])],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", clientUrl, "https://api-inference.huggingface.co", ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
+        connectSrc: ["'self'", clientUrl, "https://api-inference.huggingface.co", "https://api.github.com", "https://cdn.jsdelivr.net", "https://storage.googleapis.com", ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
         workerSrc: ["'self'", "blob:"],
       },
     },
@@ -80,7 +80,7 @@ app.use("/api/voice", voiceRoutes);
 if (!isDev) {
   const clientDistPath = path.resolve(__dirname, "../client/dist");
   app.use(express.static(clientDistPath));
-  app.get("*", (_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
+  app.get("/{*splat}", (_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
 }
 
 app.use((error, _request, response, _next) => {
