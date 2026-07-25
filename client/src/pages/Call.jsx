@@ -1,10 +1,11 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, User } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
@@ -205,9 +206,21 @@ export default function Call() {
             </h2>
           </div>
           <div className="flex flex-wrap gap-2 text-sm font-semibold">
-            <span className="rounded-md bg-mint px-3 py-2 text-ink dark:bg-glow/20 dark:text-glow">
-              Voice: {activeProfile?.name || "No profile selected"}
-            </span>
+            {activeProfile ? (() => {
+              const activeColorKey = COLOR_TAGS[activeProfile.colorTag] ? activeProfile.colorTag : "emerald";
+              const activeColor = COLOR_TAGS[activeColorKey];
+              const IconComp = AVATAR_ICONS[activeProfile.avatarIcon] || User;
+              return (
+                <span className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-ink shadow-sm ${activeColor.badge}`}>
+                  <IconComp size={15} aria-hidden="true" />
+                  <span>Voice: {activeProfile.name}</span>
+                </span>
+              );
+            })() : (
+              <span className="rounded-md bg-mint px-3 py-2 text-ink dark:bg-glow/20 dark:text-glow">
+                Voice: No profile selected
+              </span>
+            )}
             <span className="rounded-md bg-cloud px-3 py-2 text-ink dark:bg-black dark:text-neutral-200">
               Virtual camera: {virtualCamera.isLive ? "Live" : "Idle"}
             </span>
