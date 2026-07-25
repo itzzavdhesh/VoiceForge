@@ -7,14 +7,14 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
   const [audioBuffer, setAudioBuffer] = useState(null);
   const [duration, setDuration] = useState(0);
   const [peaks, setPeaks] = useState([]);
-  
+
   const [startRatio, setStartRatio] = useState(0.0);
   const [endRatio, setEndRatio] = useState(1.0);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0); // ratio relative to duration
-  
+
   const canvasRef = useRef(null);
   const audioCtxRef = useRef(null);
   const activeSourceRef = useRef(null);
@@ -42,13 +42,13 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
         if (active) {
           setAudioBuffer(buffer);
           setDuration(buffer.duration);
-          
+
           // Extract peaks for drawing the waveform
           const channelData = buffer.getChannelData(0);
           const barCount = 150;
           const step = Math.floor(channelData.length / barCount) || 1;
           const tempPeaks = [];
-          
+
           for (let i = 0; i < barCount; i++) {
             let max = 0;
             const start = i * step;
@@ -145,7 +145,7 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
       ctx.moveTo(progressX, 0);
       ctx.lineTo(progressX, h);
       ctx.stroke();
-      
+
       // Cursor head
       ctx.fillStyle = "#40916C";
       ctx.beginPath();
@@ -164,7 +164,9 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
     // Start handle tag
     ctx.fillStyle = "#2EC4B6";
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(startX - 6, h / 2 - 12, 12, 24, 4) : ctx.rect(startX - 6, h / 2 - 12, 12, 24);
+    ctx.roundRect
+      ? ctx.roundRect(startX - 6, h / 2 - 12, 12, 24, 4)
+      : ctx.rect(startX - 6, h / 2 - 12, 12, 24);
     ctx.fill();
     // Inner handle lines
     ctx.fillStyle = "#ffffff";
@@ -181,13 +183,14 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
     // End handle tag
     ctx.fillStyle = "#FF6B6B";
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(endX - 6, h / 2 - 12, 12, 24, 4) : ctx.rect(endX - 6, h / 2 - 12, 12, 24);
+    ctx.roundRect
+      ? ctx.roundRect(endX - 6, h / 2 - 12, 12, 24, 4)
+      : ctx.rect(endX - 6, h / 2 - 12, 12, 24);
     ctx.fill();
     // Inner handle lines
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(endX - 2, h / 2 - 6, 1, 12);
     ctx.fillRect(endX + 1, h / 2 - 6, 1, 12);
-
   }, [peaks, startRatio, endRatio, isPlaying, playbackProgress]);
 
   // Handle pointer down on handles
@@ -234,7 +237,7 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
   // Play preview of the selected segment
   function startPreview() {
     if (!audioBuffer || !audioCtxRef.current) return;
-    
+
     stopPreview();
 
     const ctx = audioCtxRef.current;
@@ -248,15 +251,15 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
     source.start(0, start, length);
     activeSourceRef.current = source;
     setIsPlaying(true);
-    
+
     const startTime = ctx.currentTime;
     startTimeRef.current = startTime;
     setPlaybackProgress(startRatio);
 
     playbackIntervalRef.current = window.setInterval(() => {
       const elapsed = ctx.currentTime - startTime;
-      const currentProgress = startRatio + (elapsed / duration);
-      
+      const currentProgress = startRatio + elapsed / duration;
+
       if (currentProgress >= endRatio) {
         stopPreview();
       } else {
@@ -287,7 +290,7 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
   // Truncate and commit changes
   function handleApplyTrim() {
     if (!audioBuffer) return;
-    
+
     const startSec = startRatio * duration;
     const endSec = endRatio * duration;
     const sliceLenSec = endSec - startSec;
@@ -341,7 +344,9 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
             type="button"
             onClick={isPlaying ? stopPreview : startPreview}
             className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-bold text-white transition ${
-              isPlaying ? "bg-neutral-600 hover:bg-neutral-700" : "bg-moss hover:bg-moss/90"
+              isPlaying
+                ? "bg-neutral-600 hover:bg-neutral-700"
+                : "bg-moss hover:bg-moss/90"
             }`}
           >
             {isPlaying ? (
@@ -369,10 +374,16 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
 
         <div className="flex items-center gap-4 text-xs font-bold text-neutral-500 dark:text-neutral-400">
           <div>
-            Start: <span className="text-neutral-700 dark:text-neutral-300">{(startRatio * duration).toFixed(1)}s</span>
+            Start:{" "}
+            <span className="text-neutral-700 dark:text-neutral-300">
+              {(startRatio * duration).toFixed(1)}s
+            </span>
           </div>
           <div>
-            End: <span className="text-neutral-700 dark:text-neutral-300">{(endRatio * duration).toFixed(1)}s</span>
+            End:{" "}
+            <span className="text-neutral-700 dark:text-neutral-300">
+              {(endRatio * duration).toFixed(1)}s
+            </span>
           </div>
           <div className="rounded-full bg-coral/10 text-coral px-2.5 py-0.5 border border-coral/20">
             Selected: {((endRatio - startRatio) * duration).toFixed(1)}s

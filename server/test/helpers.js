@@ -1,7 +1,12 @@
 // Shared lightweight Express request/response mocks and a fetch
 // stub used by the voiceController test suites. Keeps tests dependency-free.
 
-export function createRequest({ headers = {}, body = {}, params = {}, query = {} } = {}) {
+export function createRequest({
+  headers = {},
+  body = {},
+  params = {},
+  query = {},
+} = {}) {
   const lowerHeaders = {};
   for (const [key, value] of Object.entries(headers)) {
     lowerHeaders[key.toLowerCase()] = value;
@@ -15,7 +20,7 @@ export function createRequest({ headers = {}, body = {}, params = {}, query = {}
     },
     on() {
       // No-op: streamSpeech registers a "close" listener we do not exercise.
-    }
+    },
   };
 }
 
@@ -47,13 +52,17 @@ export function createResponse() {
     },
     end() {
       this.ended = true;
-    }
+    },
   };
 }
 
 // Returns a fetch stub that yields a single-chunk audio stream and records
 // the upstream call so tests can assert on the request body.
-export function createFetchStub({ ok = true, status = 200, chunk = "audio-bytes" } = {}) {
+export function createFetchStub({
+  ok = true,
+  status = 200,
+  chunk = "audio-bytes",
+} = {}) {
   const calls = [];
   const stub = async (url, options) => {
     calls.push({ url, options });
@@ -63,7 +72,7 @@ export function createFetchStub({ ok = true, status = 200, chunk = "audio-bytes"
         status,
         async text() {
           return "upstream error";
-        }
+        },
       };
     }
     let delivered = false;
@@ -80,10 +89,10 @@ export function createFetchStub({ ok = true, status = 200, chunk = "audio-bytes"
               delivered = true;
               return { done: false, value: Buffer.from(chunk) };
             },
-            async cancel() {}
+            async cancel() {},
           };
-        }
-      }
+        },
+      },
     };
   };
   stub.calls = calls;

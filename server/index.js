@@ -16,8 +16,8 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 if (getIsMock()) {
   console.warn(
     "\x1b[33m[VoiceForge] Mock mode active — Chatterbox calls are stubbed." +
-    " Voice clone returns a fixture voice_id; TTS streams silent audio." +
-    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine.\x1b[0m"
+      " Voice clone returns a fixture voice_id; TTS streams silent audio." +
+      " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine.\x1b[0m",
   );
 }
 
@@ -31,8 +31,7 @@ const globalLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (_req, res) =>
-    res.status(429).json({ error: "Too Many Requests" })
+  handler: (_req, res) => res.status(429).json({ error: "Too Many Requests" }),
 });
 
 app.use(globalLimiter);
@@ -53,7 +52,7 @@ app.use("/api/voice", voiceRoutes);
 app.use((error, _request, response, _next) => {
   console.error(error);
   response.status(error.status || 500).json({
-    error: error.message || "Unexpected VoiceForge server error."
+    error: error.message || "Unexpected VoiceForge server error.",
   });
 });
 
