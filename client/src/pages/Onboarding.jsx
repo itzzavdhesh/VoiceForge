@@ -1,6 +1,12 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
 import React from "react";
-import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  CircleAlert,
+  ArrowRight,
+  RotateCcw,
+} from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
@@ -201,7 +207,10 @@ export default function Onboarding({ onReady }) {
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    space: "",
+  });
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -214,21 +223,20 @@ export default function Onboarding({ onReady }) {
   const hasKey = React.useMemo(() => {
     return serverStatus.isMock || Boolean(serverStatus.space);
   }, [serverStatus]);
-  
-  const nameError = React.useMemo(() => {
-  const trimmed = voiceName.trim();
-  if (trimmed.length === 0) {
-    return "Voice name is required.";
-  }
-  if (trimmed.length < MIN_NAME_LENGTH) {
-    return `Voice name must be at least ${MIN_NAME_LENGTH} characters.`;
-  }
-  if (trimmed.length > MAX_NAME_LENGTH) {
-    return `Voice name must be ${MAX_NAME_LENGTH} characters or fewer.`;
-  }
-  return "";
-}, [voiceName]);
 
+  const nameError = React.useMemo(() => {
+    const trimmed = voiceName.trim();
+    if (trimmed.length === 0) {
+      return "Voice name is required.";
+    }
+    if (trimmed.length < MIN_NAME_LENGTH) {
+      return `Voice name must be at least ${MIN_NAME_LENGTH} characters.`;
+    }
+    if (trimmed.length > MAX_NAME_LENGTH) {
+      return `Voice name must be ${MAX_NAME_LENGTH} characters or fewer.`;
+    }
+    return "";
+  }, [voiceName]);
 
   // Track the highest milestone step the user is allowed to navigate to
   const [maxUnlockedStep, setMaxUnlockedStep] = React.useState(() => {
@@ -240,10 +248,10 @@ export default function Onboarding({ onReady }) {
   const [activeStep, setActiveStep] = React.useState(() => {
     const savedStep = localStorage.getItem("voiceforge:onboardingStep");
     const savedMax = localStorage.getItem("voiceforge:maxUnlockedStep");
-    
+
     const parsedStep = savedStep ? parseInt(savedStep, 10) : 1;
     const parsedMax = savedMax ? parseInt(savedMax, 10) : 1;
-    
+
     // Clamp initialization target securely underneath the highest unlocked milestone
     return Math.min(parsedStep, parsedMax);
   });
@@ -252,19 +260,22 @@ export default function Onboarding({ onReady }) {
   const stepContent = {
     1: {
       title: "Create your voice profile",
-      description: "Record a short, consent-based reference clip. VoiceForge sends it via the Chatterbox engine on Hugging Face through your local server and saves the returned voice ID in this browser.",
-      labels: ["Record", "Clone", "Next"]
+      description:
+        "Record a short, consent-based reference clip. VoiceForge sends it via the Chatterbox engine on Hugging Face through your local server and saves the returned voice ID in this browser.",
+      labels: ["Record", "Clone", "Next"],
     },
     2: {
       title: "Configure voice settings",
-      description: "Fine-tune your workspace properties, adjust stability and clarity parameters, and establish your initial system instructions.",
-      labels: ["Stability", "Clarity", "Next"]
+      description:
+        "Fine-tune your workspace properties, adjust stability and clarity parameters, and establish your initial system instructions.",
+      labels: ["Stability", "Clarity", "Next"],
     },
     3: {
       title: "Finalize setup & test",
-      description: "Review your configurations, connect your local server pipeline, and prepare to place your very first AI companion voice call.",
-      labels: ["Review", "Pipeline", "Launch"]
-    }
+      description:
+        "Review your configurations, connect your local server pipeline, and prepare to place your very first AI companion voice call.",
+      labels: ["Review", "Pipeline", "Launch"],
+    },
   };
 
   // Persist values to localStorage on step changes
@@ -273,7 +284,10 @@ export default function Onboarding({ onReady }) {
   }, [activeStep]);
 
   React.useEffect(() => {
-    localStorage.setItem("voiceforge:maxUnlockedStep", maxUnlockedStep.toString());
+    localStorage.setItem(
+      "voiceforge:maxUnlockedStep",
+      maxUnlockedStep.toString(),
+    );
   }, [maxUnlockedStep]);
 
   async function handleClone() {
@@ -298,15 +312,19 @@ export default function Onboarding({ onReady }) {
               {stepContent[activeStep].description}
             </p>
           </div>
-          
+
           {/* STEP PROGRESS INDICATORS COMPONENT GRID */}
-          <div className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm" aria-label="Onboarding progress indicators">
+          <div
+            className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm"
+            aria-label="Onboarding progress indicators"
+          >
             {stepContent[activeStep].labels.map((label, index) => {
               let isBarFilled = false;
               if (activeStep === 1) {
                 if (index === 0) isBarFilled = true;
                 if (index === 1 && recording) isBarFilled = true;
-                if (index === 2 && (successProfile || maxUnlockedStep >= 2)) isBarFilled = true;
+                if (index === 2 && (successProfile || maxUnlockedStep >= 2))
+                  isBarFilled = true;
               } else if (activeStep === 2) {
                 if (index === 0) isBarFilled = true;
                 if (index === 1) isBarFilled = true;
@@ -327,24 +345,34 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
         <>
           {!hasKey && (
             <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
-              <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
+              <CircleAlert
+                size={18}
+                aria-hidden="true"
+                className="shrink-0 text-coral"
+              />
               <span>
-              No voice engine available. Ensure your local server is running on port 3001. Check your{" "}
-                <strong>.env</strong> file and the README.
+                No voice engine available. Ensure your local server is running
+                on port 3001. Check your <strong>.env</strong> file and the
+                README.
               </span>
             </div>
           )}
 
-          <VoiceRecorder onRecordingReady={handleRecordingReady} disabled={isCloning} />
+          <VoiceRecorder
+            onRecordingReady={handleRecordingReady}
+            disabled={isCloning}
+          />
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
-            <label className="block text-sm font-bold text-ink dark:text-neutral-100" htmlFor="voice-name">
+            <label
+              className="block text-sm font-bold text-ink dark:text-neutral-100"
+              htmlFor="voice-name"
+            >
               Voice profile name
             </label>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
@@ -368,7 +396,13 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
+                disabled={
+                  isCloning ||
+                  !hasKey ||
+                  !recording ||
+                  recordingDuration < 10 ||
+                  Boolean(nameError)
+                }
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCloning && <Loader2 className="animate-spin" size={18} />}
@@ -382,7 +416,10 @@ export default function Onboarding({ onReady }) {
               className="mt-1.5 flex items-center justify-between gap-2 text-xs"
             >
               {nameError ? (
-                <p className="flex items-center gap-1 font-semibold text-coral" role="alert">
+                <p
+                  className="flex items-center gap-1 font-semibold text-coral"
+                  role="alert"
+                >
                   <CircleAlert size={13} aria-hidden="true" />
                   {nameError}
                 </p>
@@ -405,16 +442,22 @@ export default function Onboarding({ onReady }) {
 
             {/* Render actual API errors transparently instead of swallowing failures */}
             {apiError && (
-              <p className="mt-3 text-sm font-semibold text-coral flex items-center gap-1.5" role="alert">
+              <p
+                className="mt-3 text-sm font-semibold text-coral flex items-center gap-1.5"
+                role="alert"
+              >
                 <CircleAlert size={16} />
                 {apiError}
               </p>
             )}
-            
+
             {(successProfile || maxUnlockedStep >= 2) && (
               <div className="mt-4 flex flex-col gap-3 rounded-md bg-mint p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-glow/15">
                 <p className="inline-flex items-center gap-2 font-bold text-ink dark:text-neutral-50">
-                  <CheckCircle2 size={20} className="text-moss dark:text-glow" />
+                  <CheckCircle2
+                    size={20}
+                    className="text-moss dark:text-glow"
+                  />
                   Voice profile setup verified!
                 </p>
                 <button
@@ -435,23 +478,39 @@ export default function Onboarding({ onReady }) {
       {activeStep === 2 && (
         <Step2VoiceSettings
           onBack={() => setActiveStep(1)}
-          onContinue={() => { setMaxUnlockedStep(3); setActiveStep(3); }}
+          onContinue={() => {
+            setMaxUnlockedStep(3);
+            setActiveStep(3);
+          }}
         />
       )}
 
       {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-          <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
-          <p className="mt-2 text-sm text-neutral-500">Your custom voice template setup is complete.</p>
+          <h3 className="text-xl font-bold text-ink dark:text-neutral-100">
+            Ready for Activation
+          </h3>
+          <p className="mt-2 text-sm text-neutral-500">
+            Your custom voice template setup is complete.
+          </p>
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
-            Pipeline deployment status diagnostics verify operational conditions are ideal.
+            Pipeline deployment status diagnostics verify operational conditions
+            are ideal.
           </div>
           <div className="flex justify-between items-center border-t pt-4">
-            <button type="button" onClick={() => setActiveStep(2)} className="text-sm font-bold text-ink dark:text-neutral-300 hover:underline">
+            <button
+              type="button"
+              onClick={() => setActiveStep(2)}
+              className="text-sm font-bold text-ink dark:text-neutral-300 hover:underline"
+            >
               ← Back to Settings
             </button>
-            <button type="button" onClick={onReady} className="rounded-md bg-black px-5 py-2 font-bold text-white dark:bg-glow dark:text-black">
+            <button
+              type="button"
+              onClick={onReady}
+              className="rounded-md bg-black px-5 py-2 font-bold text-white dark:bg-glow dark:text-black"
+            >
               Complete Setup & Go to Call
             </button>
           </div>

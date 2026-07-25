@@ -7,7 +7,11 @@ export default function useVirtualCamera(canvasRef) {
   const originalTrackRef = React.useRef(null);
 
   function browserSupportsInsertableStreams() {
-    return "MediaStreamTrackProcessor" in window && "MediaStreamTrackGenerator" in window && "TransformStream" in window;
+    return (
+      "MediaStreamTrackProcessor" in window &&
+      "MediaStreamTrackGenerator" in window &&
+      "TransformStream" in window
+    );
   }
 
   async function start() {
@@ -40,7 +44,9 @@ export default function useVirtualCamera(canvasRef) {
       outputStream = new MediaStream([generator]);
       outputTrack = generator;
     } else {
-      setStatus("Canvas stream live; Insertable Streams unavailable in this browser");
+      setStatus(
+        "Canvas stream live; Insertable Streams unavailable in this browser",
+      );
     }
 
     setStream(outputStream);
@@ -63,5 +69,12 @@ export default function useVirtualCamera(canvasRef) {
     };
   }, [stream]);
 
-  return { isLive, status, stream, start, stop, browserSupportsInsertableStreams };
+  return {
+    isLive,
+    status,
+    stream,
+    start,
+    stop,
+    browserSupportsInsertableStreams,
+  };
 }

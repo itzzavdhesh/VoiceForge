@@ -9,7 +9,16 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange, min = 0, max = 1, step = 0.01 }) {
+function SliderRow({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+}) {
   return (
     <div className="space-y-1">
       <label
@@ -63,7 +72,10 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
   // Keep in sync when settings change
   useEffect(() => {
     function handleStorage(event) {
-      if (event.key === VOICE_SETTINGS_KEY || event.type === "voiceforge:settingsChanged") {
+      if (
+        event.key === VOICE_SETTINGS_KEY ||
+        event.type === "voiceforge:settingsChanged"
+      ) {
         setSettings(loadVoiceSettings());
       }
     }
@@ -85,7 +97,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
         return next;
       });
     },
-    []
+    [],
   );
 
   const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
@@ -164,8 +176,12 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           <details className="group border-t border-neutral-100 pt-3 dark:border-neutral-800">
             <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-neutral-600 dark:text-neutral-400 focus:outline-none">
               <span>Graphic Equalizer (EQ)</span>
-              <span className="text-[10px] text-neutral-400 group-open:hidden">Show</span>
-              <span className="text-[10px] text-neutral-400 hidden group-open:inline">Hide</span>
+              <span className="text-[10px] text-neutral-400 group-open:hidden">
+                Show
+              </span>
+              <span className="text-[10px] text-neutral-400 hidden group-open:inline">
+                Hide
+              </span>
             </summary>
             <div className="space-y-4 mt-3 pl-1">
               <SliderRow

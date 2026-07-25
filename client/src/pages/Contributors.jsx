@@ -14,7 +14,7 @@ export default function Contributors() {
       try {
         const res = await fetch(
           `https://api.github.com/repos/${REPO}/contributors?per_page=100`,
-          { signal: controller.signal }
+          { signal: controller.signal },
         );
         if (res.status === 403) {
           throw new Error("rate_limited");
@@ -46,14 +46,21 @@ export default function Contributors() {
       </section>
 
       {status === "loading" && (
-        <p role="status" aria-live="polite" className="text-center text-sm text-neutral-500">
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-center text-sm text-neutral-500"
+        >
           Loading contributors…
         </p>
       )}
 
       {status === "rate_limited" && (
         <div className="flex flex-col items-center gap-3 text-center">
-          <p role="alert" className="text-sm text-yellow-600 dark:text-yellow-400">
+          <p
+            role="alert"
+            className="text-sm text-yellow-600 dark:text-yellow-400"
+          >
             GitHub API rate limit reached. Please wait a moment and try again.
           </p>
           <button
@@ -98,7 +105,8 @@ export default function Contributors() {
                 {contributor.login}
               </span>
               <span className="text-xs text-neutral-500">
-                {contributor.contributions} commit{contributor.contributions !== 1 ? "s" : ""}
+                {contributor.contributions} commit
+                {contributor.contributions !== 1 ? "s" : ""}
               </span>
             </a>
           ))}

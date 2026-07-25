@@ -13,15 +13,18 @@ export function useToast(duration = 2200) {
     };
   }, []);
 
-  const showToast = useCallback((message, type = "success") => {
-    const id = ++nextId;
-    setToasts((previous) => [...previous, { id, message, type }]);
+  const showToast = useCallback(
+    (message, type = "success") => {
+      const id = ++nextId;
+      setToasts((previous) => [...previous, { id, message, type }]);
 
-    timers.current[id] = setTimeout(() => {
-      setToasts((previous) => previous.filter((toast) => toast.id !== id));
-      delete timers.current[id];
-    }, duration);
-  }, [duration]);
+      timers.current[id] = setTimeout(() => {
+        setToasts((previous) => previous.filter((toast) => toast.id !== id));
+        delete timers.current[id];
+      }, duration);
+    },
+    [duration],
+  );
 
   return { toasts, showToast };
 }
@@ -36,7 +39,12 @@ export function ToastContainer({ toasts }) {
       className="pointer-events-none fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2"
     >
       {toasts.map((toast) => {
-        const Icon = toast.type === "error" ? AlertTriangle : toast.type === "info" ? Info : Check;
+        const Icon =
+          toast.type === "error"
+            ? AlertTriangle
+            : toast.type === "info"
+              ? Info
+              : Check;
         return (
           <div
             key={toast.id}

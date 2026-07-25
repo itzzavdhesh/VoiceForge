@@ -122,7 +122,11 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
       >
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4 dark:border-border">
           <div className="flex items-center gap-2">
-            <Keyboard size={18} aria-hidden="true" className="text-ink dark:text-neutral-200" />
+            <Keyboard
+              size={18}
+              aria-hidden="true"
+              className="text-ink dark:text-neutral-200"
+            />
             <h2
               id={HEADING_ID}
               className="text-base font-semibold text-ink dark:text-neutral-100"
