@@ -16,7 +16,6 @@ export default function useTTS() {
   const [engine, setEngine] = React.useState("chatterbox");
   const abortControllerRef = React.useRef(null);
 
-
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
    *
@@ -73,7 +72,13 @@ export default function useTTS() {
    *   it is looked up from the locally saved profile matching voiceId.
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
-  async function speak({ text, voiceId, language_code, ownerToken, voice_settings_override }) {
+  async function speak({
+    text,
+    voiceId,
+    language_code,
+    ownerToken,
+    voice_settings_override,
+  }) {
     // Cancel any in-flight request before starting a new one.
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -91,7 +96,8 @@ export default function useTTS() {
       // authorize use of voice_id (403 otherwise). Use the explicitly
       // passed token if given, else resolve it from the saved profile.
       let activeVoiceId = voiceId;
-      let resolvedOwnerToken = ownerToken || (await findProfileByVoiceId(voiceId))?.ownerToken || null;
+      let resolvedOwnerToken =
+        ownerToken || (await findProfileByVoiceId(voiceId))?.ownerToken || null;
 
       let response = await fetch("/api/voice/speak", {
         method: "POST",
@@ -115,7 +121,11 @@ export default function useTTS() {
         if (profile && profile.audioBlob) {
           // 2. Quietly re-clone (POST /api/voice/clone)
           const formData = new FormData();
-          formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
+          formData.append(
+            "audio",
+            profile.audioBlob,
+            "voiceforge-reference.webm",
+          );
           formData.append("name", profile.name);
           formData.append("voice_id", voiceId);
 
@@ -145,11 +155,18 @@ export default function useTTS() {
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         // If voice profile is missing on the backend (404), trigger auto-reclone from IndexedDB
-        if (response.status === 404 && (payload.error || "").includes("Voice profile not found")) {
+        if (
+          response.status === 404 &&
+          (payload.error || "").includes("Voice profile not found")
+        ) {
           const profile = await findProfileByVoiceId(voiceId);
           if (profile && profile.audioBlob) {
             const formData = new FormData();
-            formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
+            formData.append(
+              "audio",
+              profile.audioBlob,
+              "voiceforge-reference.webm",
+            );
             formData.append("name", profile.name);
 
             const cloneResponse = await fetch("/api/voice/clone", {
@@ -173,7 +190,7 @@ export default function useTTS() {
                   owner_token: clonePayload.owner_token,
                   name: clonePayload.name || profile.name,
                 },
-                profile.audioBlob
+                profile.audioBlob,
               );
 
               activeVoiceId = updatedProfile.voice_id;

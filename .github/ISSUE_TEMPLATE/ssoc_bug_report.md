@@ -6,15 +6,19 @@ labels: ""
 ---
 
 ## 🚀 Program
+
 SSOC
 
 ## 🐛 Describe the bug
+
 A clear and concise description of what the bug is.
 
 ---
 
 ## 🔁 Steps to Reproduce
+
 Steps to reproduce the behavior:
+
 1. Go to '...'
 2. Click on '...'
 3. Scroll to '...'
@@ -23,21 +27,25 @@ Steps to reproduce the behavior:
 ---
 
 ## ✅ Expected Behavior
+
 A clear and concise description of what you expected to happen.
 
 ---
 
 ## ❌ Actual Behavior
+
 What actually happens instead.
 
 ---
 
 ## 📸 Screenshots
+
 If applicable, add screenshots to help explain your problem.
 
 ---
 
 ## 🌱 Contributor Checklist
+
 - [ ] I am participating via SSOC
 - [ ] I have read the contribution guidelines
 - [ ] I checked for existing issues before creating this
@@ -45,6 +53,7 @@ If applicable, add screenshots to help explain your problem.
 ---
 
 ## 💻 Environment
+
 - Browser: (e.g. Chrome, Firefox)
 - Device: (e.g. Desktop, Mobile)
 - OS: (e.g. Windows, macOS)
@@ -52,4 +61,5 @@ If applicable, add screenshots to help explain your problem.
 ---
 
 ## 📝 Additional Context
+
 Add any other context about the problem here.

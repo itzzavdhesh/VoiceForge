@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  voiceforge:
+    build:
+      context: .
+      target: development
+    ports:
+      - "3001:3001"
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+      - /app/server/node_modules
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    command: npm run dev

@@ -1,9 +1,18 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  Pin,
+  Search,
+  Trash2,
+  Download,
+} from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
-export function SpeechHistory({history,
+export function SpeechHistory({
+  history,
   favorites,
   sessionTranscript = [],
   onReuse,
@@ -103,17 +112,24 @@ export function SpeechHistory({history,
   };
 
   const visible = useMemo(() => {
-    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
+    let messages =
+      tab === "pinned"
+        ? history.filter((message) => favorites.has(message.id))
+        : history;
 
     if (selectedTag !== "All Tags") {
-      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+      messages = messages.filter(
+        (message) => message.tags && message.tags.includes(selectedTag),
+      );
     }
 
     if (debouncedSearch.trim()) {
       const query = debouncedSearch.toLowerCase();
-      messages = messages.filter((message) => 
-        message.text.toLowerCase().includes(query) ||
-        (message.tags && message.tags.some(t => t.toLowerCase().includes(query)))
+      messages = messages.filter(
+        (message) =>
+          message.text.toLowerCase().includes(query) ||
+          (message.tags &&
+            message.tags.some((t) => t.toLowerCase().includes(query))),
       );
     }
 
@@ -125,69 +141,72 @@ export function SpeechHistory({history,
   function handleTabKeyDown(event, currentIndex) {
     let nextIndex = currentIndex;
 
-    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
-    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowRight")
+      nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft")
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
 
     if (nextIndex !== currentIndex) setTab(tabs[nextIndex]);
   }
 
   function handleClearHistory() {
-    if (window.confirm("Clear all history? Pinned messages will also be removed.")) {
+    if (
+      window.confirm("Clear all history? Pinned messages will also be removed.")
+    ) {
       onClearHistory();
     }
   }
 
   function handleExportTranscript() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const formattedText = sessionTranscript
-    .map(
-      (item) =>
-        `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
-          item.status ?? "unknown"
-        }`
-    )
-    .join("\n");
+    const formattedText = sessionTranscript
+      .map(
+        (item) =>
+          `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
+            item.status ?? "unknown"
+          }`,
+      )
+      .join("\n");
 
-  const blob = new Blob([formattedText], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
+    const blob = new Blob([formattedText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-}
-function handleExportJson() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+    URL.revokeObjectURL(url);
+  }
+  function handleExportJson() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const exportData = sessionTranscript.map((item) => ({
-    command: item.text,
-    timestamp: new Date(item.timestamp).toISOString(),
-    status: item.status ?? "unknown",
-  }));
+    const exportData = sessionTranscript.map((item) => ({
+      command: item.text,
+      timestamp: new Date(item.timestamp).toISOString(),
+      status: item.status ?? "unknown",
+    }));
 
-  const blob = new Blob(
-    [JSON.stringify(exportData, null, 2)],
-    { type: "application/json" }
-  );
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
 
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-}
+    URL.revokeObjectURL(url);
+  }
   return (
     <aside
       className={[
@@ -200,11 +219,17 @@ function handleExportJson() {
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-3 dark:border-border">
         <button
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "Expand history panel" : "Collapse history panel"}
+          aria-label={
+            collapsed ? "Expand history panel" : "Collapse history panel"
+          }
           aria-expanded={!collapsed}
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-400 dark:hover:bg-neutral-900"
         >
-          {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
+          {collapsed ? (
+            <ChevronRight size={15} aria-hidden="true" />
+          ) : (
+            <ChevronLeft size={15} aria-hidden="true" />
+          )}
         </button>
 
         {!collapsed && (
@@ -228,7 +253,11 @@ function handleExportJson() {
               Search history
             </label>
             <div className="relative">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <Search
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+              />
               <input
                 id="vf-search"
                 type="search"
@@ -247,30 +276,49 @@ function handleExportJson() {
               aria-expanded={analyticsOpen}
               className="flex w-full items-center justify-between text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
             >
-              <span className="flex items-center gap-1">📊 Conversation Stats</span>
+              <span className="flex items-center gap-1">
+                📊 Conversation Stats
+              </span>
               <span>{analyticsOpen ? "Hide ▲" : "Show ▼"}</span>
             </button>
-            
+
             {analyticsOpen && (
               <div className="mt-2 rounded bg-neutral-100 p-2.5 text-[11px] text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400 space-y-2 border border-neutral-200 dark:border-border">
                 <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
-                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalSentences}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Phrases</p>
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalSentences}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Phrases
+                    </p>
                   </div>
                   <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
-                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalWords}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Total Words</p>
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalWords}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Total Words
+                    </p>
                   </div>
                 </div>
                 {analyticsData.top.length > 0 && (
                   <div>
-                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Top Phrases:</p>
+                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Top Phrases:
+                    </p>
                     <ul className="space-y-1">
                       {analyticsData.top.map(({ text, count }) => (
-                        <li key={text} className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0">
-                          <span className="truncate flex-1" title={text}>{text}</span>
-                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">{count}x</span>
+                        <li
+                          key={text}
+                          className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0"
+                        >
+                          <span className="truncate flex-1" title={text}>
+                            {text}
+                          </span>
+                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">
+                            {count}x
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -283,14 +331,16 @@ function handleExportJson() {
           {/* Dynamic Tag Filters Row */}
           {allUniqueTags.length > 0 && (
             <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border overflow-x-auto no-scrollbar flex items-center gap-1.5 scroll-smooth">
-              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">Tags:</span>
+              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">
+                Tags:
+              </span>
               <button
                 onClick={() => setSelectedTag("All Tags")}
                 className={[
                   "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
                   selectedTag === "All Tags"
                     ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
                 ].join(" ")}
               >
                 All
@@ -303,7 +353,7 @@ function handleExportJson() {
                     "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
                     selectedTag === tag
                       ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
                   ].join(" ")}
                 >
                   #{tag}
@@ -352,7 +402,10 @@ function handleExportJson() {
             tabIndex={0}
           >
             {visible.length === 0 ? (
-              <EmptyState tab={tab} hasSearch={Boolean(debouncedSearch.trim())} />
+              <EmptyState
+                tab={tab}
+                hasSearch={Boolean(debouncedSearch.trim())}
+              />
             ) : (
               <ul className="space-y-2" aria-label="Message list">
                 {visible.map((message) => (
@@ -375,37 +428,37 @@ function handleExportJson() {
             )}
           </div>
 
-         {sessionTranscript?.length > 0 && (
-  <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-    <button
-      onClick={handleExportTranscript}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-    >
-      <Download size={13} aria-hidden="true" />
-      Export TXT
-    </button>
+          {sessionTranscript?.length > 0 && (
+            <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={handleExportTranscript}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export TXT
+              </button>
 
-    <button
-      onClick={handleExportJson}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-    >
-      <Download size={13} aria-hidden="true" />
-      Export JSON
-    </button>
-  </div>
-)}
+              <button
+                onClick={handleExportJson}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export JSON
+              </button>
+            </div>
+          )}
 
-{history.length > 0 && (
-  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-    <button
-      onClick={handleClearHistory}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
-    >
-      <Trash2 size={13} aria-hidden="true" />
-      Clear all history
-    </button>
-  </div>
-)}
+          {history.length > 0 && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={handleClearHistory}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+              >
+                <Trash2 size={13} aria-hidden="true" />
+                Clear all history
+              </button>
+            </div>
+          )}
         </>
       )}
     </aside>
