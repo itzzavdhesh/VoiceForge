@@ -11,7 +11,7 @@ voiceStore.set("voice_1", {
   name: "voice_1",
   audioBuffer: Buffer.from("fake-audio"),
   mimeType: "audio/webm",
-  expiresAt: Date.now() + 2 * 60 * 60 * 1000
+  expiresAt: Date.now() + 2 * 60 * 60 * 1000,
 });
 
 // Fix (Broken Server Unit Tests): these tests exercise token generation,
@@ -25,7 +25,7 @@ process.env.MOCK_CHATTERBOX = "true";
 
 async function callSpeak(speak, overrides = {}) {
   const request = createRequest({
-    body: { text: "Hello there", voice_id: "voice_1", ...overrides }
+    body: { text: "Hello there", voice_id: "voice_1", ...overrides },
   });
   const response = createResponse();
   const error = await invoke(speak, request, response);
@@ -36,7 +36,7 @@ async function callSpeak(speak, overrides = {}) {
 test("speechId is a cryptographically secure token", async () => {
   const { speak } = await import("../controllers/voiceController.js");
   const payload = await callSpeak(speak);
-  
+
   // Verify it is a valid base64url-encoded JSON object representing our token metadata
   const rawJson = Buffer.from(payload.speechId, "base64url").toString("utf8");
   const parsed = JSON.parse(rawJson);
@@ -61,7 +61,7 @@ test("audioUrl embeds the matching speechId", async () => {
   assert.equal(
     payload.audioUrl,
     `/api/voice/speak/stream?t=${payload.speechId}`,
-    "audioUrl should reference the generated speechId via query parameter"
+    "audioUrl should reference the generated speechId via query parameter",
   );
 });
 
@@ -101,16 +101,16 @@ test("pending-stream store rejects new /speak calls when full", async (t) => {
   await invoke(
     speak,
     createRequest({ body: { text: "Hello there", voice_id: "voice_1" } }),
-    overflowResponse
+    overflowResponse,
   );
   assert.equal(
     overflowResponse.statusCode,
     503,
-    "new /speak requests should be rejected when the pending stream store is full"
+    "new /speak requests should be rejected when the pending stream store is full",
   );
   assert.equal(
     overflowResponse.jsonBody.error,
-    "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+    "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams.",
   );
 
   const oldest = created[0];
@@ -118,22 +118,31 @@ test("pending-stream store rejects new /speak calls when full", async (t) => {
   await invoke(
     streamSpeech,
     createRequest({ query: { t: oldest.speechId } }),
-    oldestResponse
+    oldestResponse,
   );
-  assert.equal(oldestResponse.ended, true, "oldest entry should still stream when the store is full");
+  assert.equal(
+    oldestResponse.ended,
+    true,
+    "oldest entry should still stream when the store is full",
+  );
 
   const newest = created[created.length - 1];
   const newestResponse = createResponse();
   await invoke(
     streamSpeech,
     createRequest({ query: { t: newest.speechId } }),
-    newestResponse
+    newestResponse,
   );
-  assert.equal(newestResponse.ended, true, "newest entry should still stream when the store is full");
+  assert.equal(
+    newestResponse.ended,
+    true,
+    "newest entry should still stream when the store is full",
+  );
 });
 
 test("expired speech token throws 403 error", async (t) => {
-  const { speak, streamSpeech } = await import("../controllers/voiceController.js");
+  const { speak, streamSpeech } =
+    await import("../controllers/voiceController.js");
 
   const originalNow = Date.now;
   t.after(() => {
@@ -150,7 +159,7 @@ test("expired speech token throws 403 error", async (t) => {
   const streamReq = createRequest({ query: { t: payload.speechId } });
   const streamRes = createResponse();
   const err = await invoke(streamSpeech, streamReq, streamRes);
-  
+
   assert.ok(err, "should call next with an error for expired token");
   assert.equal(err.status, 403);
   assert.equal(err.message, "Speech stream has expired.");

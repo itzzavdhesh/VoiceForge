@@ -26,9 +26,11 @@ export class AudioProcessor {
   async initialize(audioElement) {
     if (!this.audioContext) {
       // Must be created after a user gesture
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      this.audioContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
     }
-    
+
     if (this.audioContext.state === "suspended") {
       await this.audioContext.resume();
     }
@@ -112,7 +114,7 @@ export class AudioProcessor {
   getLatestFeatures() {
     const history = this.melHistory || [];
     const flat = new Float32Array(80 * 16);
-    
+
     // Fill the flat array in shape [1, 1, 80, 16] where time step changes fastest.
     // Flat index = b * 16 + t
     const missing = 16 - history.length;

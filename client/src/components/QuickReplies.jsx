@@ -7,12 +7,42 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const DEFAULT_QUICK_REPLIES = [
   { id: generateId(), label: "Hello", phrase: "Hello", category: "Social" },
-  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social" },
-  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent" },
-  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent" },
-  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
-  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
-  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs" },
+  {
+    id: generateId(),
+    label: "Thank you",
+    phrase: "Thank you",
+    category: "Social",
+  },
+  {
+    id: generateId(),
+    label: "Please wait",
+    phrase: "Please wait",
+    category: "Urgent",
+  },
+  {
+    id: generateId(),
+    label: "I need help",
+    phrase: "I need help",
+    category: "Urgent",
+  },
+  {
+    id: generateId(),
+    label: "Can you repeat that?",
+    phrase: "Can you repeat that?",
+    category: "Needs",
+  },
+  {
+    id: generateId(),
+    label: "Yes, I understand",
+    phrase: "Yes, I understand",
+    category: "Social",
+  },
+  {
+    id: generateId(),
+    label: "No, thank you",
+    phrase: "No, thank you",
+    category: "Needs",
+  },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
@@ -25,12 +55,20 @@ export function QuickReplies({ onSelect, showToast }) {
       const parsed = JSON.parse(saved);
       if (
         Array.isArray(parsed) &&
-        parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
+        parsed.every(
+          (item) =>
+            item &&
+            typeof item.phrase === "string" &&
+            typeof item.label === "string",
+        )
       ) {
         return parsed.map((item) => ({
           ...item,
           id: item.id || generateId(),
-          category: item.category && CATEGORIES.includes(item.category) ? item.category : "General",
+          category:
+            item.category && CATEGORIES.includes(item.category)
+              ? item.category
+              : "General",
         }));
       }
       return DEFAULT_QUICK_REPLIES;
@@ -51,7 +89,7 @@ export function QuickReplies({ onSelect, showToast }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(replies));
     } catch {
-      console.error('Failed to persist quick replies to localStorage');
+      console.error("Failed to persist quick replies to localStorage");
     }
   }, [replies]);
 
@@ -94,7 +132,7 @@ export function QuickReplies({ onSelect, showToast }) {
     }
 
     const isDuplicate = replies.some(
-      (r) => r.phrase.toLowerCase() === cleanPhrase.toLowerCase()
+      (r) => r.phrase.toLowerCase() === cleanPhrase.toLowerCase(),
     );
 
     if (isDuplicate) {
@@ -102,7 +140,12 @@ export function QuickReplies({ onSelect, showToast }) {
       return;
     }
 
-    const newReply = { id: generateId(), label: cleanPhrase, phrase: cleanPhrase, category: newCategory };
+    const newReply = {
+      id: generateId(),
+      label: cleanPhrase,
+      phrase: cleanPhrase,
+      category: newCategory,
+    };
     setReplies((prev) => [...prev, newReply]);
     setNewPhrase("");
     setNewCategory("General");
@@ -118,7 +161,10 @@ export function QuickReplies({ onSelect, showToast }) {
   const handleEditStart = (id, reply) => {
     setIsAdding(false);
     setEditingReplyId(id);
-    setEditingReplyData({ phrase: reply.phrase, category: reply.category || "General" });
+    setEditingReplyData({
+      phrase: reply.phrase,
+      category: reply.category || "General",
+    });
   };
 
   const handleEditSave = (e) => {
@@ -136,7 +182,9 @@ export function QuickReplies({ onSelect, showToast }) {
     }
 
     const isDuplicate = replies.some(
-      (r) => r.id !== editingReplyId && r.phrase.toLowerCase() === cleanPhrase.toLowerCase()
+      (r) =>
+        r.id !== editingReplyId &&
+        r.phrase.toLowerCase() === cleanPhrase.toLowerCase(),
     );
 
     if (isDuplicate) {
@@ -144,12 +192,19 @@ export function QuickReplies({ onSelect, showToast }) {
       return;
     }
 
-    setReplies((prev) => prev.map(r => {
-      if (r.id === editingReplyId) {
-        return { ...r, label: cleanPhrase, phrase: cleanPhrase, category: editingReplyData.category };
-      }
-      return r;
-    }));
+    setReplies((prev) =>
+      prev.map((r) => {
+        if (r.id === editingReplyId) {
+          return {
+            ...r,
+            label: cleanPhrase,
+            phrase: cleanPhrase,
+            category: editingReplyData.category,
+          };
+        }
+        return r;
+      }),
+    );
 
     setEditingReplyId(null);
     setEditingReplyData(null);
@@ -197,7 +252,11 @@ export function QuickReplies({ onSelect, showToast }) {
               setNewPhrase("");
             }}
             className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
-            aria-label={isEditing ? "Done customizing quick replies" : "Customize quick replies"}
+            aria-label={
+              isEditing
+                ? "Done customizing quick replies"
+                : "Customize quick replies"
+            }
           >
             {isEditing ? "Done" : "Customize"}
           </button>
@@ -228,7 +287,11 @@ export function QuickReplies({ onSelect, showToast }) {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Quick reply phrases"
+      >
         {filteredReplies.map(({ id, label, phrase, category }) => {
           const isCurrentlyEditing = editingReplyId === id;
 
@@ -243,19 +306,33 @@ export function QuickReplies({ onSelect, showToast }) {
                   <input
                     type="text"
                     value={editingReplyData.phrase}
-                    onChange={(e) => setEditingReplyData({ ...editingReplyData, phrase: e.target.value })}
+                    onChange={(e) =>
+                      setEditingReplyData({
+                        ...editingReplyData,
+                        phrase: e.target.value,
+                      })
+                    }
                     maxLength={120}
                     autoFocus
                     className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
                   />
                   <select
                     value={editingReplyData.category}
-                    onChange={(e) => setEditingReplyData({ ...editingReplyData, category: e.target.value })}
+                    onChange={(e) =>
+                      setEditingReplyData({
+                        ...editingReplyData,
+                        category: e.target.value,
+                      })
+                    }
                     aria-label="Category"
                     className="bg-transparent text-xs text-neutral-500 dark:text-neutral-400 focus:outline-none border-l border-neutral-200 dark:border-neutral-700 pl-1.5 mr-1 cursor-pointer"
                   >
                     {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat} className="dark:bg-neutral-900 dark:text-neutral-100">
+                      <option
+                        key={cat}
+                        value={cat}
+                        className="dark:bg-neutral-900 dark:text-neutral-100"
+                      >
                         {cat}
                       </option>
                     ))}
@@ -350,7 +427,11 @@ export function QuickReplies({ onSelect, showToast }) {
               className="bg-transparent text-xs text-neutral-500 dark:text-neutral-400 focus:outline-none border-l border-neutral-200 dark:border-neutral-700 pl-1.5 mr-1 cursor-pointer"
             >
               {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat} className="dark:bg-neutral-900 dark:text-neutral-100">
+                <option
+                  key={cat}
+                  value={cat}
+                  className="dark:bg-neutral-900 dark:text-neutral-100"
+                >
                   {cat}
                 </option>
               ))}
@@ -380,11 +461,10 @@ export function QuickReplies({ onSelect, showToast }) {
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
             {isEditing
               ? `No quick replies in this category. Click "Add" to create one.`
-              : 'No quick replies in this category.'}
+              : "No quick replies in this category."}
           </p>
         )}
       </div>
     </section>
   );
 }
-

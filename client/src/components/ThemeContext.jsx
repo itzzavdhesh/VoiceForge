@@ -12,7 +12,9 @@ function getStoredTheme() {
   }
 
   try {
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : DEFAULT_THEME;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : DEFAULT_THEME;
   } catch {
     return DEFAULT_THEME;
   }
@@ -55,7 +57,3 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
   return ctx;
 }
-
-
-
-

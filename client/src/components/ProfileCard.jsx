@@ -31,7 +31,7 @@ export function ProfileCard({ profile, onDelete, onShare }) {
     }
   };
 
-  const formattedDate = profile.createdAt 
+  const formattedDate = profile.createdAt
     ? new Date(profile.createdAt).toLocaleDateString()
     : "Unknown date";
 
@@ -50,7 +50,7 @@ export function ProfileCard({ profile, onDelete, onShare }) {
           {profile.name.substring(0, 2)}
         </div>
       </div>
-      
+
       <div className="flex flex-1 flex-col p-4">
         <p className="mb-4 text-xs font-mono text-ink/50 dark:text-muted truncate">
           ID: {profile.voice_id}
@@ -63,12 +63,20 @@ export function ProfileCard({ profile, onDelete, onShare }) {
               onClick={togglePlay}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-moss text-white hover:bg-moss/90 dark:bg-glow dark:text-black"
             >
-              {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              {isPlaying ? (
+                <Pause size={14} fill="currentColor" />
+              ) : (
+                <Play size={14} fill="currentColor" className="ml-0.5" />
+              )}
             </button>
             <div className="h-6 flex-1 rounded-sm bg-ink/10 dark:bg-white/10 relative overflow-hidden flex items-center justify-between px-1">
               {/* Fake waveform for visual aesthetics */}
               {[...Array(20)].map((_, i) => (
-                <div key={i} className="w-1 bg-moss dark:bg-glow rounded-full opacity-50" style={{ height: `${Math.max(20, Math.random() * 100)}%` }}></div>
+                <div
+                  key={i}
+                  className="w-1 bg-moss dark:bg-glow rounded-full opacity-50"
+                  style={{ height: `${Math.max(20, Math.random() * 100)}%` }}
+                ></div>
               ))}
               {isPlaying && (
                 <div className="absolute inset-0 bg-moss/20 dark:bg-glow/20 animate-pulse pointer-events-none"></div>
