@@ -32,7 +32,7 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
       const offer = JSON.parse(decoded);
 
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       pcRef.current = pc;
 
@@ -54,11 +54,17 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
               }
               audioBlob = new Blob([u8arr], { type: mime });
             }
-            
-            await saveVoiceProfile({
-              voice_id: payload.voice_id + "-received-" + Date.now().toString().slice(-4),
-              name: payload.name + " (Shared)",
-            }, audioBlob);
+
+            await saveVoiceProfile(
+              {
+                voice_id:
+                  payload.voice_id +
+                  "-received-" +
+                  Date.now().toString().slice(-4),
+                name: payload.name + " (Shared)",
+              },
+              audioBlob,
+            );
 
             setStep("done");
             if (onSuccess) onSuccess();
@@ -79,7 +85,6 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-
     } catch (err) {
       setError("Invalid offer format: " + err.message);
       setStep("waiting_for_offer");
@@ -96,12 +101,16 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
     setStep("scanning_offer");
     try {
       codeReaderRef.current = new BrowserQRCodeReader();
-      codeReaderRef.current.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
-        if (result) {
-          codeReaderRef.current.releaseAllStreams();
-          processOffer(result.getText());
-        }
-      });
+      codeReaderRef.current.decodeFromVideoDevice(
+        null,
+        videoRef.current,
+        (result, err) => {
+          if (result) {
+            codeReaderRef.current.releaseAllStreams();
+            processOffer(result.getText());
+          }
+        },
+      );
     } catch (err) {
       setError("Camera error: " + err.message);
       setStep("waiting_for_offer");
@@ -117,7 +126,10 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
       <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl dark:bg-surface dark:text-neutral-100">
         <div className="flex items-center justify-between border-b border-ink/10 p-4 dark:border-border">
           <h2 className="text-xl font-bold">Receive Voice Profile</h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-ink/10 dark:hover:bg-white/10">
+          <button
+            onClick={onClose}
+            className="rounded p-1 hover:bg-ink/10 dark:hover:bg-white/10"
+          >
             <X size={20} />
           </button>
         </div>
@@ -141,8 +153,8 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
                 >
                   <Camera size={16} /> Scan Offer
                 </button>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Or paste offer here"
                   value={offerText}
                   onChange={handlePasteOffer}
@@ -154,8 +166,11 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
 
           {step === "scanning_offer" && (
             <div className="flex flex-col items-center">
-              <video ref={videoRef} className="w-full max-w-sm rounded-lg bg-black object-cover aspect-square" />
-              <button 
+              <video
+                ref={videoRef}
+                className="w-full max-w-sm rounded-lg bg-black object-cover aspect-square"
+              />
+              <button
                 onClick={() => {
                   codeReaderRef.current?.releaseAllStreams();
                   setStep("waiting_for_offer");
@@ -167,7 +182,11 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
             </div>
           )}
 
-          {step === "generating_answer" && <div className="text-center py-8">Generating connection code...</div>}
+          {step === "generating_answer" && (
+            <div className="text-center py-8">
+              Generating connection code...
+            </div>
+          )}
 
           {step === "waiting_for_sender" && (
             <div className="flex flex-col items-center">
@@ -177,7 +196,7 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
               <div className="bg-white p-2 rounded-lg border">
                 <QRCodeSVG value={answerText} size={200} />
               </div>
-              <button 
+              <button
                 onClick={handleCopy}
                 className="mt-4 flex items-center gap-2 text-sm font-bold text-moss hover:underline dark:text-glow"
               >
@@ -189,13 +208,21 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
             </div>
           )}
 
-          {step === "receiving" && <div className="text-center py-8">Receiving profile data...</div>}
-          
+          {step === "receiving" && (
+            <div className="text-center py-8">Receiving profile data...</div>
+          )}
+
           {step === "done" && (
             <div className="flex flex-col items-center py-8">
-              <CheckCircle2 size={48} className="text-moss dark:text-glow mb-4" />
+              <CheckCircle2
+                size={48}
+                className="text-moss dark:text-glow mb-4"
+              />
               <p className="font-bold text-lg">Profile Received!</p>
-              <button onClick={onClose} className="mt-6 rounded bg-moss px-6 py-2 font-bold text-white hover:bg-moss/90 dark:bg-glow dark:text-black">
+              <button
+                onClick={onClose}
+                className="mt-6 rounded bg-moss px-6 py-2 font-bold text-white hover:bg-moss/90 dark:bg-glow dark:text-black"
+              >
                 Close
               </button>
             </div>

@@ -16,32 +16,170 @@ export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
  * Each entry: { code, name, nativeName, flag, region }
  */
 export const SUPPORTED_LANGUAGES = [
-  { code: "en", name: "English", nativeName: "English", flag: "EN", region: "Europe" },
-  { code: "fr", name: "French", nativeName: "Francais", flag: "FR", region: "Europe" },
-  { code: "de", name: "German", nativeName: "Deutsch", flag: "DE", region: "Europe" },
-  { code: "es", name: "Spanish", nativeName: "Espanol", flag: "ES", region: "Europe" },
-  { code: "pt", name: "Portuguese", nativeName: "Portugues", flag: "PT", region: "Europe" },
-  { code: "it", name: "Italian", nativeName: "Italiano", flag: "IT", region: "Europe" },
-  { code: "nl", name: "Dutch", nativeName: "Nederlands", flag: "NL", region: "Europe" },
-  { code: "pl", name: "Polish", nativeName: "Polski", flag: "PL", region: "Europe" },
-  { code: "sv", name: "Swedish", nativeName: "Svenska", flag: "SV", region: "Europe" },
-  { code: "da", name: "Danish", nativeName: "Dansk", flag: "DA", region: "Europe" },
-  { code: "fi", name: "Finnish", nativeName: "Suomi", flag: "FI", region: "Europe" },
-  { code: "el", name: "Greek", nativeName: "Greek", flag: "EL", region: "Europe" },
-  { code: "ru", name: "Russian", nativeName: "Russian", flag: "RU", region: "Europe" },
-  { code: "no", name: "Norwegian", nativeName: "Norsk", flag: "NO", region: "Europe" },
-  { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
+  {
+    code: "en",
+    name: "English",
+    nativeName: "English",
+    flag: "EN",
+    region: "Europe",
+  },
+  {
+    code: "fr",
+    name: "French",
+    nativeName: "Francais",
+    flag: "FR",
+    region: "Europe",
+  },
+  {
+    code: "de",
+    name: "German",
+    nativeName: "Deutsch",
+    flag: "DE",
+    region: "Europe",
+  },
+  {
+    code: "es",
+    name: "Spanish",
+    nativeName: "Espanol",
+    flag: "ES",
+    region: "Europe",
+  },
+  {
+    code: "pt",
+    name: "Portuguese",
+    nativeName: "Portugues",
+    flag: "PT",
+    region: "Europe",
+  },
+  {
+    code: "it",
+    name: "Italian",
+    nativeName: "Italiano",
+    flag: "IT",
+    region: "Europe",
+  },
+  {
+    code: "nl",
+    name: "Dutch",
+    nativeName: "Nederlands",
+    flag: "NL",
+    region: "Europe",
+  },
+  {
+    code: "pl",
+    name: "Polish",
+    nativeName: "Polski",
+    flag: "PL",
+    region: "Europe",
+  },
+  {
+    code: "sv",
+    name: "Swedish",
+    nativeName: "Svenska",
+    flag: "SV",
+    region: "Europe",
+  },
+  {
+    code: "da",
+    name: "Danish",
+    nativeName: "Dansk",
+    flag: "DA",
+    region: "Europe",
+  },
+  {
+    code: "fi",
+    name: "Finnish",
+    nativeName: "Suomi",
+    flag: "FI",
+    region: "Europe",
+  },
+  {
+    code: "el",
+    name: "Greek",
+    nativeName: "Greek",
+    flag: "EL",
+    region: "Europe",
+  },
+  {
+    code: "ru",
+    name: "Russian",
+    nativeName: "Russian",
+    flag: "RU",
+    region: "Europe",
+  },
+  {
+    code: "no",
+    name: "Norwegian",
+    nativeName: "Norsk",
+    flag: "NO",
+    region: "Europe",
+  },
+  {
+    code: "tr",
+    name: "Turkish",
+    nativeName: "Turkce",
+    flag: "TR",
+    region: "Europe",
+  },
 
-  { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
-  { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
-  { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
-  { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
-  { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "MS", region: "Asia & Pacific" },
+  {
+    code: "hi",
+    name: "Hindi",
+    nativeName: "Hindi",
+    flag: "HI",
+    region: "Asia & Pacific",
+  },
+  {
+    code: "ja",
+    name: "Japanese",
+    nativeName: "Japanese",
+    flag: "JA",
+    region: "Asia & Pacific",
+  },
+  {
+    code: "ko",
+    name: "Korean",
+    nativeName: "Korean",
+    flag: "KO",
+    region: "Asia & Pacific",
+  },
+  {
+    code: "zh",
+    name: "Chinese",
+    nativeName: "Chinese",
+    flag: "ZH",
+    region: "Asia & Pacific",
+  },
+  {
+    code: "ms",
+    name: "Malay",
+    nativeName: "Bahasa Melayu",
+    flag: "MS",
+    region: "Asia & Pacific",
+  },
 
-  { code: "ar", name: "Arabic", nativeName: "Arabic", flag: "AR", region: "Middle East" },
-  { code: "he", name: "Hebrew", nativeName: "Hebrew", flag: "HE", region: "Middle East" },
+  {
+    code: "ar",
+    name: "Arabic",
+    nativeName: "Arabic",
+    flag: "AR",
+    region: "Middle East",
+  },
+  {
+    code: "he",
+    name: "Hebrew",
+    nativeName: "Hebrew",
+    flag: "HE",
+    region: "Middle East",
+  },
 
-  { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
+  {
+    code: "sw",
+    name: "Swahili",
+    nativeName: "Kiswahili",
+    flag: "SW",
+    region: "Africa",
+  },
 ];
 
 /** Set of all valid language codes for O(1) lookups. */
@@ -55,9 +193,7 @@ export function isValidLanguageCode(code) {
   return !code || VALID_CODES.has(code);
 }
 
-const BY_CODE = Object.fromEntries(
-  SUPPORTED_LANGUAGES.map((l) => [l.code, l])
-);
+const BY_CODE = Object.fromEntries(SUPPORTED_LANGUAGES.map((l) => [l.code, l]));
 
 /** Returns the language object for a given code, or undefined. */
 export function getLanguageByCode(code) {
@@ -83,7 +219,7 @@ export function loadLanguage() {
     }
 
     const legacyNameToCode = Object.fromEntries(
-      SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code])
+      SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code]),
     );
     const normalized = legacyNameToCode[current] ?? current;
 
