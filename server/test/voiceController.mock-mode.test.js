@@ -14,7 +14,7 @@ import {
   cloneVoice,
   speak,
   streamSpeech,
-  getStatus
+  getStatus,
 } from "../controllers/voiceController.js";
 
 // ---------------------------------------------------------------------------
@@ -50,12 +50,16 @@ test("MOCK_CHATTERBOX: cloneVoice returns fixture voice_id", async (t) => {
   request.file = {
     buffer: Buffer.from("fake-audio"),
     mimetype: "audio/webm",
-    originalname: "test.webm"
+    originalname: "test.webm",
   };
   const response = createResponse();
 
   const err = await invoke(cloneVoice, request, response);
-  assert.equal(err, undefined, "cloneVoice must not call next(error) in mock mode");
+  assert.equal(
+    err,
+    undefined,
+    "cloneVoice must not call next(error) in mock mode",
+  );
   assert.equal(response.jsonBody?.voice_id, "mock-voice-id-00000000");
   assert.equal(response.jsonBody?.name, "Contributor test voice");
 });
@@ -79,7 +83,7 @@ test("MOCK_CHATTERBOX: speak enqueues a stream", async (t) => {
   t.after(restore);
 
   const request = createRequest({
-    body: { text: "Hello from mock", voice_id: "mock-voice-id-00000000" }
+    body: { text: "Hello from mock", voice_id: "mock-voice-id-00000000" },
   });
   const response = createResponse();
 
@@ -88,7 +92,7 @@ test("MOCK_CHATTERBOX: speak enqueues a stream", async (t) => {
   assert.ok(response.jsonBody?.speechId, "speechId must be present");
   assert.ok(
     response.jsonBody?.audioUrl?.includes(response.jsonBody.speechId),
-    "audioUrl must embed the speechId"
+    "audioUrl must embed the speechId",
   );
 });
 
@@ -96,7 +100,9 @@ test("MOCK_CHATTERBOX: speak still rejects when text is missing", async (t) => {
   const restore = withEnv({ MOCK_CHATTERBOX: "true", NODE_ENV: "development" });
   t.after(restore);
 
-  const request = createRequest({ body: { voice_id: "mock-voice-id-00000000" } });
+  const request = createRequest({
+    body: { voice_id: "mock-voice-id-00000000" },
+  });
   const response = createResponse();
   await invoke(speak, request, response);
   assert.equal(response.statusCode, 400);
@@ -112,7 +118,7 @@ test("MOCK_CHATTERBOX: streamSpeech responds with audio/mpeg and a non-empty bod
 
   // 1. Enqueue a mock speech entry.
   const speakReq = createRequest({
-    body: { text: "Hello mock stream", voice_id: "mock-voice-id-00000000" }
+    body: { text: "Hello mock stream", voice_id: "mock-voice-id-00000000" },
   });
   const speakRes = createResponse();
   const speakErr = await invoke(speak, speakReq, speakRes);
@@ -124,9 +130,16 @@ test("MOCK_CHATTERBOX: streamSpeech responds with audio/mpeg and a non-empty bod
   const streamRes = createResponse();
   const err = await invoke(streamSpeech, streamReq, streamRes);
 
-  assert.equal(err, undefined, "streamSpeech must not call next(error) in mock mode");
+  assert.equal(
+    err,
+    undefined,
+    "streamSpeech must not call next(error) in mock mode",
+  );
   assert.equal(streamRes.headers["Content-Type"], "audio/mpeg");
-  assert.ok(streamRes.ended, "response must be ended after streaming mock audio");
+  assert.ok(
+    streamRes.ended,
+    "response must be ended after streaming mock audio",
+  );
 });
 
 test("MOCK_CHATTERBOX: streamSpeech returns 400 for an invalid speechId", async (t) => {
@@ -152,12 +165,16 @@ test("MOCK_CHATTERBOX is ignored in production: cloneVoice still runs (no key re
   request.file = {
     buffer: Buffer.from("fake-audio"),
     mimetype: "audio/webm",
-    originalname: "test.webm"
+    originalname: "test.webm",
   };
   const response = createResponse();
   const err = await invoke(cloneVoice, request, response);
   // Chatterbox requires no API key so cloneVoice should succeed even in production.
-  assert.equal(err, undefined, "cloneVoice must not error in production — no key needed");
+  assert.equal(
+    err,
+    undefined,
+    "cloneVoice must not error in production — no key needed",
+  );
   assert.ok(response.jsonBody?.voice_id, "must return a voice_id");
 });
 
@@ -168,7 +185,7 @@ test("MOCK_CHATTERBOX is ignored in production: cloneVoice still runs (no key re
 test("getStatus returns correct flags when in development and mock is true", async (t) => {
   const restore = withEnv({
     MOCK_CHATTERBOX: "true",
-    NODE_ENV: "development"
+    NODE_ENV: "development",
   });
   t.after(restore);
 
@@ -183,7 +200,7 @@ test("getStatus returns correct flags when in development and mock is true", asy
 test("getStatus returns correct flags when in production and mock is true (ignored in production)", async (t) => {
   const restore = withEnv({
     MOCK_CHATTERBOX: "true",
-    NODE_ENV: "production"
+    NODE_ENV: "production",
   });
   t.after(restore);
 

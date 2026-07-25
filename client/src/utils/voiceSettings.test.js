@@ -12,9 +12,15 @@ const localStorageMock = (() => {
   let store = {};
   return {
     getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = String(value); },
-    clear: () => { store = {}; },
-    removeItem: (key) => { delete store[key]; },
+    setItem: (key, value) => {
+      store[key] = String(value);
+    },
+    clear: () => {
+      store = {};
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
   };
 })();
 global.localStorage = localStorageMock;
@@ -28,9 +34,9 @@ describe("voiceSettings utility", () => {
     expect(VOICE_PRESETS).toBeDefined();
     expect(VOICE_PRESETS.neutral).toEqual({
       name: "Narrator / Neutral",
-      stability: 0.70,
-      temperature: 0.60,
-      style: 0.30,
+      stability: 0.7,
+      temperature: 0.6,
+      style: 0.3,
       dspPitch: 1.0,
       dspSpeed: 1.0,
       dspBass: 0.0,
@@ -39,10 +45,10 @@ describe("voiceSettings utility", () => {
     });
     expect(VOICE_PRESETS.excited).toEqual({
       name: "Excited / Energetic",
-      stability: 0.40,
+      stability: 0.4,
       temperature: 0.95,
       style: 0.75,
-      dspPitch: 1.10,
+      dspPitch: 1.1,
       dspSpeed: 1.15,
       dspBass: -2.0,
       dspMid: 1.0,
@@ -51,9 +57,9 @@ describe("voiceSettings utility", () => {
     expect(VOICE_PRESETS.robotic).toEqual({
       name: "Robotic / Flat",
       stability: 0.95,
-      temperature: 0.10,
+      temperature: 0.1,
       style: 0.05,
-      dspPitch: 0.90,
+      dspPitch: 0.9,
       dspSpeed: 0.95,
       dspBass: 2.0,
       dspMid: -3.0,
@@ -62,8 +68,8 @@ describe("voiceSettings utility", () => {
     expect(VOICE_PRESETS.soft).toEqual({
       name: "Soft / Whispering",
       stability: 0.55,
-      temperature: 0.50,
-      style: 0.20,
+      temperature: 0.5,
+      style: 0.2,
       dspPitch: 1.05,
       dspSpeed: 0.85,
       dspBass: -4.0,

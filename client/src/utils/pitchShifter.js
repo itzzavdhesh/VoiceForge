@@ -26,7 +26,9 @@ export class PitchShifter {
     this.fade2 = context.createDelay(1.0);
 
     // Constant Source
-    this.constSource = context.createConstantSource ? context.createConstantSource() : null;
+    this.constSource = context.createConstantSource
+      ? context.createConstantSource()
+      : null;
     if (this.constSource) {
       this.constSource.offset.value = 1.0;
       this.constSource.start();
@@ -43,8 +45,8 @@ export class PitchShifter {
     this.gain2.connect(this.output);
 
     // Pitch shifting modulation parameters
-    this.delayTime = 0.100; // 100ms
-    this.fadeTime = 0.050; // 50ms
+    this.delayTime = 0.1; // 100ms
+    this.fadeTime = 0.05; // 50ms
 
     // Set delay values
     this.delay1.delayTime.value = 0.025;
@@ -101,13 +103,13 @@ export class PitchShifter {
     // Start LFO oscillators
     this.osc1.start();
     this.osc2.start();
-    
+
     this.setPitch(1.0);
   }
 
   setPitch(pitch) {
     this._pitch = pitch;
-    
+
     if (Math.abs(pitch - 1.0) < 0.01) {
       // Direct pass-through
       this.oscGain1.gain.value = 0;

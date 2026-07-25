@@ -47,7 +47,9 @@ export function MessageCard({
       className={[
         "group relative rounded-md border bg-white p-3 text-sm shadow-none",
         "transition-all duration-150 hover:border-blue-400 dark:bg-surface",
-        isPinned ? "border-l-4 border-l-amber-400 border-neutral-200 dark:border-border dark:border-l-amber-400" : "border-neutral-200 dark:border-border",
+        isPinned
+          ? "border-l-4 border-l-amber-400 border-neutral-200 dark:border-border dark:border-l-amber-400"
+          : "border-neutral-200 dark:border-border",
       ].join(" ")}
       aria-label={`Message: ${text}`}
     >
@@ -74,7 +76,10 @@ export function MessageCard({
         ))}
 
         {isAddingTag ? (
-          <form onSubmit={handleAddTagSubmit} className="inline-flex items-center gap-1">
+          <form
+            onSubmit={handleAddTagSubmit}
+            className="inline-flex items-center gap-1"
+          >
             <input
               type="text"
               value={newTagText}
@@ -85,8 +90,19 @@ export function MessageCard({
               className="rounded border border-neutral-300 px-1.5 py-0.5 text-[9px] outline-none dark:border-neutral-700 dark:bg-black dark:text-neutral-100"
               style={{ width: "70px" }}
             />
-            <button type="submit" className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline">Add</button>
-            <button type="button" onClick={() => setIsAddingTag(false)} className="text-[9px] text-neutral-400 hover:underline">Cancel</button>
+            <button
+              type="submit"
+              className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddingTag(false)}
+              className="text-[9px] text-neutral-400 hover:underline"
+            >
+              Cancel
+            </button>
           </form>
         ) : (
           <button
@@ -112,16 +128,32 @@ export function MessageCard({
           role="group"
           aria-label="Message actions"
         >
-          <ActionButton onClick={() => onReplay(text)} aria-label="Replay this message" title="Replay">
+          <ActionButton
+            onClick={() => onReplay(text)}
+            aria-label="Replay this message"
+            title="Replay"
+          >
             <Play size={14} aria-hidden="true" fill="currentColor" />
           </ActionButton>
-          <ActionButton onClick={() => onReuse(text)} aria-label="Load this message into the composer" title="Reuse">
+          <ActionButton
+            onClick={() => onReuse(text)}
+            aria-label="Load this message into the composer"
+            title="Reuse"
+          >
             <RotateCcw size={14} aria-hidden="true" />
           </ActionButton>
-          <ActionButton onClick={() => onCopy(text)} aria-label="Copy message to clipboard" title="Copy">
+          <ActionButton
+            onClick={() => onCopy(text)}
+            aria-label="Copy message to clipboard"
+            title="Copy"
+          >
             <Copy size={14} aria-hidden="true" />
           </ActionButton>
-          <ActionButton onClick={() => onAddToQuickReplies(text)} aria-label="Promote to Quick Replies" title="Promote to Quick Reply">
+          <ActionButton
+            onClick={() => onAddToQuickReplies(text)}
+            aria-label="Promote to Quick Replies"
+            title="Promote to Quick Reply"
+          >
             <Zap size={14} aria-hidden="true" />
           </ActionButton>
           <ActionButton
@@ -131,7 +163,11 @@ export function MessageCard({
             title={isPinned ? "Unpin" : "Pin"}
             className={isPinned ? "text-amber-500" : ""}
           >
-            <Pin size={14} aria-hidden="true" fill={isPinned ? "currentColor" : "none"} />
+            <Pin
+              size={14}
+              aria-hidden="true"
+              fill={isPinned ? "currentColor" : "none"}
+            />
           </ActionButton>
           <ActionButton
             onClick={() => onDelete(id)}
