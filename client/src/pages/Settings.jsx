@@ -118,11 +118,13 @@ export default function Settings() {
         history: localStorage.getItem("vf_history"),
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
+        quick_reply_categories: localStorage.getItem("vf_quick_reply_categories"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+        historyRetention: localStorage.getItem("vf_history_retention"),
       };
 
       const rawProfiles = await getSavedProfiles();
@@ -233,11 +235,13 @@ export default function Settings() {
         history: "vf_history",
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
+        quick_reply_categories: "vf_quick_reply_categories",
         voiceSettings: "voiceforge:voiceSettings",
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
         calibrationScale: "voiceforge:calibrationScale",
+        historyRetention: "vf_history_retention",
       };
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
