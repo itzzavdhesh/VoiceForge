@@ -24,6 +24,7 @@ import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -323,6 +324,11 @@ export default function Settings() {
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
           </div>
+        </div>
+
+        {/* Audio Peak Level VU Meter & Clipping Warning */}
+        <div className="mt-5 pt-4 border-t border-ink/10 dark:border-border">
+          <PeakLevelMeter isActive={true} />
         </div>
       </section>
 

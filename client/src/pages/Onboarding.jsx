@@ -3,6 +3,8 @@ import React from "react";
 import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
+import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 
 import {
@@ -145,6 +147,11 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           value={settings.style}
           onChange={updateSlider("style")}
         />
+      </div>
+
+      {/* Audio Peak Level VU Meter & Clipping Warning */}
+      <div className="mt-5 pt-3 border-t border-ink/10 dark:border-border">
+        <PeakLevelMeter isActive={true} />
       </div>
 
       {/* ── Info note ── */}
