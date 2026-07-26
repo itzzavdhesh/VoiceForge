@@ -69,7 +69,17 @@ export default function Settings() {
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+  const [retentionPolicy, setRetentionPolicy] = React.useState(() => {
+    return localStorage.getItem("vf_history_retention") || "forever";
+  });
   const selectedLangObj = getLanguageByCode(language);
+
+  function handleRetentionPolicyChange(value) {
+    setRetentionPolicy(value);
+    localStorage.setItem("vf_history_retention", value);
+    showToast("History retention policy updated", "success");
+    window.dispatchEvent(new Event("voiceforge:retentionPolicyChanged"));
+  }
 
 
   function saveVoiceSettings(newSettings) {
@@ -123,6 +133,7 @@ export default function Settings() {
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+        historyRetention: localStorage.getItem("vf_history_retention"),
       };
 
       const rawProfiles = await getSavedProfiles();
@@ -238,6 +249,7 @@ export default function Settings() {
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
         calibrationScale: "voiceforge:calibrationScale",
+        historyRetention: "vf_history_retention",
       };
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
@@ -256,6 +268,7 @@ export default function Settings() {
       setProfiles(loaded);
       setVoiceSettings(loadVoiceSettings());
       setLanguage(loadLanguage());
+      setRetentionPolicy(localStorage.getItem("vf_history_retention") || "forever");
       event.target.value = "";
     } catch (err) {
       showToast("Import failed: " + (err.message || String(err)), "error");
@@ -540,6 +553,34 @@ export default function Settings() {
           Powered by Chatterbox Multilingual TTS - supports 23 languages.
           Choose &ldquo;Auto-detect&rdquo; to let the AI infer the language from your text.
         </p>
+      </section>
+
+      {/* ── Privacy & Retention ────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Privacy &amp; Retention</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Configure how long your speech history is kept on this device.
+        </p>
+
+        <div className="mb-5">
+          <label
+            htmlFor="history-retention"
+            className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+          >
+            History Retention
+          </label>
+          <select
+            id="history-retention"
+            value={retentionPolicy}
+            onChange={(e) => handleRetentionPolicyChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="forever">Keep Forever</option>
+            <option value="7days">Clear after 7 days</option>
+            <option value="30days">Clear after 30 days</option>
+            <option value="session">Clear on session close</option>
+          </select>
+        </div>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
