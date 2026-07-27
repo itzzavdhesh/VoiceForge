@@ -1,4 +1,5 @@
 // Starts the local Express API that proxies VoiceForge voice synthesis through Chatterbox Multilingual TTS.
+import helmet from "helmet";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
@@ -24,6 +25,31 @@ if (getIsMock()) {
 const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+const isDev = process.env.NODE_ENV !== "production";
+
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: true,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : [])],
+        styleSrc: ["'self'", ...(isDev ? ["'unsafe-inline'"] : [])],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'", clientUrl, "https://api-inference.huggingface.co", "https://api.github.com", "https://cdn.jsdelivr.net", "https://storage.googleapis.com", ...(isDev ? ["ws://localhost:5173", "http://localhost:5173"] : [])],
+        workerSrc: ["'self'", "blob:"],
+      },
+    },
+  })
+);
+
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(self), geolocation=(), interest-cohort=()"
+  );
+  next();
+});
 
 // Global rate limiter: 100 requests per 15 minutes per IP
 const globalLimiter = rateLimit({
@@ -49,6 +75,13 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.use("/api/voice", voiceRoutes);
+
+// Serve the React client in production so CSP headers apply to it
+if (!isDev) {
+  const clientDistPath = path.resolve(__dirname, "../client/dist");
+  app.use(express.static(clientDistPath));
+  app.get("/{*splat}", (_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
+}
 
 app.use((error, _request, response, _next) => {
   console.error(error);
