@@ -12,7 +12,7 @@ import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
 import { LanguageSelector } from "./LanguageSelector.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 
 const MAX_CHARS = 500;
 
@@ -20,6 +20,12 @@ export default function VoiceForge() {
   const [inputText, setInputText] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [language, setLanguage] = useState(loadLanguage);
+
+  useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
 

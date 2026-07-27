@@ -8,6 +8,7 @@ import {
 import {
   loadLanguage,
   persistLanguage,
+  subscribeLanguageChange,
   getLanguageByCode,
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
@@ -68,6 +69,13 @@ export default function Settings() {
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+
+  React.useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
+
   const selectedLangObj = getLanguageByCode(language);
 
 

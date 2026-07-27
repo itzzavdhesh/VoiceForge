@@ -99,10 +99,44 @@ export function loadLanguage() {
  */
 export function persistLanguage(code) {
   try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, code || "en");
+    const val = code || "en";
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, val);
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("voiceforge:languageChanged", { detail: val }));
+    }
   } catch {
     // Storage unavailable - continue without persisting.
   }
+}
+
+/**
+ * Subscribes a callback to local and multi-tab storage language changes.
+ * Returns an unsubscribe function.
+ */
+export function subscribeLanguageChange(callback) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleLocalEvent(e) {
+    callback(e.detail || loadLanguage());
+  }
+
+  function handleStorageEvent(e) {
+    if (
+      e.key === LANGUAGE_STORAGE_KEY ||
+      e.key === "voiceforge:compose-language" ||
+      !e.key
+    ) {
+      callback(loadLanguage());
+    }
+  }
+
+  window.addEventListener("voiceforge:languageChanged", handleLocalEvent);
+  window.addEventListener("storage", handleStorageEvent);
+
+  return () => {
+    window.removeEventListener("voiceforge:languageChanged", handleLocalEvent);
+    window.removeEventListener("storage", handleStorageEvent);
+  };
 }
 
 /**
