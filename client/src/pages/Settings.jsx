@@ -12,9 +12,10 @@ import {
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { useTheme } from "../components/ThemeContext.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
@@ -66,6 +67,7 @@ export default function Settings() {
 
 
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
@@ -379,6 +381,40 @@ export default function Settings() {
           Powered by Chatterbox Multilingual TTS - supports 23 languages.
           Choose &ldquo;Auto-detect&rdquo; to let the AI infer the language from your text.
         </p>
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Appearance & Accessibility</h2>
+        <p className="text-sm text-ink/65 mb-5 dark:text-muted">
+          Customize high-contrast accessibility options, contrast ratios, and visual boundaries.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-between rounded-md border border-ink/10 bg-amber-50/40 p-4 dark:border-border dark:bg-black">
+          <div className="flex items-start gap-3">
+            <Eye size={20} className="mt-0.5 text-moss dark:text-glow" aria-hidden="true" />
+            <div>
+              <h3 className="font-semibold text-sm text-ink dark:text-neutral-100">
+                High-Contrast Accessibility Mode
+              </h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">
+                Enforces maximum WCAG AAA contrast ratios, thick element borders, and bright yellow focus rings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleHighContrast}
+            aria-pressed={isHighContrast}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+              isHighContrast
+                ? "bg-amber-500 text-black shadow-sm ring-2 ring-amber-400"
+                : "bg-ink/10 text-ink hover:bg-ink/20 dark:bg-neutral-800 dark:text-neutral-200"
+            }`}
+          >
+            {isHighContrast ? "High-Contrast ON" : "High-Contrast OFF"}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">

@@ -18,6 +18,14 @@ function getStoredTheme() {
   }
 }
 
+function getStoredHighContrast() {
+  try {
+    return localStorage.getItem("voiceforge:highContrast") === "true";
+  } catch {
+    return false;
+  }
+}
+
 function storeTheme(theme) {
   try {
     localStorage.setItem("voiceforge:theme", theme);
@@ -26,8 +34,17 @@ function storeTheme(theme) {
   }
 }
 
+function storeHighContrast(enabled) {
+  try {
+    localStorage.setItem("voiceforge:highContrast", String(enabled));
+  } catch {
+    // Storage unavailable
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = React.useState(getStoredTheme);
+  const [isHighContrast, setIsHighContrast] = React.useState(getStoredHighContrast);
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -39,12 +56,26 @@ export function ThemeProvider({ children }) {
     storeTheme(theme);
   }, [theme]);
 
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (isHighContrast) {
+      root.classList.add("high-contrast");
+    } else {
+      root.classList.remove("high-contrast");
+    }
+    storeHighContrast(isHighContrast);
+  }, [isHighContrast]);
+
   function toggleTheme() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   }
 
+  function toggleHighContrast() {
+    setIsHighContrast((prev) => !prev);
+  }
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isHighContrast, toggleHighContrast }}>
       {children}
     </ThemeContext.Provider>
   );
