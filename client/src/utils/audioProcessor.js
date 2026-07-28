@@ -1,5 +1,22 @@
 import Meyda from "meyda";
 
+let sharedAudioContext = null;
+const elementSourceMap = new WeakMap();
+
+/**
+ * Returns a shared singleton AudioContext to prevent HTMLMediaElement reconnect DOMExceptions.
+ */
+export function getSharedAudioContext() {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioContext = new AudioCtx();
+    }
+  }
+  return sharedAudioContext;
+}
+
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
  * This is a simplified wrapper for real-time inference.
@@ -18,48 +35,66 @@ export class AudioProcessor {
    * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
    */
   async initialize(audioElement) {
-    if (!this.audioContext) {
-      // Must be created after a user gesture
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioElement) return;
+
+    this.audioContext = getSharedAudioContext();
+    if (!this.audioContext) return;
     
     if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+      try {
+        await this.audioContext.resume();
+      } catch {
+        // Autoplay policy gesture requirement
+      }
     }
 
-    // Prevent re-creating the source node if it already exists for this element
-    if (!audioElement.dataset.sourceCreated) {
-      this.source = this.audioContext.createMediaElementSource(audioElement);
-      // Connect to destination so we can still hear it
-      this.source.connect(this.audioContext.destination);
-      audioElement.dataset.sourceCreated = "true";
+    if (elementSourceMap.has(audioElement)) {
+      this.source = elementSourceMap.get(audioElement);
+    } else {
+      try {
+        this.source = this.audioContext.createMediaElementSource(audioElement);
+        this.source.connect(this.audioContext.destination);
+        elementSourceMap.set(audioElement, this.source);
+        audioElement.dataset.sourceCreated = "true";
+      } catch {
+        if (elementSourceMap.has(audioElement)) {
+          this.source = elementSourceMap.get(audioElement);
+        }
+      }
     }
 
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore analyzer stop error
+      }
+      this.analyzer = null;
     }
 
-    // Configure Meyda to extract the melSpectrogram
-    // Typical Wav2Lip uses specific mel bands and FFT sizes,
-    // this will need tuning to match the exact ONNX model requirements.
-    this.analyzer = Meyda.createMeydaAnalyzer({
-      audioContext: this.audioContext,
-      source: this.source,
-      bufferSize: 512, // Must be a power of 2
-      featureExtractors: ["melSpectrogram", "rms"],
-      callback: (features) => {
-        if (features) {
-          if (features.melSpectrogram) {
-            this.currentMelSpectrogram = features.melSpectrogram;
-          }
-          if (features.rms !== undefined) {
-            this.currentVolume = features.rms;
-          }
-        }
-      },
-    });
-
-    this.analyzer.start();
+    if (this.source && Meyda && typeof Meyda.createMeydaAnalyzer === "function") {
+      try {
+        this.analyzer = Meyda.createMeydaAnalyzer({
+          audioContext: this.audioContext,
+          source: this.source,
+          bufferSize: 512,
+          featureExtractors: ["melSpectrogram", "rms"],
+          callback: (features) => {
+            if (features) {
+              if (features.melSpectrogram) {
+                this.currentMelSpectrogram = features.melSpectrogram;
+              }
+              if (features.rms !== undefined) {
+                this.currentVolume = features.rms;
+              }
+            }
+          },
+        });
+        this.analyzer.start();
+      } catch {
+        // Meyda initialization fallback
+      }
+    }
   }
 
   /**
@@ -88,16 +123,18 @@ export class AudioProcessor {
   }
 
   /**
-   * Cleans up audio context and analyzer.
+   * Cleans up Meyda analyzer without closing shared AudioContext.
    */
   dispose() {
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore
+      }
       this.analyzer = null;
     }
-    if (this.audioContext && this.audioContext.state !== "closed") {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+    this.source = null;
+    this.audioContext = null;
   }
 }
