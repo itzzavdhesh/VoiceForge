@@ -1,6 +1,6 @@
 // Provides the large in-call typing surface and Speak command for generated speech.
 import React from "react";
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, Eraser } from "lucide-react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 
 /**
@@ -136,9 +136,22 @@ if (estimatedDuration > 30) {
           <p className="mt-1 text-sm text-ink/65 dark:text-muted">Press Enter to speak. Shift + Enter adds a new line.</p>
         </div>
         <div className="text-right">
-  <span className={["rounded-md border border-ink/10 px-3 py-1 text-sm font-semibold dark:border-border", getCounterColor()].join(" ")}>
-    {characterCount} / {MAX_CHARS}
-  </span>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setText("")}
+              disabled={!text}
+              aria-label="Clear text"
+              title="Clear text"
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-cloud px-3 py-1 text-sm font-semibold text-ink/70 transition-all duration-200 hover:border-moss/40 hover:bg-mint/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:bg-black dark:text-neutral-400 dark:hover:border-glow/40 dark:hover:bg-glow/10"
+            >
+              <Eraser size={15} aria-hidden="true" />
+              Clear
+            </button>
+            <span className={["rounded-md border border-ink/10 px-3 py-1 text-sm font-semibold dark:border-border", getCounterColor()].join(" ")}>
+              {characterCount} / {MAX_CHARS}
+            </span>
+          </div>
 
           <p
             aria-live="polite"
