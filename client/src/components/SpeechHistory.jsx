@@ -3,6 +3,10 @@ import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from 
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
+export function escapeRegExp(string = "") {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function SpeechHistory({history,
   favorites,
   sessionTranscript = [],
@@ -22,8 +26,12 @@ export function SpeechHistory({history,
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
 
     if (debouncedSearch.trim()) {
-      const query = debouncedSearch.toLowerCase();
-      messages = messages.filter((message) => message.text.toLowerCase().includes(query));
+      const sanitized = escapeRegExp(debouncedSearch.trim()).toLowerCase();
+      const query = debouncedSearch.toLowerCase().trim();
+      messages = messages.filter((message) =>
+        message.text.toLowerCase().includes(query) ||
+        message.text.toLowerCase().includes(sanitized)
+      );
     }
 
     return messages;
