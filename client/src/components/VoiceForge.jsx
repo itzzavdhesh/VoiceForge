@@ -8,6 +8,7 @@ import { Copy, Eraser, Mic2, History, X } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
+import { AACSymbolBoard } from "./AACSymbolBoard";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
@@ -231,6 +232,10 @@ export default function VoiceForge() {
           onReuse={handleReuse}
           onUnpin={toggleFavorite}
         />
+
+        <div className="px-4 pt-2">
+          <AACSymbolBoard onSelectSymbol={handleQuickReply} />
+        </div>
 
         <QuickReplies onSelect={handleQuickReply} showToast={showToast} />
 
