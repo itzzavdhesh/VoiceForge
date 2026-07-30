@@ -6,6 +6,15 @@
 // Storage: one unified localStorage key ("voiceforge:language") replaces the
 // previously split "voiceforge:language" (Call) and "voiceforge:compose-language"
 // (VoiceForge Compose) keys.
+//
+// NOTE ON MARATHI ("mr"): the default public Chatterbox-Multilingual-TTS Space
+// does not natively support Marathi (it ships with 23 base languages). Marathi
+// is included here so it is selectable in the UI, but producing real speech for
+// it currently requires a compatible fine-tuned model (e.g. BosonLab/chatterbox-desi
+// on Hugging Face, MIT licensed, trained on ~72.7 hrs of Marathi speech data).
+// See issue #1110 for background and integration notes. Until a Marathi-capable
+// backend is wired in, requests for "mr" may fail or fall back to default
+// behavior depending on server configuration.
 
 export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
 
@@ -33,6 +42,7 @@ export const SUPPORTED_LANGUAGES = [
   { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
 
   { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
+  { code: "mr", name: "Marathi", nativeName: "मराठी", flag: "MR", region: "Asia & Pacific" },
   { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
   { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
   { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
