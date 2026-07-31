@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange }) {
+function SliderRow({ id, label, description, value, formattedValue, min = 0, max = 1, step = 0.01, onChange }) {
   return (
     <div className="space-y-1">
       <label
@@ -18,19 +18,19 @@ function SliderRow({ id, label, description, value, onChange }) {
       >
         <span>{label}</span>
         <span
-          className="tabular-nums text-neutral-500 dark:text-neutral-400"
+          className="tabular-nums text-neutral-500 dark:text-neutral-400 font-mono text-[11px]"
           aria-live="polite"
-          aria-label={`${label} value: ${value}`}
+          aria-label={`${label} value: ${formattedValue !== undefined ? formattedValue : value}`}
         >
-          {value}
+          {formattedValue !== undefined ? formattedValue : value}
         </span>
       </label>
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
-        step="0.01"
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={onChange}
         aria-label={label}
@@ -114,6 +114,28 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           aria-label="Voice quick settings"
           className="space-y-4 border-t border-neutral-200 px-4 py-4 dark:border-border"
         >
+          <SliderRow
+            id="vqs-pitch"
+            label="Pitch Transposition"
+            description="Transposes synthesized pitch up or down (-12 to +12 semitones)."
+            value={settings.pitchShift !== undefined ? settings.pitchShift : 0}
+            formattedValue={`${settings.pitchShift > 0 ? "+" : ""}${settings.pitchShift || 0} st`}
+            min={-12}
+            max={12}
+            step={1}
+            onChange={updateSetting("pitchShift")}
+          />
+          <SliderRow
+            id="vqs-tone"
+            label="DSP Tone Clarity"
+            description="Boosts high-frequency speech definition and acoustic presence."
+            value={settings.toneEq !== undefined ? settings.toneEq : 0.5}
+            formattedValue={((settings.toneEq !== undefined ? settings.toneEq : 0.5) * 100).toFixed(0) + "%"}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={updateSetting("toneEq")}
+          />
           <SliderRow
             id="vqs-stability"
             label="Stability"
