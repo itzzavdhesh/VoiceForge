@@ -6,22 +6,26 @@ import upload from "../middleware/upload.js";
 
 const router = Router();
 
-// Limit voice-cloning requests: cloning is expensive — allow 5 per hour per IP.
+// Voice cloning consumes ElevenLabs voice-slot credits and API quota.
+// Limit each IP to 3 clone attempts per 5-minute window to prevent burst abuse
+// while still allowing reasonable legitimate use.
 const cloneRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
-  standardHeaders: true,
+  windowMs: 5 * 60 * 1000,
+  limit: 3,
+  standardHeaders: "draft-8",
   legacyHeaders: false,
-  message: { error: "Too many voice clone requests. Please try again in an hour." },
+  message: { error: "Too many voice clone requests. Please wait before trying again." }
 });
 
-// Limit TTS/speak requests: allow 30 per minute per IP.
+// TTS requests are billed per character of synthesized speech.
+// 20 requests per minute is comfortable for real-time usage but prevents
+// automated quota exhaustion.
 const speakRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30,
-  standardHeaders: true,
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
   legacyHeaders: false,
-  message: { error: "Too many speech requests. Please slow down." },
+  message: { error: "Too many speech requests. Please slow down." }
 });
 
 router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
