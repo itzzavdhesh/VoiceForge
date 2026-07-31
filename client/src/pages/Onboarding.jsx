@@ -195,20 +195,17 @@ const MIN_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 100;
 
 export default function Onboarding({ onReady }) {
-  const [recording, setRecording] = React.useState(null);
-  const [recordingDuration, setRecordingDuration] = React.useState(0);
-
-  function handleRecordingReady(blob, duration = 0) {
-    setRecording(blob);
-    setRecordingDuration(duration);
-  }
-
+  const [recording, setRecording] = React.useState(null); // stores { blob, duration, isValid }
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    space: "",
+    hasServerKey: false,
+  });
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -284,31 +281,9 @@ export default function Onboarding({ onReady }) {
   }, [maxUnlockedStep]);
 
   async function handleClone() {
-    // 1. Strict validation guards: recording and a valid name are required.
-    if (!hasKey || !recording) return;
-    if (recordingDuration < 10) return;
-    if (nameError) return; // block on empty / whitespace / over-limit name
-
-    try {
-      // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(recording, voiceName.trim());
-      if (profile) {
-        setSuccessProfile(profile);
-        setMaxUnlockedStep(2);
-        showToast("Voice cloned successfully", "success");
-        setActiveStep(2); // Move user to Step 2 instantly upon real success
-      }
-    } catch (err) {
-      console.error("Voice cloning process failed:", err);
-      showToast("Voice cloning failed. Please try again.", "error");
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
-    }
-  }
-
-  function handleManualStepNavigation(targetStep) {
-    if (targetStep <= maxUnlockedStep) {
-      setActiveStep(targetStep);
-    }
+    if (!recording || !recording.isValid) return;
+    const profile = await cloneVoice(recording.blob, voiceName);
+    setSuccessProfile(profile);
   }
 
   return (
@@ -356,29 +331,6 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-      {/* REFACTORED ACCESSIBLE INTERACTIVE NAVIGATION STEP DOT TRACKS */}
-      <div className="flex items-center justify-center gap-3" role="tablist" aria-label="Onboarding step navigation">
-        {[1, 2, 3].map((stepNum) => {
-          const isAccessible = stepNum <= maxUnlockedStep;
-          const isCurrent = activeStep === stepNum;
-
-          return (
-            <button
-              key={stepNum}
-              type="button"
-              disabled={!isAccessible}
-              onClick={() => handleManualStepNavigation(stepNum)}
-              aria-label={`Go to Step ${stepNum}`}
-              aria-current={isCurrent ? "step" : undefined}
-              className={`h-3 w-3 rounded-full transition-all duration-300 ${
-                isCurrent 
-                  ? "bg-coral scale-125 ring-2 ring-coral/30" 
-                  : isAccessible ? "bg-mint" : "bg-ink/15 dark:bg-white/10"
-              } ${!isAccessible ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
-            />
-          );
-        })}
-      </div>
 
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
