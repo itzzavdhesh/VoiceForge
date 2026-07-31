@@ -3,7 +3,16 @@
 // Used on the Call page, Compose page (compact mode), and Settings page
 // as the unified way to select an output language for Chatterbox TTS.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId
+} from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search, Globe, X } from "lucide-react";
 import {
   SUPPORTED_LANGUAGES,
@@ -24,11 +33,15 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIndex, setFocusIndex] = useState(-1);
+  const [panelStyle, setPanelStyle] = useState(null);
 
   const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
   const searchRef = useRef(null);
+  const generatedId = useId();
+  const panelId = id ?? generatedId;
   const listRef = useRef(null);
-
   const selectedLang = getLanguageByCode(value);
   const regions = useMemo(() => getRegions(), []);
 
@@ -81,6 +94,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     setIsOpen(false);
     setSearch("");
     setFocusIndex(-1);
+    setPanelStyle(null);
   }, []);
 
   const toggle = useCallback(() => {
@@ -92,13 +106,73 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   useEffect(() => {
     if (!isOpen) return;
     function handleClick(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      const trigger = containerRef.current;
+      const panel = panelRef.current;
+      if (
+        trigger &&
+        !trigger.contains(e.target) &&
+        panel &&
+        !panel.contains(e.target)
+      ) {
         closeDropdown();
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [isOpen, closeDropdown]);
+
+  const updatePanelPosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const availableBelow = viewportHeight - rect.bottom - margin;
+    const availableAbove = rect.top - margin;
+    const openAbove = availableBelow < 260 && availableAbove > availableBelow;
+    const widthTarget = compact ? 288 : Math.max(rect.width, 320);
+    const width = Math.min(widthTarget, Math.max(0, viewportWidth - margin * 2));
+    const maxHeight = Math.min(420, Math.max(180, viewportHeight - margin * 2));
+    const heightTarget = Math.max(openAbove ? availableAbove : availableBelow, 180);
+    const height = Math.min(maxHeight, heightTarget);
+    const top = openAbove
+      ? Math.max(margin, rect.top - height - 8)
+      : Math.min(rect.bottom + 8, viewportHeight - margin - height);
+    const left = Math.min(
+      Math.max(rect.left, margin),
+      Math.max(margin, viewportWidth - width - margin)
+    );
+
+    setPanelStyle({
+      position: "fixed",
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${width}px`,
+      maxHeight: `${height}px`,
+      zIndex: 60,
+    });
+  }, [compact]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    updatePanelPosition();
+
+    const handleWindowChange = () => updatePanelPosition();
+    document.addEventListener("scroll", handleWindowChange, true);
+    window.addEventListener("resize", handleWindowChange);
+    window.addEventListener("orientationchange", handleWindowChange);
+
+    return () => {
+      document.removeEventListener("scroll", handleWindowChange, true);
+      window.removeEventListener("resize", handleWindowChange);
+      window.removeEventListener("orientationchange", handleWindowChange);
+    };
+  }, [isOpen, updatePanelPosition]);
 
   // ── Select handler ────────────────────────────────────────────────────
   const selectLanguage = useCallback(
@@ -180,11 +254,13 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
       {/* ── Trigger Button ─────────────────────────────────────────────── */}
       <button
         id={id}
+        ref={triggerRef}
         type="button"
         onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label="Select output language"
+        aria-controls={isOpen ? `${panelId}-panel` : undefined}
         className={[
           "group inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-moss/40 dark:focus:ring-glow/40",
@@ -208,18 +284,17 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
       </button>
 
       {/* ── Dropdown Panel ─────────────────────────────────────────────── */}
-      {isOpen && (
+      {isOpen && panelStyle && typeof document !== "undefined" && createPortal(
         <div
+          ref={panelRef}
+          id={`${panelId}-panel`}
           role="dialog"
           aria-label="Language selection"
           className={[
-            "absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg",
+            "flex flex-col overflow-hidden rounded-xl border shadow-lg animate-fade-in-up",
             "border-neutral-200/80 bg-white dark:border-border dark:bg-surface",
-            "animate-fade-in-up",
-            "max-w-[calc(100vw-2rem)]",
-            compact ? "left-0 w-72" : "left-0 right-0 min-w-0 sm:min-w-[320px] sm:w-96", 
           ].join(" ")}
-          style={{ maxHeight: "420px" }}
+          style={panelStyle}
         >
           {/* Search bar */}
           <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2.5 dark:border-border">
@@ -257,8 +332,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
             ref={listRef}
             role="listbox"
             aria-label="Available languages"
-            className="overflow-y-auto overscroll-contain"
-            style={{ maxHeight: "360px" }}
+            className="flex-1 overflow-y-auto overscroll-contain"
           >
             {filtered.length === 0 && (
               <p className="px-4 py-8 text-center text-sm text-neutral-400 dark:text-neutral-500">
@@ -366,7 +440,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
               close
             </p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
