@@ -40,7 +40,7 @@
 
 body {
   overflow-x: hidden;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   /* Smooth background transition when toggling theme */
   transition: background-color 0.2s ease, color 0.2s ease;

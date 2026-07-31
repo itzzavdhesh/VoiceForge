@@ -29,7 +29,7 @@ const steps = [
 
 export default function About({ onNavigate }) {
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 py-12 max-w-4xl mx-auto">
+    <div className="min-h-dvh bg-background text-foreground px-4 py-12 max-w-4xl mx-auto">
 
       <section className="mb-16 text-center">
         <h1 className="text-4xl font-bold mb-4">About VoiceForge</h1>
