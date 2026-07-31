@@ -4,6 +4,7 @@ import { useTheme } from "./ThemeContext";
 import { useEffect, useRef } from "react";
 import { AudioProcessor } from "../utils/audioProcessor";
 import { FaceProcessor } from "../utils/faceProcessor";
+import { applyAudioOutput } from "../utils/audioOutput";
 
 export default React.forwardRef(function VideoPreview({
   webcamStream,
@@ -28,6 +29,26 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
+
+  const pipVideoRef = React.useRef(null);
+  const isPiPSupported = typeof document !== "undefined" && document.pictureInPictureEnabled;
+
+  const togglePiP = async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        if (!pipVideoRef.current.srcObject) {
+          const stream = ref.current.captureStream(30);
+          pipVideoRef.current.srcObject = stream;
+          await pipVideoRef.current.play();
+        }
+        await pipVideoRef.current.requestPictureInPicture();
+      }
+    } catch (error) {
+      console.error("PiP error:", error);
+    }
+  };
 
   const [blurEnabled, setBlurEnabled] = React.useState(false);
   const segmenterRef = React.useRef(null);
@@ -152,6 +173,21 @@ export default React.forwardRef(function VideoPreview({
     }
   }, [webcamStream]);
 
+  React.useEffect(() => {
+    if (audioRef.current) {
+      applyAudioOutput(audioRef.current);
+    }
+  }, [audioUrl]);
+
+  React.useEffect(() => {
+    function handleOutputChange() {
+      if (audioRef.current) {
+        applyAudioOutput(audioRef.current);
+      }
+    }
+    window.addEventListener("voiceforge:audioOutputChanged", handleOutputChange);
+    return () => window.removeEventListener("voiceforge:audioOutputChanged", handleOutputChange);
+  }, []);
   React.useEffect(() => {
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
@@ -387,16 +423,6 @@ export default React.forwardRef(function VideoPreview({
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             Lip-synced output
-            <button
-              onClick={() => setBlurEnabled(!blurEnabled)}
-              className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                blurEnabled 
-                  ? "bg-coral text-white" 
-                  : "bg-ink/10 text-ink/70 hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
-              }`}
-            >
-              {blurEnabled ? "Blur ON" : "Blur OFF"}
-            </button>
             {!avatarImage && (
               <button
                 onClick={() => setBlurEnabled(!blurEnabled)}
@@ -407,6 +433,15 @@ export default React.forwardRef(function VideoPreview({
                 }`}
               >
                 {blurEnabled ? "Blur ON" : "Blur OFF"}
+              </button>
+            )}
+            {isPiPSupported && (
+              <button
+                onClick={togglePiP}
+                className="ml-2 rounded-full bg-ink/10 px-3 py-1 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
+                title="Pop out video preview"
+              >
+                PiP Mode
               </button>
             )}
           </h2>
@@ -432,6 +467,7 @@ export default React.forwardRef(function VideoPreview({
         )}
       </div>
       <video ref={videoRef} autoPlay muted playsInline className="hidden" />
+      <video ref={pipVideoRef} autoPlay muted playsInline className="hidden" />
       <canvas
         ref={ref}
         width="960"

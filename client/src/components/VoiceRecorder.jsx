@@ -14,6 +14,11 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
 
+  const [isExtracting, setIsExtracting] = React.useState(false);
+  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+  const [isDragOver, setIsDragOver] = React.useState(false);
+
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -25,6 +30,60 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const rafRef = React.useRef(null);
   const errorTimerRef = React.useRef(null);
   const didFinalizeRef = React.useRef(false);
+
+  const processFile = async (file) => {
+    setIsExtracting(true);
+    setRecorderError("");
+    setRawAudioBlob(null);
+    try {
+      const { audioBlob, duration: extDuration } = await extractAudioFromFile(file);
+      setRawAudioBlob(audioBlob);
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(previous => {
+        if (previous) URL.revokeObjectURL(previous);
+        return url;
+      });
+      const roundedDuration = Math.round(extDuration);
+      setDuration(roundedDuration);
+      durationRef.current = roundedDuration;
+      chunksRef.current = [audioBlob];
+      onRecordingReady(audioBlob, { duration: roundedDuration, isValid: roundedDuration >= MIN_DURATION });
+    } catch (err) {
+      console.error(err);
+      setRecorderError(err.message || "Failed to extract audio from file.");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    if (!disabled && !isRecording && !isInitializing && !isExtracting) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (disabled || isRecording || isInitializing || isExtracting) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await processFile(file);
+    }
+  };
 
   // Common stop cleanup function
   function handleStopCleanup({ emitReady = true } = {}) {
@@ -289,7 +348,16 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }, [isRecording]);
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section 
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`rounded-lg border bg-white p-5 shadow-soft transition-colors dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk ${
+        isDragOver 
+          ? "border-coral bg-coral/5 dark:border-coral/60 dark:bg-coral/10" 
+          : "border-ink/10 dark:border-border"
+      }`}
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">Record or upload a 10-second reference</h2>

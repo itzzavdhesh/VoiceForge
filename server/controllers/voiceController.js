@@ -3,6 +3,7 @@
 import crypto from "crypto";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
+import { logger } from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------
 // In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
@@ -61,8 +62,8 @@ const MOCK_AUDIO_MP3 = Buffer.from(
 );
 
 const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
-  console.warn(
-    "[VoiceForge] STREAM_SECRET not set - using ephemeral key. " +
+  logger.warn(
+    "STREAM_SECRET not set - using ephemeral key. " +
     "All speech tokens will be invalidated on server restart. " +
     "Set STREAM_SECRET in .env for stability."
   );
@@ -276,7 +277,7 @@ export async function cloneVoice(request, response, next) {
     }
 
     if (getIsMock()) {
-      console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
+      logger.warn("MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
         voice_id: request.body.voice_id || "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
@@ -469,7 +470,7 @@ if (voice_settings !== undefined && voice_settings !== null) {
     pendingStreams.set(speechId, { text: trimmedText, voiceId: trimmedVoiceId, mergedSettings, timeout });
 
     if (getIsMock()) {
-      console.warn(`[VoiceForge] MOCK_CHATTERBOX: speak enqueued mock stream for speechId=${speechId}`);
+      logger.warn({ speechId }, "MOCK_CHATTERBOX: speak enqueued mock stream");
     }
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
@@ -531,7 +532,7 @@ export async function streamSpeech(request, response, next) {
     }
 
     if (getIsMock()) {
-      console.warn("[VoiceForge] MOCK_CHATTERBOX: streaming mock audio");
+      logger.warn({ speechId }, "MOCK_CHATTERBOX: streaming mock audio");
       deletePendingStream(speechId);
       response.setHeader("Content-Type", "audio/mpeg");
       response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
@@ -552,7 +553,7 @@ export async function streamSpeech(request, response, next) {
     // Set up abortion for client disconnect
     const generateController = new AbortController();
     const onClose = () => {
-      console.log("[VoiceForge] Request aborted by client");
+      logger.info({ speechId }, "Request aborted by client");
       if (speechId) deletePendingStream(speechId);
       generateController.abort();
     };
@@ -571,7 +572,7 @@ export async function streamSpeech(request, response, next) {
       );
     } catch (error) {
       if (error.message === "Request aborted by client") {
-        console.log("[VoiceForge] Inference canceled. Cleanup completed.");
+        logger.info({ speechId }, "Inference canceled. Cleanup completed.");
         return; // Stop processing, request is already closed
       }
       if (error.message.includes("timed out")) {
@@ -611,7 +612,7 @@ export async function streamSpeech(request, response, next) {
     const reader = upstream.body.getReader();
 
     request.on("close", () => {
-      reader.cancel().catch((err) => console.error("Error cancelling Chatterbox reader:", err));
+      reader.cancel().catch((err) => logger.error({ err, speechId }, "Error cancelling Chatterbox reader"));
     });
 
     while (true) {

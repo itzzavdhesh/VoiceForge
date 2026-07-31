@@ -217,15 +217,27 @@ if (estimatedDuration > 30) {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
-        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <SendHorizontal size={18} aria-hidden="true" />
-        {status === "speaking" ? "Generating..." : "Speak"}
-      </button>
+      <div className="mt-4 flex gap-3">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <SendHorizontal size={18} aria-hidden="true" />
+          {status === "speaking" ? "Generating..." : "Speak"}
+        </button>
+        {trimmedText && (
+          <button
+            type="button"
+            onClick={() => setText("")}
+            disabled={status === "speaking"}
+            className="inline-flex items-center justify-center rounded-md border border-ink/15 bg-cloud px-5 py-3 font-bold text-ink transition hover:border-coral hover:text-coral disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-coral dark:hover:text-coral"
+          >
+            Clear
+          </button>
+        )}
+      </div>
     </section>
   );
 }

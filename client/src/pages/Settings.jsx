@@ -25,6 +25,7 @@ import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -581,6 +582,15 @@ export default function Settings() {
             <option value="session">Clear on session close</option>
           </select>
         </div>
+      </section>
+
+      {/* ── Audio & Hardware ───────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-4 dark:text-muted">
+          Configure hardware routing for synthesized speech playback across video calls and webcams.
+        </p>
+        <AudioOutputSelector />
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
