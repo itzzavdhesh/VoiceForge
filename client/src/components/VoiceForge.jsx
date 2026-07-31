@@ -30,10 +30,12 @@ export default function VoiceForge() {
     history,
     favorites,
     sessionTranscript,
+    storageStats,
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -185,11 +187,13 @@ export default function VoiceForge() {
           history={history}
           favorites={favorites}
           sessionTranscript={sessionTranscript}
+          storageStats={storageStats}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
           onToggleFav={toggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
+          onArchive={archiveOldHistory}
           onCopy={handleCopy}
         />
       </div>
