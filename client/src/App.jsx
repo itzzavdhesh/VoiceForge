@@ -15,6 +15,7 @@ import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import VoiceProfiles from "./pages/VoiceProfiles.jsx";
+import SpeakingHistory from "./pages/SpeakingHistory.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -24,6 +25,7 @@ const tabs = [
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
+  { id: "speaking-history", label: "History", icon: MessageSquare,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -245,6 +247,7 @@ export default function App() {
             {activeTab === "settings"   && <Settings />}
             {activeTab === "analytics"  && <Analytics />}
             {activeTab === "voice-profiles" && <VoiceProfiles />}
+            {activeTab === "speaking-history" && <SpeakingHistory />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
