@@ -18,6 +18,7 @@ import VoiceProfiles from "./pages/VoiceProfiles.jsx";
 import SpeakingHistory from "./pages/SpeakingHistory.jsx";
 import VoiceQualityAnalyzer from "./pages/VoiceQualityAnalyzer.jsx";
 import KeyboardShortcutCenter from "./pages/KeyboardShortcutCenter.jsx";
+import LiveAudioMonitor from "./pages/LiveAudioMonitor.jsx";
 import {
   Camera,
   Mic2,
@@ -44,6 +45,7 @@ const tabs = [
   { id: "speaking-history", label: "History", icon: MessageSquare,},
   { id: "voice-quality", label: "Quality", icon: Mic2,},
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard, },
+  { id: "live-audio", label: "Live Audio", icon: Mic,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -268,6 +270,7 @@ export default function App() {
             {activeTab === "speaking-history" && <SpeakingHistory />}
             {activeTab === "voice-quality" && <VoiceQualityAnalyzer />}
             {activeTab === "shortcuts" && <KeyboardShortcutCenter />}
+            {activeTab === "live-audio" && <LiveAudioMonitor />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
