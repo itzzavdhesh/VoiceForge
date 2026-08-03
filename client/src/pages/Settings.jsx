@@ -20,11 +20,13 @@ import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
+  subscribeProfileChanges,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -41,6 +43,7 @@ function AudioPlayback({ blob }) {
     <audio
       src={audioUrl}
       controls
+      aria-label="Generated speech audio playback"
       className="mt-2 h-8 w-full max-w-xs"
     />
   );
@@ -63,6 +66,7 @@ export default function Settings() {
       }
     }
     loadProfiles();
+    return subscribeProfileChanges(loadProfiles);
   }, []);
 
 
@@ -365,6 +369,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.stability}
+              aria-label="Stability"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -380,6 +385,7 @@ export default function Settings() {
               id="temperature"
               type="range"
               min="0" max="1" step="0.01"
+              aria-label="Temperature"
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"
@@ -397,6 +403,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.style}
+              aria-label="Style Exaggeration"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -546,6 +553,15 @@ export default function Settings() {
         </p>
       </section>
 
+      {/* ── Audio & Hardware ───────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-4 dark:text-muted">
+          Configure hardware routing for synthesized speech playback across video calls and webcams.
+        </p>
+        <AudioOutputSelector />
+      </section>
+
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Backup & Restore</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
@@ -572,6 +588,7 @@ export default function Settings() {
               id="import-config-file"
               type="file"
               accept=".json"
+              aria-label="Choose backup file to import"
               onChange={handleImport}
               className="sr-only"
             />

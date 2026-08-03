@@ -209,3 +209,11 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 ## License
 
 MIT
+
+---
+
+## About
+
+VoiceForge is an open-source, browser-based assistive communication platform built to make video conversations more accessible for everyone. It combines voice cloning, multilingual text-to-speech, and a synchronized lip-synced avatar to help users communicate naturally during online meetings.
+
+Designed with a local-first approach, VoiceForge prioritizes accessibility, privacy, and ease of use while leveraging free, open-source AI technologies to deliver an inclusive communication experience.

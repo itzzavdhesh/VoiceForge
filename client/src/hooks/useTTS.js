@@ -206,12 +206,18 @@ export default function useTTS() {
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
 
+      const streamResponse = await fetch(nextAudioUrl);
+      if (!streamResponse.ok) throw new Error("Failed to fetch audio stream");
+      const blob = await streamResponse.blob();
+      const localUrl = URL.createObjectURL(blob);
+
       setEngine("chatterbox");
-      setAudioUrl(nextAudioUrl);
+      setAudioUrl(localUrl);
       setStatus("ready");
 
       return {
-        audioUrl: nextAudioUrl,
+        audioUrl: localUrl,
+        blob,
         engine: "chatterbox",
       };
     } catch (ttsError) {
