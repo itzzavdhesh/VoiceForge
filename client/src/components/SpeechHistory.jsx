@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
-import { MessageCard } from "./MessageCard";
-import useDebounce from "../hooks/useDebounce";
+import { MessageCard } from "./MessageCard.jsx";
+import useDebounce from "../hooks/useDebounce.js";
 
-export function SpeechHistory({history,
-  favorites,
+export function SpeechHistory({
+  history = [],
+  favorites = new Set(),
   sessionTranscript = [],
   onReuse,
   onReplay,
@@ -13,14 +14,57 @@ export function SpeechHistory({history,
   onClearHistory,
   onCopy,
   onImportBackup,
+  onAddTag = () => {},
+  onRemoveTag = () => {},
+  onAddToQuickReplies = () => {},
   showToast,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((msg) => {
+      if (Array.isArray(msg?.tags)) {
+        msg.tags.forEach((t) => {
+          if (typeof t === "string" && t.trim()) {
+            tagsSet.add(t.trim());
+          }
+        });
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  React.useEffect(() => {
+    if (selectedTag !== "All Tags" && !allUniqueTags.includes(selectedTag)) {
+      setSelectedTag("All Tags");
+    }
+  }, [allUniqueTags, selectedTag]);
+
+  const analyticsData = useMemo(() => {
+    const source = sessionTranscript && sessionTranscript.length > 0 ? sessionTranscript : history;
+    const totalSentences = source.length;
+    const totalWords = source.reduce((acc, msg) => acc + (msg?.text ? msg.text.split(/\s+/).length : 0), 0);
+    const counts = {};
+    source.forEach((msg) => {
+      if (msg?.text) {
+        const key = msg.text.trim();
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+    return { totalSentences, totalWords, top };
+  }, [history, sessionTranscript]);
 
   const handleExport = () => {
     try {
@@ -57,6 +101,10 @@ export function SpeechHistory({history,
         typeof message.timestamp !== "number"
       ) {
         return false;
+      }
+      if (message.tags !== undefined) {
+        if (!Array.isArray(message.tags)) return false;
+        message.tags = message.tags.filter((t) => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
       }
     }
 
@@ -106,14 +154,14 @@ export function SpeechHistory({history,
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
 
     if (selectedTag !== "All Tags") {
-      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+      messages = messages.filter((message) => Array.isArray(message.tags) && message.tags.includes(selectedTag));
     }
 
     if (debouncedSearch.trim()) {
       const query = debouncedSearch.toLowerCase();
       messages = messages.filter((message) => 
-        message.text.toLowerCase().includes(query) ||
-        (message.tags && message.tags.some(t => t.toLowerCase().includes(query)))
+        (message.text && message.text.toLowerCase().includes(query)) ||
+        (Array.isArray(message.tags) && message.tags.some((t) => typeof t === "string" && t.toLowerCase().includes(query)))
       );
     }
 

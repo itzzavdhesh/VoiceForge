@@ -5,27 +5,46 @@ import React, {
   useEffect,
 } from "react";
 import { Copy, Eraser, Mic2, History, X } from "lucide-react";
-import { VoiceQuickSettings } from "./VoiceQuickSettings";
-import { FavoriteMessages } from "./FavoriteMessages";
-import { QuickReplies } from "./QuickReplies";
-import { SpeechHistory } from "./SpeechHistory";
+import { VoiceQuickSettings } from "./VoiceQuickSettings.jsx";
+import { FavoriteMessages } from "./FavoriteMessages.jsx";
+import { QuickReplies } from "./QuickReplies.jsx";
+import { SpeechHistory } from "./SpeechHistory.jsx";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
 import useTTS from "../hooks/useTTS.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
-import { saveAudioBlob, getAudioBlob } from "../utils/db.js";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges.js";
 
 const MAX_CHARS = 300;
+const DRAFT_KEY = "voiceforge_composer_draft_text";
 
 export default function VoiceForge() {
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState(() => {
+    try {
+      return sessionStorage.getItem(DRAFT_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [language, setLanguage] = useState(loadLanguage);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
   const historyToggleRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      if (inputText.length > 0) {
+        sessionStorage.setItem(DRAFT_KEY, inputText);
+      } else {
+        sessionStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {}
+  }, [inputText]);
+
+  useUnsavedChanges(inputText.trim().length > 0);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -39,6 +58,8 @@ export default function VoiceForge() {
     toggleFavorite,
     clearHistory,
     importBackup,
+    addTag,
+    removeTag,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -146,6 +167,10 @@ export default function VoiceForge() {
       saveAudioBlob(msgId, result.blob).catch(err => console.error("Cache save error:", err));
     }
     showToast("Saved to history", "success");
+    setInputText("");
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {}
   }, [inputText, speak, addMessage, showToast, language]);
 
   const handleReplay = useCallback(async (id, text) => {
@@ -343,6 +368,9 @@ export default function VoiceForge() {
           onClearHistory={clearHistory}
           onCopy={handleCopy}
           onImportBackup={importBackup}
+          onAddTag={addTag}
+          onRemoveTag={removeTag}
+          onAddToQuickReplies={handleAddToQuickReplies}
           showToast={showToast}
         />
       </div>

@@ -2,6 +2,7 @@
 import React from "react";
 import { SendHorizontal } from "lucide-react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges.js";
 
 /**
  * Emotion presets define prompt engineering text and voice_settings overrides
@@ -64,11 +65,30 @@ const EMOTION_PRESETS = [
 ];
 
 const MAX_CHARS = 300;
+const DRAFT_KEY = "voiceforge_draft_text";
 
 export default function TextToSpeech({ onSpeak, disabled = false, status = "idle" }) {
-  const [text, setText] = React.useState("");
+  const [text, setText] = React.useState(() => {
+    try {
+      return sessionStorage.getItem(DRAFT_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  });
   const [activeEmotion, setActiveEmotion] = React.useState("neutral");
   const trimmedText = text.trim();
+
+  React.useEffect(() => {
+    try {
+      if (text.length > 0) {
+        sessionStorage.setItem(DRAFT_KEY, text);
+      } else {
+        sessionStorage.removeItem(DRAFT_KEY);
+      }
+    } catch (e) {}
+  }, [text]);
+
+  useUnsavedChanges(trimmedText.length > 0);
 
 const characterCount = text.length;
 const charsLeft = MAX_CHARS - characterCount;
@@ -101,25 +121,26 @@ if (estimatedDuration > 30) {
   }
 
   async function submit() {
-  if (!trimmedText || disabled) return;
+    if (!trimmedText || disabled || characterCount > MAX_CHARS) return;
 
-  // Build the final text with the emotion prompt prefix
-  const finalText = activePreset.promptPrefix
-    ? `${activePreset.promptPrefix}${trimmedText}`
-    : trimmedText;
+    // Build the final text with the emotion prompt prefix
+    const finalText = activePreset.promptPrefix
+      ? `${activePreset.promptPrefix}${trimmedText}`
+      : trimmedText;
 
-  // Merge emotion overrides on top of the user's saved voice settings
-  let voice_settings_override = undefined;
-  if (Object.keys(activePreset.settingsOverride).length > 0) {
-    const base = loadVoiceSettings();
-    voice_settings_override = { ...base, ...activePreset.settingsOverride };
+    // Merge emotion overrides on top of the user's saved voice settings
+    let voice_settings_override = undefined;
+    if (Object.keys(activePreset.settingsOverride).length > 0) {
+      const base = loadVoiceSettings();
+      voice_settings_override = { ...base, ...activePreset.settingsOverride };
+    }
+
+    await onSpeak(finalText, voice_settings_override);
+    setText("");
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch (e) {}
   }
-
-  await onSpeak(finalText, voice_settings_override);
-  if (!trimmedText || disabled || characterCount > MAX_CHARS) return;
-  await onSpeak(trimmedText);
-  setText("");
-}
 
   function handleKeyDown(event) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -222,28 +243,15 @@ if (estimatedDuration > 30) {
         </p>
       )}
 
-      <div className="mt-4 flex gap-3">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
-          aria-label={status === "speaking" ? "Generating speech, please wait" : "Speak typed text"}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <SendHorizontal size={18} aria-hidden="true" />
-          {status === "speaking" ? "Generating..." : "Speak"}
-        </button>
-        {trimmedText && (
-          <button
-            type="button"
-            onClick={() => setText("")}
-            disabled={status === "speaking"}
-            className="inline-flex items-center justify-center rounded-md border border-ink/15 bg-cloud px-5 py-3 font-bold text-ink transition hover:border-coral hover:text-coral disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-coral dark:hover:text-coral"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
+        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <SendHorizontal size={18} aria-hidden="true" />
+        {status === "speaking" ? "Generating..." : "Speak"}
+      </button>
     </section>
   );
 }

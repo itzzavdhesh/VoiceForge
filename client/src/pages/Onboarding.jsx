@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucid
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges.js";
 
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -206,6 +207,42 @@ export default function Onboarding({ onReady }) {
     space: "",
     hasServerKey: false,
   });
+
+  useUnsavedChanges((Boolean(recording?.blob) || isCloning) && !successProfile);
+
+  const handleRecordingReady = React.useCallback((blobArg, metaArg) => {
+    if (!blobArg) {
+      setRecording(null);
+      return;
+    }
+    let blob = blobArg instanceof Blob ? blobArg : blobArg?.blob;
+    if (!blob && !(blobArg instanceof Blob)) {
+      setRecording(null);
+      return;
+    }
+    let duration = 0;
+    let isValid = false;
+
+    if (typeof metaArg === "number") {
+      duration = metaArg;
+      isValid = duration >= 10;
+    } else if (metaArg && typeof metaArg === "object") {
+      duration = metaArg.duration || 0;
+      isValid = metaArg.isValid !== undefined ? metaArg.isValid : duration >= 10;
+    } else if (blobArg && typeof blobArg === "object" && !(blobArg instanceof Blob)) {
+      blob = blobArg.blob;
+      duration = blobArg.duration || 0;
+      isValid = blobArg.isValid !== undefined ? blobArg.isValid : duration >= 10;
+    }
+
+    if (!isValid && duration >= 10) {
+      isValid = true;
+    }
+
+    setRecording({ blob: blob || blobArg, duration, isValid });
+  }, []);
+
+  const recordingDuration = recording?.duration || 0;
 
   React.useEffect(() => {
     fetch("/api/voice/status")
