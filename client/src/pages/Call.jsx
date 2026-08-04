@@ -12,6 +12,7 @@ import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { getStoredValue, setStoredValue } from "../utils/storage.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
@@ -19,6 +20,7 @@ export default function Call() {
   const [retryCamera, setRetryCamera] = React.useState(0);
   const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
+  const [subtitleText, setSubtitleText] = React.useState("");
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
@@ -27,6 +29,15 @@ export default function Call() {
   const [avatarImage, setAvatarImage] = React.useState(null);
   const [videoDevices, setVideoDevices] = React.useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = React.useState(null);
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
+    return getStoredValue("voiceforge:subtitlesEnabled") === "true";
+  });
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
+    return getStoredValue("voiceforge:subtitleFontSize", "medium");
+  });
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
+    return getStoredValue("voiceforge:subtitleBgOpacity", "0.6");
+  });
 
   React.useEffect(() => {
     persistLanguage(language);
@@ -58,10 +69,9 @@ export default function Call() {
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);
   const [calibration, setCalibration] = React.useState(() => {
-  try {
-    const savedX     = localStorage.getItem("voiceforge:calibrationXOffset");
-    const savedY     = localStorage.getItem("voiceforge:calibrationYOffset");
-    const savedScale = localStorage.getItem("voiceforge:calibrationScale");
+    const savedX = getStoredValue("voiceforge:calibrationXOffset");
+    const savedY = getStoredValue("voiceforge:calibrationYOffset");
+    const savedScale = getStoredValue("voiceforge:calibrationScale");
 
     let x = savedX !== null ? parseInt(savedX, 10) : 0;
     let y = savedY !== null ? parseInt(savedY, 10) : 0;
@@ -89,12 +99,9 @@ export default function Call() {
     return {
       xOffset: x,
       yOffset: y,
-      scale
+      scale,
     };
-  } catch {
-    return { xOffset: 0, yOffset: 0, scale: 1.0 };
-  }
-});
+  });
 
   const handleCalibrationChange = (key, value) => {
     let parsedValue = typeof value === "string" ? parseFloat(value) : value;
@@ -111,12 +118,10 @@ export default function Call() {
 
     setCalibration((prev) => {
       const updated = { ...prev, [key]: parsedValue };
-      try {
-        localStorage.setItem(
-          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-          parsedValue.toString()
-        );
-      } catch { /* storage unavailable – continue without persisting */ }
+      setStoredValue(
+        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+        parsedValue.toString()
+      );
       return updated;
     });
   };
@@ -124,9 +129,9 @@ export default function Call() {
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
     setCalibration(defaults);
-    localStorage.setItem("voiceforge:calibrationXOffset", "0");
-    localStorage.setItem("voiceforge:calibrationYOffset", "0");
-    localStorage.setItem("voiceforge:calibrationScale", "1.0");
+    setStoredValue("voiceforge:calibrationXOffset", "0");
+    setStoredValue("voiceforge:calibrationYOffset", "0");
+    setStoredValue("voiceforge:calibrationScale", "1.0");
   };
 
   React.useEffect(() => {
@@ -212,6 +217,8 @@ export default function Call() {
   async function handleSpeak(text, voice_settings_override) {
     if (!activeProfile?.voice_id) return;
 
+    setSubtitleText(text || "");
+
     try {
       const result = await speak({
         text,
@@ -228,6 +235,13 @@ export default function Call() {
       showToast("Speech generation failed", "error");
     }
   }
+
+  const handleSpeakingChange = (value) => {
+    setIsSpeaking(value);
+    if (!value) {
+      setSubtitleText("");
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -418,7 +432,7 @@ export default function Call() {
               checked={subtitlesEnabled}
               onChange={(e) => {
                 setSubtitlesEnabled(e.target.checked);
-                localStorage.setItem("voiceforge:subtitlesEnabled", e.target.checked.toString());
+                setStoredValue("voiceforge:subtitlesEnabled", e.target.checked.toString());
               }}
               className="sr-only peer"
             />
@@ -440,7 +454,7 @@ export default function Call() {
                 value={subtitleFontSize}
                 onChange={(e) => {
                   setSubtitleFontSize(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleFontSize", e.target.value);
+                  setStoredValue("voiceforge:subtitleFontSize", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -459,7 +473,7 @@ export default function Call() {
                 value={subtitleBgOpacity}
                 onChange={(e) => {
                   setSubtitleBgOpacity(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleBgOpacity", e.target.value);
+                  setStoredValue("voiceforge:subtitleBgOpacity", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -543,10 +557,14 @@ export default function Call() {
           webcamStream={webcamStream}
           audioUrl={audioUrl}
           isSpeaking={isSpeaking}
-          onSpeakingChange={setIsSpeaking}
+          onSpeakingChange={handleSpeakingChange}
           calibration={calibration}
           isCalibrating={isCalibrationOpen}
           avatarImage={avatarImage}
+          subtitlesEnabled={subtitlesEnabled}
+          subtitleText={subtitleText}
+          subtitleFontSize={subtitleFontSize}
+          subtitleBgOpacity={subtitleBgOpacity}
         />
       </div>
 

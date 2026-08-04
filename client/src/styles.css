@@ -199,3 +199,47 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: #22c55e var(--bg-page);
 }
+
+/* Webcam Navigation Cursor */
+.webcam-cursor {
+  position: fixed;
+  z-index: 9999;
+  width: 50px;
+  height: 50px;
+  transform: translate(-50%, -50%);
+  pointer-events: none; /* so we don't hover our own cursor */
+}
+
+.webcam-cursor-dot {
+  width: 20px;
+  height: 20px;
+  background-color: rgba(34, 197, 94, 0.8);
+  border-radius: 50%;
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.webcam-click-feedback .webcam-cursor-dot {
+  transform: scale(1.5);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.webcam-cursor-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.webcam-cursor-progress {
+  fill: transparent;
+  stroke: #22c55e;
+  stroke-width: 4;
+  stroke-dasharray: 125.6;
+  stroke-dashoffset: 125.6;
+  transition: stroke-dashoffset 0.1s linear, opacity 0.1s ease;
+  opacity: 0;
+}
