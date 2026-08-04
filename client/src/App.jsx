@@ -61,7 +61,27 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  const desktopNavRef = React.useRef(null);
+  const [webcamNavEnabled, setWebcamNavEnabled] = React.useState(
+    () => loadAccessibilitySettings().webcamNavigationEnabled
+  );
+
+  React.useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "voiceforge:accessibilitySettings") {
+        setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    // Custom event for same-window updates since storage event doesn't fire in the same window
+    const handleCustomChange = () => {
+      setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+    };
+    window.addEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    };
+  }, []);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -289,6 +309,7 @@ export default function App() {
       <ScrollToBottomButton activeTab={activeTab} />
       <ScrollToTopButton activeTab={activeTab} />
       <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      <WebcamNavigation enabled={webcamNavEnabled} />
     </div>
   );
 }
