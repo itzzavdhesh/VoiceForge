@@ -201,6 +201,16 @@ export default function Onboarding({ onReady }) {
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
+
+  const handleRecordingReady = React.useCallback((blob, metadata) => {
+    if (!blob) {
+      setRecording(null);
+      return;
+    }
+    const duration = typeof metadata === "object" ? metadata.duration : metadata;
+    const isValid = typeof metadata === "object" ? metadata.isValid : (duration >= 10);
+    setRecording({ blob, duration, isValid });
+  }, []);
   const [serverStatus, setServerStatus] = React.useState({
     isMock: false,
     space: "",
@@ -390,7 +400,7 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
+                disabled={isCloning || !hasKey || !recording || !recording.isValid || Boolean(nameError)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {status === "cloning" ? (

@@ -94,18 +94,24 @@ export default function Analytics() {
     return { data, maxCount };
   }, [analyticsHistory]);
 
+  const escapeCSVCell = (value) => {
+    if (value === null || value === undefined) return '""';
+    const str = String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
   const exportCSV = () => {
     if (!analyticsHistory.length) return;
     
     const headers = ["ID", "Timestamp", "Language", "Text"];
     const rows = analyticsHistory.map(msg => [
-      msg.id,
-      new Date(msg.timestamp).toISOString(),
-      msg.language || "Unknown",
-      `"${msg.text.replace(/"/g, '""')}"`
+      escapeCSVCell(msg.id),
+      escapeCSVCell(new Date(msg.timestamp).toISOString()),
+      escapeCSVCell(msg.language || "Unknown"),
+      escapeCSVCell(msg.text)
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map(e => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);

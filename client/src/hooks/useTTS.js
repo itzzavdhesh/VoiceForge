@@ -121,6 +121,7 @@ export default function useTTS() {
 
           const cloneResponse = await fetch("/api/voice/clone", {
             method: "POST",
+            signal: controller.signal,
             body: formData,
           });
 
@@ -128,6 +129,7 @@ export default function useTTS() {
             // 3. Retry the speak request
             response = await fetch("/api/voice/speak", {
               method: "POST",
+              signal: controller.signal,
               headers: {
                 "Content-Type": "application/json",
               },
@@ -154,6 +156,7 @@ export default function useTTS() {
 
             const cloneResponse = await fetch("/api/voice/clone", {
               method: "POST",
+              signal: controller.signal,
               body: formData,
             });
 
@@ -182,6 +185,7 @@ export default function useTTS() {
               // Retry the speak request after silent re-cloning succeeds
               response = await fetch("/api/voice/speak", {
                 method: "POST",
+                signal: controller.signal,
                 headers: {
                   "Content-Type": "application/json",
                 },
@@ -206,7 +210,7 @@ export default function useTTS() {
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
 
-      const streamResponse = await fetch(nextAudioUrl);
+      const streamResponse = await fetch(nextAudioUrl, { signal: controller.signal });
       if (!streamResponse.ok) throw new Error("Failed to fetch audio stream");
       const blob = await streamResponse.blob();
       const localUrl = URL.createObjectURL(blob);
