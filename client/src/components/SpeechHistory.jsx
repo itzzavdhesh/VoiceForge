@@ -1,7 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, Archive, HardDrive } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
+
+export function escapeCSVCell(value) {
+  if (value === null || value === undefined) return '""';
+  const str = String(value);
+  return `"${str.replace(/"/g, '""')}"`;
+}
 
 export function SpeechHistory({history,
   favorites,
@@ -162,6 +168,7 @@ export function SpeechHistory({history,
 
   URL.revokeObjectURL(url);
 }
+
 function handleExportJson() {
   if (!sessionTranscript || sessionTranscript.length === 0) return;
 
@@ -181,6 +188,32 @@ function handleExportJson() {
 
   a.href = url;
   a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function handleExportCsv() {
+  if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+  const headers = ["Timestamp", "Text", "Status", "Language"];
+  const rows = sessionTranscript.map((item) => [
+    escapeCSVCell(new Date(item.timestamp).toISOString()),
+    escapeCSVCell(item.text),
+    escapeCSVCell(item.status ?? "unknown"),
+    escapeCSVCell(item.language ?? "en-US"),
+  ]);
+
+  const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map((row) => row.join(","))].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.csv`;
 
   document.body.appendChild(a);
   a.click();
@@ -383,6 +416,14 @@ function handleExportJson() {
     >
       <Download size={13} aria-hidden="true" />
       Export TXT
+    </button>
+
+    <button
+      onClick={handleExportCsv}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+    >
+      <Download size={13} aria-hidden="true" />
+      Export CSV
     </button>
 
     <button
