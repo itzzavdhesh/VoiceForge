@@ -14,8 +14,9 @@ import ScrollToTopButton from "./components/ScrollToTopButton";
 import Contributors from "./pages/Contributors.jsx";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import WebcamNavigation from "./components/WebcamNavigation";
-import { loadAccessibilitySettings, ACCESSIBILITY_SETTINGS_CHANGED_EVENT } from "./utils/accessibilitySettings";
+import VoiceProfiles from "./pages/VoiceProfiles.jsx";
+import SpeakingHistory from "./pages/SpeakingHistory.jsx";
+import VoiceQualityAnalyzer from "./pages/VoiceQualityAnalyzer.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -24,6 +25,9 @@ const tabs = [
   { id: "analytics",    label: "Analytics",     icon: BarChart2 },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
+  { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
+  { id: "speaking-history", label: "History", icon: MessageSquare,},
+  { id: "voice-quality", label: "Quality", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -264,6 +268,9 @@ export default function App() {
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}
             {activeTab === "analytics"  && <Analytics />}
+            {activeTab === "voice-profiles" && <VoiceProfiles />}
+            {activeTab === "speaking-history" && <SpeakingHistory />}
+            {activeTab === "voice-quality" && <VoiceQualityAnalyzer />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
