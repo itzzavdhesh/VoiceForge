@@ -4,6 +4,7 @@ import { useTheme } from "./ThemeContext";
 import { useEffect, useRef } from "react";
 import { AudioProcessor } from "../utils/audioProcessor";
 import { FaceProcessor } from "../utils/faceProcessor";
+import { applyAudioOutput } from "../utils/audioOutput";
 
 export default React.forwardRef(function VideoPreview({
   webcamStream,
@@ -12,16 +13,21 @@ export default React.forwardRef(function VideoPreview({
   onSpeakingChange,
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
   isCalibrating = false,
-  activeText = "",
-  subtitlesEnabled = true,
+  avatarImage = null,
+  subtitlesEnabled = false,
+  subtitleText = "",
   subtitleFontSize = "medium",
-  subtitleBgOpacity = 0.6
+  subtitleBgOpacity = "0.6",
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
   const audioRef = useRef(null);   
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
+  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
+  const subtitleTextRef = React.useRef(subtitleText);
+  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
+  const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
   const waveRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
@@ -32,60 +38,45 @@ export default React.forwardRef(function VideoPreview({
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
 
+  const pipVideoRef = React.useRef(null);
+  const isPiPSupported = typeof document !== "undefined" && document.pictureInPictureEnabled;
+
+  const togglePiP = async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        if (!pipVideoRef.current.srcObject) {
+          const stream = ref.current.captureStream(30);
+          pipVideoRef.current.srcObject = stream;
+          await pipVideoRef.current.play();
+        }
+        await pipVideoRef.current.requestPictureInPicture();
+      }
+    } catch (error) {
+      console.error("PiP error:", error);
+    }
+  };
   const [blurEnabled, setBlurEnabled] = React.useState(false);
   const segmenterRef = React.useRef(null);
   const isSegmentingRef = React.useRef(false);
   const maskCanvasRef = React.useRef(null);
-
-  const activeTextRef = React.useRef(activeText);
-  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
-  const subtitleBgOpacityRef = React.useRef(subtitleBgOpacity);
-
-  React.useEffect(() => {
-    activeTextRef.current = activeText;
-  }, [activeText]);
 
   React.useEffect(() => {
     subtitlesEnabledRef.current = subtitlesEnabled;
   }, [subtitlesEnabled]);
 
   React.useEffect(() => {
+    subtitleTextRef.current = subtitleText;
+  }, [subtitleText]);
+
+  React.useEffect(() => {
     subtitleFontSizeRef.current = subtitleFontSize;
   }, [subtitleFontSize]);
 
   React.useEffect(() => {
-    subtitleBgOpacityRef.current = subtitleBgOpacity;
+    subtitleBgOpacityRef.current = Number(subtitleBgOpacity);
   }, [subtitleBgOpacity]);
-
-  React.useEffect(() => {
-    function handleStorage(event) {
-      if (
-        (event.key === "voiceforge:voiceSettings" || event.type === "voiceforge:settingsChanged") &&
-        audioProcessorRef.current
-      ) {
-        try {
-          const saved = JSON.parse(localStorage.getItem("voiceforge:voiceSettings")) || {};
-          const proc = audioProcessorRef.current;
-          if (typeof saved.dspBass === "number") proc.setBass(saved.dspBass);
-          if (typeof saved.dspMid === "number") proc.setMid(saved.dspMid);
-          if (typeof saved.dspTreble === "number") proc.setTreble(saved.dspTreble);
-          if (typeof saved.dspPitch === "number") proc.setPitch(saved.dspPitch);
-          if (typeof saved.dspSpeed === "number" && audioRef.current) {
-            proc.setSpeed(saved.dspSpeed, audioRef.current);
-          }
-        } catch (e) {
-          console.error("Error syncing audio settings:", e);
-        }
-      }
-    }
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("voiceforge:settingsChanged", handleStorage);
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("voiceforge:settingsChanged", handleStorage);
-    };
-  }, []);
 
   React.useEffect(() => {
     async function initSegmenter() {
@@ -174,6 +165,7 @@ export default React.forwardRef(function VideoPreview({
         await faceProcessorRef.current.initialize();
 
         const ort = await import("onnxruntime-web");
+        ortRef.current = ort;
         ortSessionRef.current = await ort.InferenceSession.create(modelBytes);
         setModelStatus("ONNX Wav2Lip model loaded");
       } catch (err) {
@@ -204,6 +196,21 @@ export default React.forwardRef(function VideoPreview({
     }
   }, [webcamStream]);
 
+  React.useEffect(() => {
+    if (audioRef.current) {
+      applyAudioOutput(audioRef.current);
+    }
+  }, [audioUrl]);
+
+  React.useEffect(() => {
+    function handleOutputChange() {
+      if (audioRef.current) {
+        applyAudioOutput(audioRef.current);
+      }
+    }
+    window.addEventListener("voiceforge:audioOutputChanged", handleOutputChange);
+    return () => window.removeEventListener("voiceforge:audioOutputChanged", handleOutputChange);
+  }, []);
   React.useEffect(() => {
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
@@ -289,7 +296,19 @@ export default React.forwardRef(function VideoPreview({
       context.fillRect(0, 0, canvas.width, canvas.height);
 
       const video = videoRef.current;
-      if (video?.readyState >= 2) {
+      // Privacy mode: draw static avatar image with object-fit cover
+      if (avatarImage && avatarImage.complete && avatarImage.naturalWidth) {
+        const imgW = avatarImage.naturalWidth;
+        const imgH = avatarImage.naturalHeight;
+        const canW = canvas.width;
+        const canH = canvas.height;
+        const scale = Math.max(canW / imgW, canH / imgH);
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const dx = (canW - drawW) / 2;
+        const dy = (canH - drawH) / 2;
+        context.drawImage(avatarImage, dx, dy, drawW, drawH);
+      } else if (video?.readyState >= 2) {
         if (blurEnabled && segmenterRef.current) {
           if (!isSegmentingRef.current) {
             isSegmentingRef.current = true;
@@ -312,7 +331,7 @@ export default React.forwardRef(function VideoPreview({
         context.font = "600 24px Inter, sans-serif";
         context.textAlign = "center";
         context.fillText(
-          "Waiting for webcam",
+          avatarImage ? "Loading avatar..." : "Waiting for webcam",
           canvas.width / 2,
           canvas.height / 2,
         );
@@ -321,6 +340,7 @@ export default React.forwardRef(function VideoPreview({
       const drawMouth = isSpeaking || isCalibratingRef.current;
       if (drawMouth) {
         let inferenceSucceeded = false;
+        const useONNX = isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current;
 
         // Try ONNX Inference first
         if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
@@ -379,10 +399,10 @@ export default React.forwardRef(function VideoPreview({
             ? Math.max(0.5, Math.min(2.5, currentCalibration.scale))
             : 1.0;
 
-          const centerX = canvas.width / 2 + xOffset;
-          const centerY = canvas.height * 0.63 + yOffset;
-          const radiusX = 56 * scale;
-          const radiusY = mouthOpen * scale;
+          const centerX = Math.max(0, Math.min(canvas.width, canvas.width / 2 + xOffset));
+          const centerY = Math.max(0, Math.min(canvas.height, canvas.height * 0.63 + yOffset));
+          const radiusX = Math.max(0.01, 56 * scale);
+          const radiusY = Math.max(0.01, mouthOpen * scale);
 
           context.save();
           context.fillStyle = mouthColor;
@@ -396,7 +416,7 @@ export default React.forwardRef(function VideoPreview({
       if (isSpeaking && subtitlesEnabledRef.current) {
         drawSubtitles(
           context,
-          activeTextRef.current,
+          subtitleTextRef.current,
           subtitleFontSizeRef.current,
           subtitleBgOpacityRef.current
         );
@@ -417,7 +437,7 @@ export default React.forwardRef(function VideoPreview({
 
     animationRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animationRef.current);
-  }, [ref, isSpeaking, theme]);
+  }, [ref, isSpeaking, theme, avatarImage]);
 
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
@@ -425,18 +445,29 @@ export default React.forwardRef(function VideoPreview({
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             Lip-synced output
-            <button
-              onClick={() => setBlurEnabled(!blurEnabled)}
-              className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                blurEnabled 
-                  ? "bg-coral text-white" 
-                  : "bg-ink/10 text-ink/70 hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
-              }`}
-            >
-              {blurEnabled ? "Blur ON" : "Blur OFF"}
-            </button>
+            {!avatarImage && (
+              <button
+                onClick={() => setBlurEnabled(!blurEnabled)}
+                className={`ml-2 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  blurEnabled 
+                    ? "bg-coral text-white" 
+                    : "bg-ink/10 text-ink/70 hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
+                }`}
+              >
+                {blurEnabled ? "Blur ON" : "Blur OFF"}
+              </button>
+            )}
+            {isPiPSupported && (
+              <button
+                onClick={togglePiP}
+                className="ml-2 rounded-full bg-ink/10 px-3 py-1 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink/20 dark:bg-border dark:text-muted dark:hover:bg-border/80"
+                title="Pop out video preview"
+              >
+                PiP Mode
+              </button>
+            )}
           </h2>
-          <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+          <p className="mt-1 text-sm text-ink/65 dark:text-muted" aria-live="polite">
             {modelStatus}
           </p>
         </div>
@@ -458,10 +489,13 @@ export default React.forwardRef(function VideoPreview({
         )}
       </div>
       <video ref={videoRef} autoPlay muted playsInline className="hidden" />
+      <video ref={pipVideoRef} autoPlay muted playsInline className="hidden" />
       <canvas
         ref={ref}
         width="960"
         height="540"
+        role="img"
+        aria-label="Lip-synced video output preview"
         className="aspect-video w-full rounded-md bg-black object-cover"
       />
       {audioUrl && (
@@ -472,9 +506,8 @@ export default React.forwardRef(function VideoPreview({
           controls
           src={audioUrl}
           autoPlay
-          onPlay={() => {
-            onSpeakingChange?.(true);
-          }}
+          aria-label="Generated speech audio playback"
+          onPlay={() => onSpeakingChange?.(true)}
           onPause={() => onSpeakingChange?.(false)}
           onEnded={() => onSpeakingChange?.(false)}
           onError={() => onSpeakingChange?.(false)}

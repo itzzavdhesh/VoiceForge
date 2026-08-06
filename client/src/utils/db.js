@@ -2,7 +2,8 @@
 
 const DB_NAME = "voiceforge_db";
 const STORE_NAME = "profiles";
-const DB_VERSION = 1;
+const AUDIO_STORE_NAME = "audio_cache";
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -36,6 +37,9 @@ function getDB() {
         const db = event.target.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME, { keyPath: "voice_id" });
+        }
+        if (!db.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+          db.createObjectStore(AUDIO_STORE_NAME, { keyPath: "id" });
         }
       };
     } catch (err) {
@@ -134,5 +138,30 @@ export async function clearStorage() {
     request.onerror = (event) => {
       reject(new Error("Failed to clear storage: " + (event.target.error?.message || "Unknown error")));
     };
+  });
+}
+
+export async function saveAudioBlob(id, blob) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(AUDIO_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(AUDIO_STORE_NAME);
+    const request = store.put({ id, blob, timestamp: Date.now() });
+
+    request.onsuccess = () => resolve(true);
+    request.onerror = (event) => reject(new Error("Failed to save audio blob: " + event.target.error?.message));
+  });
+}
+
+export async function getAudioBlob(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(AUDIO_STORE_NAME, "readonly");
+    const store = transaction.objectStore(AUDIO_STORE_NAME);
+    const request = store.get(id);
+
+    request.onsuccess = () => resolve(request.result?.blob || null);
+    request.onerror = (event) => reject(new Error("Failed to get audio blob: " + event.target.error?.message));
   });
 }
