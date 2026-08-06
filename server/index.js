@@ -26,8 +26,8 @@ const app = express();
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-// Global rate limiter: 100 requests per 15 minutes per IP
-const globalLimiter = rateLimit({
+// Health endpoint rate limiter: 100 requests per 15 minutes per IP
+const healthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
@@ -36,7 +36,6 @@ const globalLimiter = rateLimit({
     res.status(429).json({ error: "Too Many Requests" })
 });
 
-app.use(globalLimiter);
 // Enable trust proxy so rate limiters can identify real client IPs
 // behind reverse proxies (e.g., load balancers, CDNs).
 // Set to 1 for single-hop proxies; adjust based on your deployment topology.
@@ -45,7 +44,7 @@ app.set("trust proxy", 1);
 app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/api/health", (_request, response) => {
+app.get("/api/health", healthLimiter, (_request, response) => {
   response.json({ ok: true, service: "voiceforge-api" });
 });
 

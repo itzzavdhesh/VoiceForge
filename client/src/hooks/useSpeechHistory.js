@@ -12,6 +12,7 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
+const MAX_FAVORITES = 10;
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -195,9 +196,6 @@ export function useSpeechHistory() {
       tags: Array.isArray(item.tags) ? item.tags : [],
     }));
   });
-  const [favorites, setFavorites] = useState(
-    () => new Set(readStorage(FAVS_KEY, []))
-  );
   const [favorites, setFavorites] = useState(() => {
     const loadedHistory = sanitizeHistoryEntries(readStorage(HISTORY_KEY, []));
     const loadedFavoriteIds = readStorage(FAVS_KEY, []);

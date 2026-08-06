@@ -55,6 +55,24 @@ export async function getActiveVoiceProfile() {
   return profiles.find((profile) => profile.voice_id === activeVoiceId) || profiles[0] || null;
 }
 
+export function subscribeProfileChanges(callback) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleStorage(e) {
+    if (e.key === ACTIVE_KEY || !e.key) {
+      callback();
+    }
+  }
+
+  window.addEventListener("voiceforge:profileChanged", callback);
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    window.removeEventListener("voiceforge:profileChanged", callback);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
 export default function useVoiceClone() {
   const [status, setStatus] = React.useState("idle");
   const [error, setError] = React.useState("");

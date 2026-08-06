@@ -14,12 +14,20 @@ export default React.forwardRef(function VideoPreview({
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
   isCalibrating = false,
   avatarImage = null,
+  subtitlesEnabled = false,
+  subtitleText = "",
+  subtitleFontSize = "medium",
+  subtitleBgOpacity = "0.6",
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
   const audioRef = useRef(null);   
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
+  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
+  const subtitleTextRef = React.useRef(subtitleText);
+  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
+  const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
   const waveRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
@@ -49,11 +57,26 @@ export default React.forwardRef(function VideoPreview({
       console.error("PiP error:", error);
     }
   };
-
   const [blurEnabled, setBlurEnabled] = React.useState(false);
   const segmenterRef = React.useRef(null);
   const isSegmentingRef = React.useRef(false);
   const maskCanvasRef = React.useRef(null);
+
+  React.useEffect(() => {
+    subtitlesEnabledRef.current = subtitlesEnabled;
+  }, [subtitlesEnabled]);
+
+  React.useEffect(() => {
+    subtitleTextRef.current = subtitleText;
+  }, [subtitleText]);
+
+  React.useEffect(() => {
+    subtitleFontSizeRef.current = subtitleFontSize;
+  }, [subtitleFontSize]);
+
+  React.useEffect(() => {
+    subtitleBgOpacityRef.current = Number(subtitleBgOpacity);
+  }, [subtitleBgOpacity]);
 
   React.useEffect(() => {
     async function initSegmenter() {
@@ -273,7 +296,6 @@ export default React.forwardRef(function VideoPreview({
       context.fillRect(0, 0, canvas.width, canvas.height);
 
       const video = videoRef.current;
-
       // Privacy mode: draw static avatar image with object-fit cover
       if (avatarImage && avatarImage.complete && avatarImage.naturalWidth) {
         const imgW = avatarImage.naturalWidth;
@@ -394,7 +416,7 @@ export default React.forwardRef(function VideoPreview({
       if (isSpeaking && subtitlesEnabledRef.current) {
         drawSubtitles(
           context,
-          activeTextRef.current,
+          subtitleTextRef.current,
           subtitleFontSizeRef.current,
           subtitleBgOpacityRef.current
         );
@@ -445,7 +467,7 @@ export default React.forwardRef(function VideoPreview({
               </button>
             )}
           </h2>
-          <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+          <p className="mt-1 text-sm text-ink/65 dark:text-muted" aria-live="polite">
             {modelStatus}
           </p>
         </div>
@@ -472,6 +494,8 @@ export default React.forwardRef(function VideoPreview({
         ref={ref}
         width="960"
         height="540"
+        role="img"
+        aria-label="Lip-synced video output preview"
         className="aspect-video w-full rounded-md bg-black object-cover"
       />
       {audioUrl && (
@@ -482,9 +506,8 @@ export default React.forwardRef(function VideoPreview({
           controls
           src={audioUrl}
           autoPlay
-          onPlay={() => {
-            onSpeakingChange?.(true);
-          }}
+          aria-label="Generated speech audio playback"
+          onPlay={() => onSpeakingChange?.(true)}
           onPause={() => onSpeakingChange?.(false)}
           onEnded={() => onSpeakingChange?.(false)}
           onError={() => onSpeakingChange?.(false)}
