@@ -1,41 +1,42 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, ShieldCheck } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
+import DeviceSelector from "../components/DeviceSelector.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { getStoredValue, setStoredValue } from "../utils/storage.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
   const [cameraError, setCameraError] = React.useState("");
+  const [retryCamera, setRetryCamera] = React.useState(0);
   const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
+  const [subtitleText, setSubtitleText] = React.useState("");
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
-  
-  const [activeText, setActiveText] = React.useState("");
+  const [privacyMode, setPrivacyMode] = React.useState(false);
+  const [avatarImage, setAvatarImage] = React.useState(null);
+  const [videoDevices, setVideoDevices] = React.useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitlesEnabled") !== "false";
-    } catch { return true; }
+    return getStoredValue("voiceforge:subtitlesEnabled") === "true";
   });
   const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
-    } catch { return "medium"; }
+    return getStoredValue("voiceforge:subtitleFontSize", "medium");
   });
   const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
-    } catch { return "0.6"; }
+    return getStoredValue("voiceforge:subtitleBgOpacity", "0.6");
   });
 
   React.useEffect(() => {
@@ -68,10 +69,9 @@ export default function Call() {
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);
   const [calibration, setCalibration] = React.useState(() => {
-  try {
-    const savedX     = localStorage.getItem("voiceforge:calibrationXOffset");
-    const savedY     = localStorage.getItem("voiceforge:calibrationYOffset");
-    const savedScale = localStorage.getItem("voiceforge:calibrationScale");
+    const savedX = getStoredValue("voiceforge:calibrationXOffset");
+    const savedY = getStoredValue("voiceforge:calibrationYOffset");
+    const savedScale = getStoredValue("voiceforge:calibrationScale");
 
     let x = savedX !== null ? parseInt(savedX, 10) : 0;
     let y = savedY !== null ? parseInt(savedY, 10) : 0;
@@ -99,12 +99,9 @@ export default function Call() {
     return {
       xOffset: x,
       yOffset: y,
-      scale
+      scale,
     };
-  } catch {
-    return { xOffset: 0, yOffset: 0, scale: 1.0 };
-  }
-});
+  });
 
   const handleCalibrationChange = (key, value) => {
     let parsedValue = typeof value === "string" ? parseFloat(value) : value;
@@ -121,12 +118,10 @@ export default function Call() {
 
     setCalibration((prev) => {
       const updated = { ...prev, [key]: parsedValue };
-      try {
-        localStorage.setItem(
-          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-          parsedValue.toString()
-        );
-      } catch { /* storage unavailable – continue without persisting */ }
+      setStoredValue(
+        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+        parsedValue.toString()
+      );
       return updated;
     });
   };
@@ -134,75 +129,119 @@ export default function Call() {
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
     setCalibration(defaults);
-    localStorage.setItem("voiceforge:calibrationXOffset", "0");
-    localStorage.setItem("voiceforge:calibrationYOffset", "0");
-    localStorage.setItem("voiceforge:calibrationScale", "1.0");
+    setStoredValue("voiceforge:calibrationXOffset", "0");
+    setStoredValue("voiceforge:calibrationYOffset", "0");
+    setStoredValue("voiceforge:calibrationScale", "1.0");
   };
 
- React.useEffect(() => {
-  let activeStream = null;
-  let isMounted = true;
+  React.useEffect(() => {
+    let activeStream = null;
+    let isMounted = true;
 
-  async function openCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
+    async function fetchDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputDevices = devices.filter((device) => device.kind === "videoinput");
+        if (isMounted) {
+          setVideoDevices(videoInputDevices);
+        }
+      } catch (err) {
+        console.error("Failed to enumerate devices", err);
+      }
+    }
 
-      // Prevent webcam resource leak if component unmounts
-      // before getUserMedia resolves.
-      if (!isMounted) {
-        stream.getTracks().forEach((track) => track.stop());
+    async function openCamera() {
+      if (privacyMode) {
+        setWebcamStream(null);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = null;
+        }
         return;
       }
 
-      activeStream = stream;
-      setWebcamStream(stream);
+      try {
+        const constraints = {
+          video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
+          audio: false,
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
+        if (!isMounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        activeStream = stream;
+        setWebcamStream(stream);
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        setCameraError("");
+        
+        await fetchDevices();
+        
+        if (isMounted && stream.getVideoTracks().length > 0) {
+          const track = stream.getVideoTracks()[0];
+          const settings = track.getSettings();
+          if (settings.deviceId && !selectedDeviceId) {
+             setSelectedDeviceId(settings.deviceId);
+          }
+        }
+      } catch (webcamError) {
+        if (!isMounted) return;
+        setCameraError(webcamError?.message || String(webcamError));
+        showToast("Camera access failed", "error");
       }
+    }
 
-      setCameraError("");
-    } catch (webcamError) {
-      if (!isMounted) return;
+    openCamera();
+    
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', fetchDevices);
+    }
 
-      setCameraError(webcamError?.message || String(webcamError));
-      showToast("Camera access failed", "error");
+    return () => {
+      isMounted = false;
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', fetchDevices);
+      }
+      if (activeStream) {
+        activeStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [showToast, retryCamera, privacyMode, selectedDeviceId]);
+
+  async function handleSpeak(text, voice_settings_override) {
+    if (!activeProfile?.voice_id) return;
+
+    setSubtitleText(text || "");
+
+    try {
+      const result = await speak({
+        text,
+        voiceId: activeProfile.voice_id,
+        language_code: language,
+        voice_settings_override,
+      });
+
+      if (result?.fallback) {
+        showToast("Using browser voice fallback", "info");
+      }
+    } catch (err) {
+      console.error("TTS streaming error:", err);
+      showToast("Speech generation failed", "error");
     }
   }
 
-  openCamera();
-
-  return () => {
-    isMounted = false;
-
-    if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
+  const handleSpeakingChange = (value) => {
+    setIsSpeaking(value);
+    if (!value) {
+      setSubtitleText("");
     }
   };
-}, [showToast]);
-
-  async function handleSpeak(text) {
-  if (!activeProfile?.voice_id) return;
-
-  try {
-    setActiveText(text);
-    const result = await speak({
-      text,
-      voiceId: activeProfile.voice_id,
-      language_code: language,
-    });
-
-    if (result?.fallback) {
-      showToast("Using browser voice fallback", "info");
-    }
-  } catch (err) {
-    console.error("TTS streaming error:", err);
-    showToast("Speech generation failed", "error");
-  }
-}
 
   return (
     <div className="space-y-5">
@@ -234,18 +273,24 @@ export default function Call() {
       </section>
 
       {dbError && (
-        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+        <div role="alert" className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
           <CircleAlert size={18} aria-hidden="true" />
           <span>Database Error: {dbError}. Please ensure IndexedDB is enabled and not blocked.</span>
         </div>
       )}
 
       {!activeProfile && !dbError && (
-        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+        <div role="alert" className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
           <CircleAlert size={18} aria-hidden="true" />
           Create or select a voice profile before speaking.
         </div>
       )}
+
+      <PrivacyModeToggle
+        onModeChange={setPrivacyMode}
+        onAvatarChange={setAvatarImage}
+        showToast={showToast}
+      />
 
       {/* Mouth Calibration Drawer */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
@@ -253,10 +298,12 @@ export default function Call() {
           id="toggle-calibration-btn"
           type="button"
           onClick={() => setIsCalibrationOpen(!isCalibrationOpen)}
+          aria-expanded={isCalibrationOpen}
+          aria-controls="calibration-panel"
           className="flex w-full items-center justify-between font-bold text-ink"
         >
           <div className="flex items-center gap-2">
-            <Sliders size={18} className="text-moss" />
+            <Sliders size={18} className="text-moss" aria-hidden="true" />
             <h2 className="text-base font-bold">Mouth Calibration Settings</h2>
           </div>
           <ChevronDown
@@ -267,7 +314,7 @@ export default function Call() {
         </button>
 
         {isCalibrationOpen && (
-          <div className="mt-4 border-t border-ink/10 pt-4">
+          <div id="calibration-panel" className="mt-4 border-t border-ink/10 pt-4">
             <p className="text-sm text-ink/65 mb-4">
               Calibrate the audio-driven mouth position and size overlay to align with your camera.
             </p>
@@ -289,6 +336,10 @@ export default function Call() {
                   step="1"
                   value={calibration.xOffset}
                   onChange={(e) => handleCalibrationChange("xOffset", parseInt(e.target.value, 10))}
+                  aria-label="Horizontal position X offset"
+                  aria-valuemin={-400}
+                  aria-valuemax={400}
+                  aria-valuenow={calibration.xOffset}
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -309,6 +360,10 @@ export default function Call() {
                   step="1"
                   value={calibration.yOffset}
                   onChange={(e) => handleCalibrationChange("yOffset", parseInt(e.target.value, 10))}
+                  aria-label="Vertical position Y offset"
+                  aria-valuemin={-250}
+                  aria-valuemax={150}
+                  aria-valuenow={calibration.yOffset}
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -329,6 +384,10 @@ export default function Call() {
                   step="0.1"
                   value={calibration.scale}
                   onChange={(e) => handleCalibrationChange("scale", parseFloat(e.target.value))}
+                  aria-label="Mouth size scale"
+                  aria-valuemin={0.5}
+                  aria-valuemax={2.5}
+                  aria-valuenow={calibration.scale}
                   className="w-full h-2 rounded-lg bg-cloud border border-ink/10 appearance-none cursor-pointer accent-moss focus:outline-none"
                 />
               </div>
@@ -338,6 +397,7 @@ export default function Call() {
                 id="reset-calibration-btn"
                 type="button"
                 onClick={handleResetCalibration}
+                aria-label="Reset calibration to default values"
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-coral/40 px-3 py-1.5 text-xs font-bold text-coral hover:bg-coral hover:text-white transition"
               >
                 <RotateCcw size={14} aria-hidden="true" />
@@ -372,7 +432,7 @@ export default function Call() {
               checked={subtitlesEnabled}
               onChange={(e) => {
                 setSubtitlesEnabled(e.target.checked);
-                localStorage.setItem("voiceforge:subtitlesEnabled", e.target.checked.toString());
+                setStoredValue("voiceforge:subtitlesEnabled", e.target.checked.toString());
               }}
               className="sr-only peer"
             />
@@ -394,7 +454,7 @@ export default function Call() {
                 value={subtitleFontSize}
                 onChange={(e) => {
                   setSubtitleFontSize(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleFontSize", e.target.value);
+                  setStoredValue("voiceforge:subtitleFontSize", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -413,7 +473,7 @@ export default function Call() {
                 value={subtitleBgOpacity}
                 onChange={(e) => {
                   setSubtitleBgOpacity(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleBgOpacity", e.target.value);
+                  setStoredValue("voiceforge:subtitleBgOpacity", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -429,28 +489,60 @@ export default function Call() {
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
-          <div className="mb-4 flex items-center gap-2">
-            <Camera
-              size={19}
-              aria-hidden="true"
-              className="dark:text-neutral-300"
-            />
-            <h2 className="text-lg font-bold dark:text-neutral-100">
-              Live webcam
-            </h2>
-          </div>
-          {/* Video element: bg-black already looks fine in dark mode */}
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="aspect-video w-full rounded-md bg-black object-cover"
-          />
-          {cameraError && (
-            <p className="mt-3 text-sm font-semibold text-coral">
-              {cameraError}
-            </p>
+          {privacyMode ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="mb-4 rounded-full bg-moss/20 p-4 text-moss dark:bg-glow/20 dark:text-glow">
+                <ShieldCheck size={32} aria-hidden="true" />
+              </div>
+              <h2 className="text-lg font-bold dark:text-neutral-100">
+                Privacy Mode Active
+              </h2>
+              <p className="mt-2 text-sm text-ink/65 dark:text-muted">
+                Your camera is disabled.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Camera
+                    size={19}
+                    aria-hidden="true"
+                    className="dark:text-neutral-300"
+                  />
+                  <h2 className="text-lg font-bold dark:text-neutral-100">
+                    Live webcam
+                  </h2>
+                </div>
+                <DeviceSelector 
+                  devices={videoDevices} 
+                  selectedDeviceId={selectedDeviceId} 
+                  onChange={setSelectedDeviceId} 
+                />
+              </div>
+              {/* Video element: bg-black already looks fine in dark mode */}
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                aria-label="Live webcam feed"
+                className="aspect-video w-full rounded-md bg-black object-cover"
+              />
+              {cameraError && (
+                <div className="mt-3 flex flex-col gap-2 items-start" role="alert" aria-live="polite">
+                  <p className="text-sm font-semibold text-coral">
+                    {cameraError}
+                  </p>
+                  <button
+                    onClick={() => setRetryCamera(prev => prev + 1)}
+                    className="rounded-md border border-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-bold text-coral hover:bg-coral hover:text-white transition"
+                  >
+                    Retry Camera
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
 
@@ -465,13 +557,14 @@ export default function Call() {
           webcamStream={webcamStream}
           audioUrl={audioUrl}
           isSpeaking={isSpeaking}
-          onSpeakingChange={setIsSpeaking}
+          onSpeakingChange={handleSpeakingChange}
           calibration={calibration}
           isCalibrating={isCalibrationOpen}
-          activeText={activeText}
+          avatarImage={avatarImage}
           subtitlesEnabled={subtitlesEnabled}
+          subtitleText={subtitleText}
           subtitleFontSize={subtitleFontSize}
-          subtitleBgOpacity={parseFloat(subtitleBgOpacity)}
+          subtitleBgOpacity={subtitleBgOpacity}
         />
       </div>
 
