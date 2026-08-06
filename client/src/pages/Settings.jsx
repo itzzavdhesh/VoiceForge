@@ -7,19 +7,26 @@ import {
   VOICE_PRESETS,
 } from "../utils/voiceSettings.js";
 import {
+  loadAccessibilitySettings,
+  persistAccessibilitySettings,
+  ACCESSIBILITY_SETTINGS_CHANGED_EVENT,
+  ACCESSIBILITY_SETTINGS_KEY
+} from "../utils/accessibilitySettings.js";
+import {
   loadLanguage,
   persistLanguage,
   getLanguageByCode,
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Webcam } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
+  subscribeProfileChanges,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
@@ -42,6 +49,7 @@ function AudioPlayback({ blob }) {
     <audio
       src={audioUrl}
       controls
+      aria-label="Generated speech audio playback"
       className="mt-2 h-8 w-full max-w-xs"
     />
   );
@@ -64,6 +72,7 @@ export default function Settings() {
       }
     }
     loadProfiles();
+    return subscribeProfileChanges(loadProfiles);
   }, []);
 
 
@@ -71,6 +80,14 @@ export default function Settings() {
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
+
+  const [accSettings, setAccSettings] = React.useState(loadAccessibilitySettings);
+  
+  function saveAccSettings(newSettings) {
+    setAccSettings(newSettings);
+    persistAccessibilitySettings(newSettings);
+    window.dispatchEvent(new Event(ACCESSIBILITY_SETTINGS_CHANGED_EVENT));
+  }
 
 
   function saveVoiceSettings(newSettings) {
@@ -275,6 +292,7 @@ export default function Settings() {
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        accessibilitySettings: localStorage.getItem(ACCESSIBILITY_SETTINGS_KEY),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
@@ -358,15 +376,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({
@@ -389,6 +408,7 @@ export default function Settings() {
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
         voiceSettings: "voiceforge:voiceSettings",
+        accessibilitySettings: ACCESSIBILITY_SETTINGS_KEY,
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
@@ -410,6 +430,7 @@ export default function Settings() {
       const loaded = await getSavedProfiles();
       setProfiles(loaded);
       setVoiceSettings(loadVoiceSettings());
+      setAccSettings(loadAccessibilitySettings());
       setLanguage(loadLanguage());
       event.target.value = "";
     } catch (err) {
@@ -466,6 +487,25 @@ export default function Settings() {
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
         
         <div className="mb-6">
           <label className="mb-3 block text-sm font-bold text-ink dark:text-neutral-200">
@@ -536,6 +576,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.stability}
+              aria-label="Stability"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -551,6 +592,7 @@ export default function Settings() {
               id="temperature"
               type="range"
               min="0" max="1" step="0.01"
+              aria-label="Temperature"
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"
@@ -568,6 +610,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.style}
+              aria-label="Style Exaggeration"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -662,6 +705,59 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Accessibility ─────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center gap-2 mb-1">
+          <Webcam size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <h2 className="text-xl font-bold">Accessibility</h2>
+        </div>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Enable hands-free navigation using your webcam to track head movements.
+        </p>
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-bold block" htmlFor="webcam-nav-toggle">
+                Webcam Navigation
+              </label>
+              <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+                Control the cursor with your head. Click by dwelling over an element.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                id="webcam-nav-toggle"
+                type="checkbox"
+                className="peer sr-only"
+                checked={accSettings.webcamNavigationEnabled}
+                onChange={(e) => saveAccSettings({ ...accSettings, webcamNavigationEnabled: e.target.checked })}
+              />
+              <div className="peer h-6 w-11 rounded-full bg-ink/20 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-moss peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-moss dark:bg-ink/60 dark:peer-checked:bg-glow dark:peer-focus:ring-glow"></div>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dwell-time">
+              <span>Dwell Time (Click Delay)</span>
+              <span className="text-ink/65">{accSettings.dwellTime / 1000}s</span>
+            </label>
+            <input
+              id="dwell-time"
+              type="range"
+              min="500" max="3000" step="100"
+              value={accSettings.dwellTime}
+              onChange={(e) => saveAccSettings({ ...accSettings, dwellTime: parseInt(e.target.value, 10) })}
+              className="w-full mt-2"
+              disabled={!accSettings.webcamNavigationEnabled}
+            />
+            <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+              How long you must look at a button before it clicks.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── Language & Region ─────────────────────────────────────────── */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <div className="flex items-center gap-2 mb-1">
@@ -717,6 +813,15 @@ export default function Settings() {
         </p>
       </section>
 
+      {/* ── Audio & Hardware ───────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-4 dark:text-muted">
+          Configure hardware routing for synthesized speech playback across video calls and webcams.
+        </p>
+        <AudioOutputSelector />
+      </section>
+
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Backup & Restore</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
@@ -743,6 +848,7 @@ export default function Settings() {
               id="import-config-file"
               type="file"
               accept=".json"
+              aria-label="Choose backup file to import"
               onChange={handleImport}
               className="sr-only"
             />

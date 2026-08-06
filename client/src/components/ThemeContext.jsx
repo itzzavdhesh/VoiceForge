@@ -10,7 +10,10 @@ function getStoredTheme() {
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
+  return null; // Return null if no explicit user preference is saved
+}
 
+function getSystemTheme() {
   try {
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : DEFAULT_THEME;
   } catch {
@@ -18,16 +21,8 @@ function getStoredTheme() {
   }
 }
 
-function storeTheme(theme) {
-  try {
-    localStorage.setItem("voiceforge:theme", theme);
-  } catch {
-    // Theme still works for the current session when persistence is unavailable.
-  }
-}
-
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = React.useState(getStoredTheme);
+  const [theme, setTheme] = React.useState(() => getStoredTheme() || getSystemTheme());
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -36,11 +31,33 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove("dark");
     }
-    storeTheme(theme);
   }, [theme]);
 
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e) => {
+      // Only dynamically sync with OS if user hasn't explicitly overridden the theme
+      if (!getStoredTheme()) {
+        setTheme(e.matches ? "dark" : "light");
+      }
+    };
+
+    if (mediaQuery?.addEventListener) {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+  }, []);
+
   function toggleTheme() {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    setTheme((prev) => {
+      const nextTheme = prev === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("voiceforge:theme", nextTheme);
+      } catch {
+        // Storage can be unavailable
+      }
+      return nextTheme;
+    });
   }
 
   return (
