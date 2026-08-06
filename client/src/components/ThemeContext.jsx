@@ -10,7 +10,10 @@ function getStoredTheme() {
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
+  return null; // Return null if no explicit user preference is saved
+}
 
+function getSystemTheme() {
   try {
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : DEFAULT_THEME;
   } catch {
@@ -53,7 +56,6 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove("dark");
     }
-    storeTheme(theme);
   }, [theme]);
 
   React.useEffect(() => {
@@ -67,7 +69,15 @@ export function ThemeProvider({ children }) {
   }, [isHighContrast]);
 
   function toggleTheme() {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    setTheme((prev) => {
+      const nextTheme = prev === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("voiceforge:theme", nextTheme);
+      } catch {
+        // Storage can be unavailable
+      }
+      return nextTheme;
+    });
   }
 
   function toggleHighContrast() {
