@@ -50,6 +50,8 @@ export function receiveDataInChunks(dataChannel, onComplete) {
         const msg = JSON.parse(event.data);
         if (msg.type === 'metadata') {
           expectedSize = msg.size;
+          receivedBytes = [];
+          currentSize = 0;
         } else if (msg.type === 'eof') {
           // Reconstruct
           const totalBuffer = new Uint8Array(currentSize);
@@ -61,6 +63,11 @@ export function receiveDataInChunks(dataChannel, onComplete) {
           const decoder = new TextDecoder();
           const jsonStr = decoder.decode(totalBuffer);
           const data = JSON.parse(jsonStr);
+
+          // Reset receiver state for next transfer
+          receivedBytes = [];
+          currentSize = 0;
+
           onComplete(data);
         }
       } catch (e) {
