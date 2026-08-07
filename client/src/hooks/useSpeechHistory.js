@@ -12,7 +12,6 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
-const MAX_FAVORITES = 10;
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -205,13 +204,6 @@ export function useSpeechHistory() {
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
   const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
 
-  // Mirrors `favorites` so addMessage can read the latest pinned ids
-  // without depending on `favorites` state (keeps addMessage's identity stable).
-  const favoritesRef = useRef(favorites);
-  useEffect(() => {
-    favoritesRef.current = favorites;
-  }, [favorites]);
-
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
     try {
@@ -271,14 +263,14 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
     const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };
