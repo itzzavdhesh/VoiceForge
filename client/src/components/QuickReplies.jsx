@@ -6,13 +6,13 @@ const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const DEFAULT_QUICK_REPLIES = [
-  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social" },
-  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social" },
-  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent" },
-  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent" },
-  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
-  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
-  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs" },
+  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social", hotkey: "1" },
+  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social", hotkey: "2" },
+  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent", hotkey: "3" },
+  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent", hotkey: "4" },
+  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs", hotkey: "5" },
+  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social", hotkey: "6" },
+  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs", hotkey: "7" },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
@@ -27,9 +27,10 @@ export function QuickReplies({ onSelect, showToast }) {
         Array.isArray(parsed) &&
         parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
       ) {
-        return parsed.map((item) => ({
+        return parsed.map((item, idx) => ({
           ...item,
           id: item.id || generateId(),
+          hotkey: item.hotkey || String(idx + 1),
           category: item.category && CATEGORIES.includes(item.category) ? item.category : "General",
         }));
       }
@@ -46,6 +47,7 @@ export function QuickReplies({ onSelect, showToast }) {
   const [newPhrase, setNewPhrase] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [newCategory, setNewCategory] = useState("General");
+  const tablistRef = React.useRef(null);
 
   useEffect(() => {
     try {
@@ -56,28 +58,29 @@ export function QuickReplies({ onSelect, showToast }) {
   }, [replies]);
 
   useEffect(() => {
-    function handleSync() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setReplies(parsed);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to sync quick replies:", err);
+    function handleKeyDown(event) {
+      if (isEditing || isAdding) return;
+      const target = event.target;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (isInput) return;
+
+      const matchedReply = replies.find(
+        (r) => r.hotkey && r.hotkey.toLowerCase() === event.key.toLowerCase()
+      );
+      if (matchedReply && onSelect) {
+        event.preventDefault();
+        onSelect(matchedReply.phrase);
       }
     }
 
-    window.addEventListener("storage", handleSync);
-    window.addEventListener("voiceforge:quickRepliesChanged", handleSync);
-
-    return () => {
-      window.removeEventListener("storage", handleSync);
-      window.removeEventListener("voiceforge:quickRepliesChanged", handleSync);
-    };
-  }, []);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [replies, isEditing, isAdding, onSelect]);
 
   const handleAdd = (e) => {
     e.preventDefault();
@@ -161,6 +164,30 @@ export function QuickReplies({ onSelect, showToast }) {
     return reply.category === selectedCategoryTab;
   });
 
+  const allCats = ["All", ...CATEGORIES];
+
+  const handleTabKeyDown = (e) => {
+    const currentIndex = allCats.indexOf(selectedCategoryTab);
+    let nextIndex = -1;
+
+    if (e.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % allCats.length;
+    } else if (e.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + allCats.length) % allCats.length;
+    } else if (e.key === "Home") {
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      nextIndex = allCats.length - 1;
+    }
+
+    if (nextIndex >= 0) {
+      e.preventDefault();
+      setSelectedCategoryTab(allCats[nextIndex]);
+      const buttons = tablistRef.current?.querySelectorAll('[role="tab"]');
+      buttons?.[nextIndex]?.focus();
+    }
+  };
+
   return (
     <section
       aria-labelledby="qr-heading"
@@ -206,18 +233,23 @@ export function QuickReplies({ onSelect, showToast }) {
 
       {/* Category Tabs */}
       <div
+        ref={tablistRef}
         className="mb-3 flex overflow-x-auto gap-1.5 pb-1 no-scrollbar"
         role="tablist"
         aria-label="Quick replies categories"
+        onKeyDown={handleTabKeyDown}
       >
-        {["All", ...CATEGORIES].map((cat) => (
+        {allCats.map((cat) => (
           <button
             key={cat}
             role="tab"
             aria-selected={selectedCategoryTab === cat}
+            aria-controls={`tabpanel-${cat}`}
+            tabIndex={selectedCategoryTab === cat ? 0 : -1}
             onClick={() => setSelectedCategoryTab(cat)}
             className={[
               "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150 shrink-0",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-black",
               selectedCategoryTab === cat
                 ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-surface dark:hover:text-neutral-300",
@@ -229,7 +261,7 @@ export function QuickReplies({ onSelect, showToast }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
-        {filteredReplies.map(({ id, label, phrase, category }) => {
+        {filteredReplies.map(({ id, label, phrase, category, hotkey }) => {
           const isCurrentlyEditing = editingReplyId === id;
 
           if (isEditing) {
@@ -314,7 +346,7 @@ export function QuickReplies({ onSelect, showToast }) {
               key={id}
               onClick={() => onSelect(phrase)}
               className={[
-                "rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5",
+                "inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5",
                 "text-sm text-neutral-700 transition-all duration-150",
                 "hover:-translate-y-px hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1",
@@ -322,9 +354,14 @@ export function QuickReplies({ onSelect, showToast }) {
                 "dark:border-border dark:bg-surface dark:text-neutral-300",
                 "dark:hover:border-blue-500 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:focus:ring-offset-black",
               ].join(" ")}
-              aria-label={`Quick reply: ${phrase}`}
+              aria-label={`Quick reply: ${phrase} (Hotkey: ${hotkey || "None"})`}
             >
-              {label}
+              <span>{label}</span>
+              {hotkey && (
+                <span className="rounded bg-neutral-200/80 px-1 py-0.5 font-mono text-[10px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                  {hotkey}
+                </span>
+              )}
             </button>
           );
         })}
@@ -340,6 +377,7 @@ export function QuickReplies({ onSelect, showToast }) {
               onChange={(e) => setNewPhrase(e.target.value)}
               maxLength={120}
               placeholder="New reply..."
+              aria-label="New quick reply phrase"
               autoFocus
               className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />

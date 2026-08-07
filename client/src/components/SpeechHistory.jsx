@@ -1,16 +1,22 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, Archive, HardDrive } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
+
+export function escapeRegExp(string = "") {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export function SpeechHistory({history,
   favorites,
   sessionTranscript = [],
+  storageStats,
   onReuse,
   onReplay,
   onToggleFav,
   onDelete,
   onClearHistory,
+  onArchive,
   onCopy,
   onImportBackup,
   showToast,
@@ -110,10 +116,11 @@ export function SpeechHistory({history,
     }
 
     if (debouncedSearch.trim()) {
-      const query = debouncedSearch.toLowerCase();
-      messages = messages.filter((message) => 
+      const sanitized = escapeRegExp(debouncedSearch.trim()).toLowerCase();
+      const query = debouncedSearch.toLowerCase().trim();
+      messages = messages.filter((message) =>
         message.text.toLowerCase().includes(query) ||
-        (message.tags && message.tags.some(t => t.toLowerCase().includes(query)))
+        message.text.toLowerCase().includes(sanitized)
       );
     }
 
@@ -162,6 +169,7 @@ export function SpeechHistory({history,
 
   URL.revokeObjectURL(url);
 }
+
 function handleExportJson() {
   if (!sessionTranscript || sessionTranscript.length === 0) return;
 
@@ -181,6 +189,32 @@ function handleExportJson() {
 
   a.href = url;
   a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function handleExportCsv() {
+  if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+  const headers = ["Timestamp", "Text", "Status", "Language"];
+  const rows = sessionTranscript.map((item) => [
+    escapeCSVCell(new Date(item.timestamp).toISOString()),
+    escapeCSVCell(item.text),
+    escapeCSVCell(item.status ?? "unknown"),
+    escapeCSVCell(item.language ?? "en-US"),
+  ]);
+
+  const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map((row) => row.join(","))].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.csv`;
 
   document.body.appendChild(a);
   a.click();
@@ -386,11 +420,56 @@ function handleExportJson() {
     </button>
 
     <button
+      onClick={handleExportCsv}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+    >
+      <Download size={13} aria-hidden="true" />
+      Export CSV
+    </button>
+
+    <button
       onClick={handleExportJson}
       className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
     >
       <Download size={13} aria-hidden="true" />
       Export JSON
+    </button>
+  </div>
+)}
+
+{storageStats && (
+  <div className="flex-shrink-0 border-t border-neutral-200 p-2.5 dark:border-border">
+    <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+      <div className="flex items-center gap-1">
+        <HardDrive size={12} aria-hidden="true" />
+        <span>Storage Usage</span>
+      </div>
+      <span className="font-mono text-neutral-500">{storageStats.kbUsed || "0"} KB ({storageStats.usagePercentage || 0}%)</span>
+    </div>
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+      <div
+        className={`h-full transition-all duration-300 ${
+          storageStats.isHighCapacity ? "bg-amber-500" : "bg-blue-500"
+        }`}
+        style={{ width: `${storageStats.usagePercentage || 5}%` }}
+      />
+    </div>
+    {storageStats.isHighCapacity && (
+      <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+        ⚠️ Storage limit near capacity ({storageStats.usagePercentage}%).
+      </p>
+    )}
+  </div>
+)}
+
+{onArchive && (
+  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+    <button
+      onClick={onArchive}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-amber-700 transition hover:border-amber-400 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:border-border dark:text-amber-300 dark:hover:border-amber-800 dark:hover:bg-amber-500/15"
+    >
+      <Archive size={13} aria-hidden="true" />
+      Auto-Archive Old Entries
     </button>
   </div>
 )}

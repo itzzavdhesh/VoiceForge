@@ -16,6 +16,7 @@ export default function useTTS() {
   const [engine, setEngine] = React.useState("chatterbox");
   const abortControllerRef = React.useRef(null);
 
+
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
    *
@@ -36,6 +37,12 @@ export default function useTTS() {
 
       if (languageCode) {
         utterance.lang = languageCode;
+      }
+
+      const voiceSettings = loadVoiceSettings();
+      if (voiceSettings.pitchShift !== undefined) {
+        // Map semitone transposition [-12, +12] to SpeechSynthesisUtterance pitch range [0.5, 2.0]
+        utterance.pitch = Math.min(2, Math.max(0.5, 1 + (voiceSettings.pitchShift / 12)));
       }
 
       utterance.onend = resolve;
@@ -72,7 +79,7 @@ export default function useTTS() {
    *   it is looked up from the locally saved profile matching voiceId.
    * @returns {Promise<{audioUrl: string, engine: string}|{fallback: boolean, engine: string}>} Result of speech synthesis.
    */
-  async function speak({ text, voiceId, language_code, ownerToken }) {
+  async function speak({ text, voiceId, language_code, ownerToken, voice_settings_override }) {
     // Cancel any in-flight request before starting a new one.
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -84,7 +91,7 @@ export default function useTTS() {
     setStatus("speaking");
 
     try {
-      const voiceSettings = loadVoiceSettings();
+      const voiceSettings = voice_settings_override || loadVoiceSettings();
 
       // Fix (Broken Voice Synthesis): the server now requires owner_token to
       // authorize use of voice_id (403 otherwise). Use the explicitly
@@ -120,6 +127,7 @@ export default function useTTS() {
 
           const cloneResponse = await fetch("/api/voice/clone", {
             method: "POST",
+            signal: controller.signal,
             body: formData,
           });
 
@@ -127,6 +135,7 @@ export default function useTTS() {
             // 3. Retry the speak request
             response = await fetch("/api/voice/speak", {
               method: "POST",
+              signal: controller.signal,
               headers: {
                 "Content-Type": "application/json",
               },
@@ -153,6 +162,7 @@ export default function useTTS() {
 
             const cloneResponse = await fetch("/api/voice/clone", {
               method: "POST",
+              signal: controller.signal,
               body: formData,
             });
 
@@ -181,6 +191,7 @@ export default function useTTS() {
               // Retry the speak request after silent re-cloning succeeds
               response = await fetch("/api/voice/speak", {
                 method: "POST",
+                signal: controller.signal,
                 headers: {
                   "Content-Type": "application/json",
                 },
@@ -205,12 +216,18 @@ export default function useTTS() {
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
 
+      const streamResponse = await fetch(nextAudioUrl, { signal: controller.signal });
+      if (!streamResponse.ok) throw new Error("Failed to fetch audio stream");
+      const blob = await streamResponse.blob();
+      const localUrl = URL.createObjectURL(blob);
+
       setEngine("chatterbox");
-      setAudioUrl(nextAudioUrl);
+      setAudioUrl(localUrl);
       setStatus("ready");
 
       return {
-        audioUrl: nextAudioUrl,
+        audioUrl: localUrl,
+        blob,
         engine: "chatterbox",
       };
     } catch (ttsError) {
