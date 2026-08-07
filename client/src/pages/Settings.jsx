@@ -4,21 +4,31 @@ import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
   persistVoiceSettings,
+  VOICE_PRESETS,
 } from "../utils/voiceSettings.js";
+import {
+  loadAccessibilitySettings,
+  persistAccessibilitySettings,
+  ACCESSIBILITY_SETTINGS_CHANGED_EVENT,
+  ACCESSIBILITY_SETTINGS_KEY
+} from "../utils/accessibilitySettings.js";
 import {
   loadLanguage,
   persistLanguage,
+  subscribeLanguageChange,
   getLanguageByCode,
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { useTheme } from "../components/ThemeContext.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
+  subscribeProfileChanges,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
@@ -41,6 +51,7 @@ function AudioPlayback({ blob }) {
     <audio
       src={audioUrl}
       controls
+      aria-label="Generated speech audio playback"
       className="mt-2 h-8 w-full max-w-xs"
     />
   );
@@ -63,18 +74,70 @@ export default function Settings() {
       }
     }
     loadProfiles();
+    return subscribeProfileChanges(loadProfiles);
   }, []);
 
 
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+
+  React.useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
+
   const selectedLangObj = getLanguageByCode(language);
+
+  const [accSettings, setAccSettings] = React.useState(loadAccessibilitySettings);
+  
+  function saveAccSettings(newSettings) {
+    setAccSettings(newSettings);
+    persistAccessibilitySettings(newSettings);
+    window.dispatchEvent(new Event(ACCESSIBILITY_SETTINGS_CHANGED_EVENT));
+  }
 
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
+    window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const currentPresetKey = React.useMemo(() => {
+    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
+      return (
+        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
+        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
+        Math.abs(voiceSettings.style - preset.style) < 0.001 &&
+        Math.abs(voiceSettings.dspPitch - preset.dspPitch) < 0.001 &&
+        Math.abs(voiceSettings.dspSpeed - preset.dspSpeed) < 0.001 &&
+        Math.abs(voiceSettings.dspBass - preset.dspBass) < 0.001 &&
+        Math.abs(voiceSettings.dspMid - preset.dspMid) < 0.001 &&
+        Math.abs(voiceSettings.dspTreble - preset.dspTreble) < 0.001
+      );
+    });
+    return presetEntry ? presetEntry[0] : "custom";
+  }, [voiceSettings]);
+
+  function handlePresetChange(presetKey) {
+    if (presetKey === "custom") return;
+    const preset = VOICE_PRESETS[presetKey];
+    if (preset) {
+      saveVoiceSettings({
+        ...voiceSettings,
+        stability: preset.stability,
+        temperature: preset.temperature,
+        style: preset.style,
+        dspPitch: preset.dspPitch,
+        dspSpeed: preset.dspSpeed,
+        dspBass: preset.dspBass,
+        dspMid: preset.dspMid,
+        dspTreble: preset.dspTreble,
+      });
+    }
   }
 
   const handleExport = async () => {
@@ -84,6 +147,7 @@ export default function Settings() {
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        accessibilitySettings: localStorage.getItem(ACCESSIBILITY_SETTINGS_KEY),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
@@ -167,15 +231,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({
@@ -198,6 +263,7 @@ export default function Settings() {
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
         voiceSettings: "voiceforge:voiceSettings",
+        accessibilitySettings: ACCESSIBILITY_SETTINGS_KEY,
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
@@ -219,6 +285,7 @@ export default function Settings() {
       const loaded = await getSavedProfiles();
       setProfiles(loaded);
       setVoiceSettings(loadVoiceSettings());
+      setAccSettings(loadAccessibilitySettings());
       setLanguage(loadLanguage());
       event.target.value = "";
     } catch (err) {
@@ -275,7 +342,45 @@ export default function Settings() {
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
         
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-4">
           <div>
             <label className="flex justify-between text-sm font-bold" htmlFor="stability">
@@ -287,6 +392,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.stability}
+              aria-label="Stability"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -302,6 +408,7 @@ export default function Settings() {
               id="temperature"
               type="range"
               min="0" max="1" step="0.01"
+              aria-label="Temperature"
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"
@@ -319,10 +426,150 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.style}
+              aria-label="Style Exaggeration"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
+          </div>
+
+          <hr className="border-ink/10 dark:border-border my-4" />
+          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">Real-time Voice Modifiers (DSP)</h3>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-pitch">
+              <span>Voice Pitch</span>
+              <span className="text-ink/65">{voiceSettings.dspPitch}x</span>
+            </label>
+            <input
+              id="dsp-pitch"
+              type="range"
+              min="0.5" max="1.5" step="0.05"
+              value={voiceSettings.dspPitch}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspPitch: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Pitch transposition. Lower → deeper voice; higher → higher voice.</p>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-speed">
+              <span>Speech Pace (Speed)</span>
+              <span className="text-ink/65">{voiceSettings.dspSpeed}x</span>
+            </label>
+            <input
+              id="dsp-speed"
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={voiceSettings.dspSpeed}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspSpeed: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Adjust speech speed. Lower → slower; higher → faster speech.</p>
+          </div>
+
+          <div className="pt-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">3-Band Graphic Equalizer</h4>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-bass">
+                  <span>Bass (200 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspBass} dB</span>
+                </label>
+                <input
+                  id="dsp-bass"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspBass}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspBass: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-mid">
+                  <span>Mid (1000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspMid} dB</span>
+                </label>
+                <input
+                  id="dsp-mid"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspMid}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspMid: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-treble">
+                  <span>Treble (4000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspTreble} dB</span>
+                </label>
+                <input
+                  id="dsp-treble"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspTreble}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspTreble: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/50 mt-2">Sculpt voice tone in real-time. Bass controls depth; mid controls presence; treble controls clarity.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Accessibility ─────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center gap-2 mb-1">
+          <Webcam size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <h2 className="text-xl font-bold">Accessibility</h2>
+        </div>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Enable hands-free navigation using your webcam to track head movements.
+        </p>
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-bold block" htmlFor="webcam-nav-toggle">
+                Webcam Navigation
+              </label>
+              <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+                Control the cursor with your head. Click by dwelling over an element.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                id="webcam-nav-toggle"
+                type="checkbox"
+                className="peer sr-only"
+                checked={accSettings.webcamNavigationEnabled}
+                onChange={(e) => saveAccSettings({ ...accSettings, webcamNavigationEnabled: e.target.checked })}
+              />
+              <div className="peer h-6 w-11 rounded-full bg-ink/20 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-moss peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-moss dark:bg-ink/60 dark:peer-checked:bg-glow dark:peer-focus:ring-glow"></div>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dwell-time">
+              <span>Dwell Time (Click Delay)</span>
+              <span className="text-ink/65">{accSettings.dwellTime / 1000}s</span>
+            </label>
+            <input
+              id="dwell-time"
+              type="range"
+              min="500" max="3000" step="100"
+              value={accSettings.dwellTime}
+              onChange={(e) => saveAccSettings({ ...accSettings, dwellTime: parseInt(e.target.value, 10) })}
+              className="w-full mt-2"
+              disabled={!accSettings.webcamNavigationEnabled}
+            />
+            <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+              How long you must look at a button before it clicks.
+            </p>
           </div>
         </div>
 
@@ -387,6 +634,49 @@ export default function Settings() {
         </p>
       </section>
 
+      {/* ── Audio & Hardware ───────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-4 dark:text-muted">
+          Configure hardware routing for synthesized speech playback across video calls and webcams.
+        </p>
+        <AudioOutputSelector />
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Appearance & Accessibility</h2>
+        <p className="text-sm text-ink/65 mb-5 dark:text-muted">
+          Customize high-contrast accessibility options, contrast ratios, and visual boundaries.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-between rounded-md border border-ink/10 bg-amber-50/40 p-4 dark:border-border dark:bg-black">
+          <div className="flex items-start gap-3">
+            <Eye size={20} className="mt-0.5 text-moss dark:text-glow" aria-hidden="true" />
+            <div>
+              <h3 className="font-semibold text-sm text-ink dark:text-neutral-100">
+                High-Contrast Accessibility Mode
+              </h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">
+                Enforces maximum WCAG AAA contrast ratios, thick element borders, and bright yellow focus rings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleHighContrast}
+            aria-pressed={isHighContrast}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+              isHighContrast
+                ? "bg-amber-500 text-black shadow-sm ring-2 ring-amber-400"
+                : "bg-ink/10 text-ink hover:bg-ink/20 dark:bg-neutral-800 dark:text-neutral-200"
+            }`}
+          >
+            {isHighContrast ? "High-Contrast ON" : "High-Contrast OFF"}
+          </button>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Backup & Restore</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
@@ -413,6 +703,7 @@ export default function Settings() {
               id="import-config-file"
               type="file"
               accept=".json"
+              aria-label="Choose backup file to import"
               onChange={handleImport}
               className="sr-only"
             />

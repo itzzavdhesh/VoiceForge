@@ -10,11 +10,22 @@ function getStoredTheme() {
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
+  return null; // Return null if no explicit user preference is saved
+}
 
+function getSystemTheme() {
   try {
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : DEFAULT_THEME;
   } catch {
     return DEFAULT_THEME;
+  }
+}
+
+function getStoredHighContrast() {
+  try {
+    return localStorage.getItem("voiceforge:highContrast") === "true";
+  } catch {
+    return false;
   }
 }
 
@@ -26,8 +37,17 @@ function storeTheme(theme) {
   }
 }
 
+function storeHighContrast(enabled) {
+  try {
+    localStorage.setItem("voiceforge:highContrast", String(enabled));
+  } catch {
+    // Storage unavailable
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = React.useState(getStoredTheme);
+  const [isHighContrast, setIsHighContrast] = React.useState(getStoredHighContrast);
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -36,15 +56,36 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove("dark");
     }
-    storeTheme(theme);
   }, [theme]);
 
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (isHighContrast) {
+      root.classList.add("high-contrast");
+    } else {
+      root.classList.remove("high-contrast");
+    }
+    storeHighContrast(isHighContrast);
+  }, [isHighContrast]);
+
   function toggleTheme() {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    setTheme((prev) => {
+      const nextTheme = prev === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("voiceforge:theme", nextTheme);
+      } catch {
+        // Storage can be unavailable
+      }
+      return nextTheme;
+    });
+  }
+
+  function toggleHighContrast() {
+    setIsHighContrast((prev) => !prev);
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isHighContrast, toggleHighContrast }}>
       {children}
     </ThemeContext.Provider>
   );
