@@ -8,21 +8,50 @@ import { Copy, Eraser, Mic2, History, X } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
+import { AACSymbolBoard } from "./AACSymbolBoard";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
-import useTTS from "../hooks/useTTS.js";
-import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
-import { saveAudioBlob, getAudioBlob } from "../utils/db.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 
-const MAX_CHARS = 300;
+const MAX_CHARS = 500;
+const COMPOSE_DRAFT_KEY = "voiceforge:draft_speech";
 
 export default function VoiceForge() {
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(COMPOSE_DRAFT_KEY) || "";
+      }
+    } catch {
+      // Storage unavailable
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (inputText) {
+          localStorage.setItem(COMPOSE_DRAFT_KEY, inputText);
+        } else {
+          localStorage.removeItem(COMPOSE_DRAFT_KEY);
+        }
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }, [inputText]);
+
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [language, setLanguage] = useState(loadLanguage);
+
+  useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
   const historyToggleRef = useRef(null);
@@ -34,11 +63,12 @@ export default function VoiceForge() {
     history,
     favorites,
     sessionTranscript,
+    storageStats,
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
-    importBackup,
+    archiveOldHistory,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -336,11 +366,13 @@ export default function VoiceForge() {
           history={history}
           favorites={favorites}
           sessionTranscript={sessionTranscript}
+          storageStats={storageStats}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
           onToggleFav={handleToggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
+          onArchive={archiveOldHistory}
           onCopy={handleCopy}
           onImportBackup={importBackup}
           showToast={showToast}
@@ -386,6 +418,10 @@ export default function VoiceForge() {
           onReuse={handleReuse}
           onUnpin={toggleFavorite}
         />
+
+        <div className="px-4 pt-2">
+          <AACSymbolBoard onSelectSymbol={handleQuickReply} />
+        </div>
 
         <QuickReplies onSelect={handleQuickReply} showToast={showToast} />
 

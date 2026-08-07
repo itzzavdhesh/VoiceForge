@@ -6,13 +6,13 @@ const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const DEFAULT_QUICK_REPLIES = [
-  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social" },
-  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social" },
-  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent" },
-  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent" },
-  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
-  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
-  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs" },
+  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social", hotkey: "1" },
+  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social", hotkey: "2" },
+  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent", hotkey: "3" },
+  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent", hotkey: "4" },
+  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs", hotkey: "5" },
+  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social", hotkey: "6" },
+  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs", hotkey: "7" },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
@@ -27,9 +27,10 @@ export function QuickReplies({ onSelect, showToast }) {
         Array.isArray(parsed) &&
         parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
       ) {
-        return parsed.map((item) => ({
+        return parsed.map((item, idx) => ({
           ...item,
           id: item.id || generateId(),
+          hotkey: item.hotkey || String(idx + 1),
           category: item.category && CATEGORIES.includes(item.category) ? item.category : "General",
         }));
       }
@@ -275,13 +276,8 @@ export function QuickReplies({ onSelect, showToast }) {
         ))}
       </div>
 
-      <div
-        id={`tabpanel-${selectedCategoryTab}`}
-        role="tabpanel"
-        aria-label={`${selectedCategoryTab} quick replies`}
-        className="flex flex-wrap items-center gap-2"
-      >
-        {filteredReplies.map(({ id, label, phrase, category }) => {
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
+        {filteredReplies.map(({ id, label, phrase, category, hotkey }) => {
           const isCurrentlyEditing = editingReplyId === id;
 
           if (isEditing) {
@@ -400,9 +396,14 @@ export function QuickReplies({ onSelect, showToast }) {
                 "dark:border-border dark:bg-surface dark:text-neutral-300",
                 "dark:hover:border-blue-500 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:focus:ring-offset-black",
               ].join(" ")}
-              aria-label={`Quick reply: ${phrase}`}
+              aria-label={`Quick reply: ${phrase} (Hotkey: ${hotkey || "None"})`}
             >
-              {label}
+              <span>{label}</span>
+              {hotkey && (
+                <span className="rounded bg-neutral-200/80 px-1 py-0.5 font-mono text-[10px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                  {hotkey}
+                </span>
+              )}
             </button>
           );
         })}

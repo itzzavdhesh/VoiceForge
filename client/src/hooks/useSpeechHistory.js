@@ -358,6 +358,69 @@ const addMessage = useCallback((text, lang = "en-US") => {
   }, []);
 
   /**
+   * Calculates storage utilization metrics (entry counts, byte size, usage percentage).
+   */
+  const storageStats = useCallback(() => {
+    const totalEntries = history.length + analyticsHistory.length + sessionTranscript.length;
+    let bytesUsed = 0;
+    try {
+      if (typeof localStorage !== "undefined") {
+        bytesUsed = (localStorage.getItem(HISTORY_KEY) || "").length +
+                    (localStorage.getItem(ANALYTICS_KEY) || "").length +
+                    (localStorage.getItem(FAVS_KEY) || "").length;
+      }
+    } catch {
+      bytesUsed = totalEntries * 120;
+    }
+    const kbUsed = (bytesUsed / 1024).toFixed(1);
+    const maxEntries = MAX_ANALYTICS;
+    const usagePercentage = Math.min(100, Math.round((analyticsHistory.length / maxEntries) * 100));
+    const isHighCapacity = usagePercentage >= 80 || analyticsHistory.length >= 1600;
+
+    return {
+      totalEntries,
+      analyticsCount: analyticsHistory.length,
+      historyCount: history.length,
+      kbUsed,
+      usagePercentage,
+      isHighCapacity,
+    };
+  }, [history, analyticsHistory, sessionTranscript]);
+
+  /**
+   * Auto-archives history entries older than 30 days into a downloadable JSON backup,
+   * then purges unpinned archived items to free up database capacity.
+   */
+  const archiveOldHistory = useCallback(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const toArchive = analyticsHistory.filter((m) => m.timestamp < thirtyDaysAgo);
+
+    if (toArchive.length === 0 && analyticsHistory.length === 0) return 0;
+
+    const archiveData = (toArchive.length > 0 ? toArchive : analyticsHistory).map((item) => ({
+      ...item,
+      archivedAt: new Date().toISOString(),
+    }));
+
+    // Trigger JSON backup download
+    if (typeof document !== "undefined") {
+      const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VoiceForge-Archive-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Prune archived items from analytics history
+    setAnalyticsHistory((prev) => prev.filter((m) => m.timestamp >= thirtyDaysAgo));
+    return archiveData.length;
+  }, [analyticsHistory]);
+
+  /**
    * Wipes all history and favorites.
    */
   const clearHistory = useCallback(() => {
@@ -418,10 +481,11 @@ const addMessage = useCallback((text, lang = "en-US") => {
     favorites,
     sessionTranscript,
     analyticsHistory,
+    storageStats: storageStats(),
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
-    importBackup,
+    archiveOldHistory,
   };
 }

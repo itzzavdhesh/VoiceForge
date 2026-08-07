@@ -1,18 +1,18 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, ShieldCheck } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Grid } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import DeviceSelector from "../components/DeviceSelector.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
+import { AACSymbolBoard } from "../components/AACSymbolBoard.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
-import { getStoredValue, setStoredValue } from "../utils/storage.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
@@ -40,11 +40,18 @@ export default function Call() {
   });
 
   React.useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
+
+  React.useEffect(() => {
     persistLanguage(language);
   }, [language]);
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
+  const [isSymbolBoardOpen, setIsSymbolBoardOpen] = React.useState(false);
 
   React.useEffect(() => {
     async function loadActiveProfile() {
@@ -546,11 +553,37 @@ export default function Call() {
           )}
         </section>
 
-        <TextToSpeech
-          onSpeak={handleSpeak}
-          disabled={!activeProfile}
-          status={status}
-        />
+        {/* Text to Speech Panel with AAC Symbol Board Toggle */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border border-ink/10 bg-white px-4 py-2.5 shadow-soft dark:border-border dark:bg-surface">
+            <div className="flex items-center gap-2">
+              <Grid size={16} className="text-moss dark:text-glow" aria-hidden="true" />
+              <span className="text-xs font-bold text-ink dark:text-neutral-200">
+                AAC Picture-Symbol Board
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSymbolBoardOpen(!isSymbolBoardOpen)}
+              className="rounded-md bg-mint/80 px-3 py-1 text-xs font-bold text-ink transition hover:bg-mint dark:bg-glow/20 dark:text-glow"
+            >
+              {isSymbolBoardOpen ? "Hide Board" : "Show Symbol Board"}
+            </button>
+          </div>
+
+          {isSymbolBoardOpen && (
+            <AACSymbolBoard
+              onSelectSymbol={handleSpeak}
+              onClose={() => setIsSymbolBoardOpen(false)}
+            />
+          )}
+
+          <TextToSpeech
+            onSpeak={handleSpeak}
+            disabled={!activeProfile}
+            status={status}
+          />
+        </div>
 
         <VideoPreview
           ref={canvasRef}

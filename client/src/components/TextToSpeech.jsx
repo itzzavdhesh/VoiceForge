@@ -64,10 +64,34 @@ const EMOTION_PRESETS = [
 ];
 
 const MAX_CHARS = 300;
+const DRAFT_KEY = "voiceforge:draft_call_speech";
 
 export default function TextToSpeech({ onSpeak, disabled = false, status = "idle" }) {
-  const [text, setText] = React.useState("");
-  const [activeEmotion, setActiveEmotion] = React.useState("neutral");
+  const [text, setText] = React.useState(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(DRAFT_KEY) || "";
+      }
+    } catch {
+      // Storage unavailable
+    }
+    return "";
+  });
+
+  React.useEffect(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (text) {
+          localStorage.setItem(DRAFT_KEY, text);
+        } else {
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }, [text]);
+
   const trimmedText = text.trim();
 
 const characterCount = text.length;
@@ -119,6 +143,13 @@ if (estimatedDuration > 30) {
   if (!trimmedText || disabled || characterCount > MAX_CHARS) return;
   await onSpeak(trimmedText);
   setText("");
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  } catch {
+    // Storage unavailable
+  }
 }
 
   function handleKeyDown(event) {

@@ -243,3 +243,34 @@ textarea {
   transition: stroke-dashoffset 0.1s linear, opacity 0.1s ease;
   opacity: 0;
 }
+
+/* High-Contrast Accessibility Mode */
+.high-contrast {
+  --bg-page: #000000 !important;
+  --bg-card: #000000 !important;
+  --bg-input: #000000 !important;
+  --text-base: #ffffff !important;
+  --text-muted: #ffff00 !important;
+  --border: #ffffff !important;
+  --ring: #ffff00 !important;
+  color: #ffffff !important;
+  background-color: #000000 !important;
+}
+
+.high-contrast * {
+  border-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.high-contrast button,
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea,
+.high-contrast a {
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast :focus-visible {
+  outline: 3px solid #ffff00 !important;
+  outline-offset: 3px !important;
+}

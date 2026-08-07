@@ -39,6 +39,12 @@ export default function useTTS() {
         utterance.lang = languageCode;
       }
 
+      const voiceSettings = loadVoiceSettings();
+      if (voiceSettings.pitchShift !== undefined) {
+        // Map semitone transposition [-12, +12] to SpeechSynthesisUtterance pitch range [0.5, 2.0]
+        utterance.pitch = Math.min(2, Math.max(0.5, 1 + (voiceSettings.pitchShift / 12)));
+      }
+
       utterance.onend = resolve;
       utterance.onerror = reject;
 
