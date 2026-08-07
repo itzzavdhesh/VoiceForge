@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucid
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
 
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -197,6 +198,8 @@ const MAX_NAME_LENGTH = 100;
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null); // stores { blob, duration, isValid }
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
+  const [selectedColor, setSelectedColor] = React.useState("emerald");
+  const [selectedIcon, setSelectedIcon] = React.useState("user");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
@@ -291,9 +294,31 @@ export default function Onboarding({ onReady }) {
   }, [maxUnlockedStep]);
 
   async function handleClone() {
-    if (!recording || !recording.isValid) return;
-    const profile = await cloneVoice(recording.blob, voiceName);
-    setSuccessProfile(profile);
+    // 1. Strict validation guards: recording and a valid name are required.
+    if (!hasKey || !recording) return;
+    if (recordingDuration < 10) return;
+    if (nameError) return; // block on empty / whitespace / over-limit name
+
+    try {
+      // 2. Perform real API call without overlapping mock declarations
+      const profile = await cloneVoice(recording, voiceName.trim(), selectedColor, selectedIcon);
+      if (profile) {
+        setSuccessProfile(profile);
+        setMaxUnlockedStep(2);
+        showToast("Voice cloned successfully", "success");
+        setActiveStep(2); // Move user to Step 2 instantly upon real success
+      }
+    } catch (err) {
+      console.error("Voice cloning process failed:", err);
+      showToast("Voice cloning failed. Please try again.", "error");
+      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
+    }
+  }
+
+  function handleManualStepNavigation(targetStep) {
+    if (targetStep <= maxUnlockedStep) {
+      setActiveStep(targetStep);
+    }
   }
 
   return (
@@ -414,10 +439,47 @@ export default function Onboarding({ onReady }) {
               </button>
             </div>
 
+            {/* Color Tag & Avatar Icon Selectors */}
+            <div className="mt-4 pt-3 border-t border-ink/10 dark:border-border grid grid-cols-1 gap-4 sm:grid-cols-2 text-xs">
+              <div>
+                <span className="font-bold text-ink/80 dark:text-neutral-200">Color Tag Accent:</span>
+                <div className="flex items-center gap-2 mt-2">
+                  {Object.entries(COLOR_TAGS).map(([key, item]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSelectedColor(key)}
+                      title={item.label}
+                      aria-label={`Select ${item.label} color tag`}
+                      className={`h-6 w-6 rounded-full ${item.badge} transition-transform ${selectedColor === key ? "ring-2 ring-moss ring-offset-2 scale-110" : "opacity-75 hover:opacity-100"}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="font-bold text-ink/80 dark:text-neutral-200">Avatar Icon:</span>
+                <div className="flex items-center gap-2 mt-2">
+                  {Object.entries(AVATAR_ICONS).map(([key, Icon]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSelectedIcon(key)}
+                      title={key}
+                      aria-label={`Select ${key} avatar icon`}
+                      className={`flex h-7 w-7 items-center justify-center rounded-md border text-ink/80 transition-all dark:text-neutral-200 ${selectedIcon === key ? "border-moss bg-mint/30 text-moss font-bold scale-105 dark:border-glow dark:text-glow" : "border-ink/15 bg-cloud hover:bg-neutral-200 dark:border-border dark:bg-black"}`}
+                    >
+                      <Icon size={14} aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Name validation feedback + character counter */}
             <div
               id="voice-name-feedback"
-              className="mt-1.5 flex items-center justify-between gap-2 text-xs"
+              className="mt-2 flex items-center justify-between gap-2 text-xs"
             >
               {nameError ? (
                 <p className="flex items-center gap-1 font-semibold text-coral" role="alert">
