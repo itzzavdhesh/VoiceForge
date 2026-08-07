@@ -196,14 +196,7 @@ const MIN_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 100;
 
 export default function Onboarding({ onReady }) {
-  const [recording, setRecording] = React.useState(null);
-  const [recordingDuration, setRecordingDuration] = React.useState(0);
-
-  function handleRecordingReady(blob, duration = 0) {
-    setRecording(blob);
-    setRecordingDuration(duration);
-  }
-
+  const [recording, setRecording] = React.useState(null); // stores { blob, duration, isValid }
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [selectedColor, setSelectedColor] = React.useState("emerald");
   const [selectedIcon, setSelectedIcon] = React.useState("user");
@@ -211,7 +204,21 @@ export default function Onboarding({ onReady }) {
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+
+  const handleRecordingReady = React.useCallback((blob, metadata) => {
+    if (!blob) {
+      setRecording(null);
+      return;
+    }
+    const duration = typeof metadata === "object" ? metadata.duration : metadata;
+    const isValid = typeof metadata === "object" ? metadata.isValid : (duration >= 10);
+    setRecording({ blob, duration, isValid });
+  }, []);
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    space: "",
+    hasServerKey: false,
+  });
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -356,32 +363,27 @@ export default function Onboarding({ onReady }) {
               );
             })}
           </div>
+          <div className="flex items-center gap-2" aria-label="Onboarding progress">
+            {[1, 2, 3].map((s) => {
+              const isActive = s === activeStep;
+              return (
+                <div
+                  key={s}
+                  role="progressbar"
+                  aria-valuenow={s}
+                  aria-valuemin={1}
+                  aria-valuemax={3}
+                  aria-label={`Step ${s} of 3`}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    isActive ? "w-10 bg-moss dark:bg-glow" : "w-2.5 bg-neutral-200 dark:bg-neutral-800"
+                  }`}
+                />
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      {/* REFACTORED ACCESSIBLE INTERACTIVE NAVIGATION STEP DOT TRACKS */}
-      <div className="flex items-center justify-center gap-3" role="tablist" aria-label="Onboarding step navigation">
-        {[1, 2, 3].map((stepNum) => {
-          const isAccessible = stepNum <= maxUnlockedStep;
-          const isCurrent = activeStep === stepNum;
-
-          return (
-            <button
-              key={stepNum}
-              type="button"
-              disabled={!isAccessible}
-              onClick={() => handleManualStepNavigation(stepNum)}
-              aria-label={`Go to Step ${stepNum}`}
-              aria-current={isCurrent ? "step" : undefined}
-              className={`h-3 w-3 rounded-full transition-all duration-300 ${
-                isCurrent 
-                  ? "bg-coral scale-125 ring-2 ring-coral/30" 
-                  : isAccessible ? "bg-mint" : "bg-ink/15 dark:bg-white/10"
-              } ${!isAccessible ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
-            />
-          );
-        })}
-      </div>
 
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
@@ -423,11 +425,17 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
+                disabled={isCloning || !hasKey || !recording || !recording.isValid || Boolean(nameError)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCloning && <Loader2 className="animate-spin" size={18} />}
-                Clone voice
+                {status === "cloning" ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                    Processing Voice...
+                  </>
+                ) : (
+                  "Clone voice"
+                )}
               </button>
             </div>
 
@@ -498,7 +506,7 @@ export default function Onboarding({ onReady }) {
             {/* Render actual API errors transparently instead of swallowing failures */}
             {apiError && (
               <p className="mt-3 text-sm font-semibold text-coral flex items-center gap-1.5" role="alert">
-                <CircleAlert size={16} />
+                <CircleAlert size={16} aria-hidden="true" />
                 {apiError}
               </p>
             )}
@@ -506,7 +514,7 @@ export default function Onboarding({ onReady }) {
             {(successProfile || maxUnlockedStep >= 2) && (
               <div className="mt-4 flex flex-col gap-3 rounded-md bg-mint p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-glow/15">
                 <p className="inline-flex items-center gap-2 font-bold text-ink dark:text-neutral-50">
-                  <CheckCircle2 size={20} className="text-moss dark:text-glow" />
+                  <CheckCircle2 size={20} className="text-moss dark:text-glow" aria-hidden="true" />
                   Voice profile setup verified!
                 </p>
                 <button
@@ -515,7 +523,7 @@ export default function Onboarding({ onReady }) {
                   className="inline-flex items-center gap-2 rounded-md bg-black px-4 py-2 font-bold text-white dark:bg-glow dark:text-black"
                 >
                   Continue to Step 2
-                  <ArrowRight size={16} />
+                  <ArrowRight size={18} aria-hidden="true" />
                 </button>
               </div>
             )}

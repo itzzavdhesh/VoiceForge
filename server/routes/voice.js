@@ -6,28 +6,37 @@ import upload from "../middleware/upload.js";
 
 const router = Router();
 
-// Limit voice-cloning requests: cloning is expensive — allow 5 per hour per IP.
+// Limit voice-cloning requests: cloning is expensive — allow 10 per hour per IP.
 const cloneRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many voice clone requests. Please try again in an hour." },
 });
 
-// Limit TTS/speak requests: allow 30 per minute per IP.
+// Limit TTS/speak requests: allow 300 per hour per IP.
 const speakRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many speech requests. Please slow down." },
 });
 
+// Limit status requests: allow 100 per 15 minutes per IP.
+const statusRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many status requests." },
+});
+
 router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
 router.post("/speak", speakRateLimit, speak);
-router.get("/speak/stream", streamSpeech);
-router.get("/status", getStatus);
+router.get("/speak/stream", speakRateLimit, streamSpeech);
+router.get("/status", statusRateLimit, getStatus);
 
 // Handle multer and upload errors with structured JSON responses.
 router.use((err, req, res, next) => {
