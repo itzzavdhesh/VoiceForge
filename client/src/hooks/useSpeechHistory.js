@@ -12,7 +12,6 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
-const MAX_FAVORITES = 10;
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -271,14 +270,14 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
     const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };

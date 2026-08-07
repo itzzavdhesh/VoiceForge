@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Play, Pause, Share2, Trash2 } from "lucide-react";
+import { Play, Pause, Share2, Trash2, Download } from "lucide-react";
 
-export function ProfileCard({ profile, onDelete, onShare }) {
+export function ProfileCard({ profile, onDelete, onShare, onExport }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const audioRef = React.useRef(null);
@@ -86,6 +86,14 @@ export function ProfileCard({ profile, onDelete, onShare }) {
           >
             <Share2 size={16} />
             Share
+          </button>
+          <button
+            type="button"
+            onClick={() => onExport(profile)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink/15 text-ink transition hover:bg-ink/5 dark:border-border dark:text-neutral-200 dark:hover:bg-white/5"
+            title="Export Profile Backup (.vfp)"
+          >
+            <Download size={16} />
           </button>
           <button
             type="button"
