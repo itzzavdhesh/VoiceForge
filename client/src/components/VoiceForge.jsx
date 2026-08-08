@@ -5,11 +5,10 @@ import React, {
   useEffect,
 } from "react";
 import { Copy, Eraser, Mic2, History, X } from "lucide-react";
-import { VoiceQuickSettings } from "./VoiceQuickSettings";
-import { FavoriteMessages } from "./FavoriteMessages";
-import { QuickReplies } from "./QuickReplies";
-import { AACSymbolBoard } from "./AACSymbolBoard";
-import { SpeechHistory } from "./SpeechHistory";
+import { VoiceQuickSettings } from "./VoiceQuickSettings.jsx";
+import { FavoriteMessages } from "./FavoriteMessages.jsx";
+import { QuickReplies } from "./QuickReplies.jsx";
+import { SpeechHistory } from "./SpeechHistory.jsx";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
@@ -68,7 +67,9 @@ export default function VoiceForge() {
     removeMessage,
     toggleFavorite,
     clearHistory,
-    archiveOldHistory,
+    importBackup,
+    addTag,
+    removeTag,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -375,6 +376,9 @@ export default function VoiceForge() {
           onArchive={archiveOldHistory}
           onCopy={handleCopy}
           onImportBackup={importBackup}
+          onAddTag={addTag}
+          onRemoveTag={removeTag}
+          onAddToQuickReplies={handleAddToQuickReplies}
           showToast={showToast}
         />
       </div>
