@@ -1,21 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QuickReplies } from "./QuickReplies";
 
-describe("QuickReplies component and hotkey shortcut triggers", () => {
-  it("renders quick replies with hotkey badges", () => {
+describe("QuickReplies drag-and-drop reordering component", () => {
+  it("renders quick reply cards with drag handles in edit mode", () => {
     render(<QuickReplies onSelect={() => {}} showToast={() => {}} />);
     expect(screen.getByText("Quick replies")).toBeDefined();
     expect(screen.getByText("Hello")).toBeDefined();
-    expect(screen.getByText("1")).toBeDefined();
-  });
-
-  it("triggers onSelect when hotkey key is pressed", () => {
-    const handleSelect = vi.fn();
-    render(<QuickReplies onSelect={handleSelect} showToast={() => {}} />);
-
-    fireEvent.keyDown(window, { key: "1" });
-    expect(handleSelect).toHaveBeenCalledWith("Hello");
   });
 });

@@ -34,7 +34,7 @@ import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
-import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -571,6 +571,11 @@ export default function Settings() {
               How long you must look at a button before it clicks.
             </p>
           </div>
+        </div>
+
+        {/* Audio Peak Level VU Meter & Clipping Warning */}
+        <div className="mt-5 pt-4 border-t border-ink/10 dark:border-border">
+          <PeakLevelMeter isActive={true} />
         </div>
       </section>
 

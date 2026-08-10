@@ -1,13 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, Archive, HardDrive } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, X, ArrowUpDown, Filter, RotateCcw } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
-export function escapeRegExp(string = "") {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export function SpeechHistory({history,
+export function SpeechHistory({
+  history,
   favorites,
   sessionTranscript = [],
   storageStats,
@@ -24,6 +21,8 @@ export function SpeechHistory({history,
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [dateFilter, setDateFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
 
   const fileInputRef = useRef(null);
@@ -109,7 +108,7 @@ export function SpeechHistory({history,
   };
 
   const visible = useMemo(() => {
-    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
+    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : [...history];
 
     if (selectedTag !== "All Tags") {
       messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
@@ -124,8 +123,45 @@ export function SpeechHistory({history,
       );
     }
 
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      messages = messages.filter((message) => {
+        const msgTime = new Date(message.timestamp || Date.now()).getTime();
+        if (dateFilter === "today") {
+          return msgTime >= startOfDay;
+        } else if (dateFilter === "7days") {
+          const sevenDaysAgo = startOfDay - 6 * 24 * 60 * 60 * 1000;
+          return msgTime >= sevenDaysAgo;
+        } else if (dateFilter === "30days") {
+          const thirtyDaysAgo = startOfDay - 29 * 24 * 60 * 60 * 1000;
+          return msgTime >= thirtyDaysAgo;
+        }
+        return true;
+      });
+    }
+
+    if (sortOrder === "oldest") {
+      messages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    } else if (sortOrder === "alpha-asc") {
+      messages.sort((a, b) => a.text.localeCompare(b.text));
+    } else if (sortOrder === "alpha-desc") {
+      messages.sort((a, b) => b.text.localeCompare(a.text));
+    } else {
+      messages.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    }
+
     return messages;
-  }, [history, favorites, tab, selectedTag, debouncedSearch]);
+  }, [history, favorites, tab, debouncedSearch, dateFilter, sortOrder]);
+
+  const hasActiveFilters = search.trim() !== "" || dateFilter !== "all" || sortOrder !== "newest";
+
+  function handleResetFilters() {
+    setSearch("");
+    setDateFilter("all");
+    setSortOrder("newest");
+  }
 
   const tabs = ["all", "pinned"];
 
@@ -145,83 +181,58 @@ export function SpeechHistory({history,
   }
 
   function handleExportTranscript() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const formattedText = sessionTranscript
-    .map(
-      (item) =>
-        `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
-          item.status ?? "unknown"
-        }`
-    )
-    .join("\n");
+    const formattedText = sessionTranscript
+      .map(
+        (item) =>
+          `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
+            item.status ?? "unknown"
+          }`
+      )
+      .join("\n");
 
-  const blob = new Blob([formattedText], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
+    const blob = new Blob([formattedText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-}
+    URL.revokeObjectURL(url);
+  }
 
-function handleExportJson() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+  function handleExportJson() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const exportData = sessionTranscript.map((item) => ({
-    command: item.text,
-    timestamp: new Date(item.timestamp).toISOString(),
-    status: item.status ?? "unknown",
-  }));
+    const exportData = sessionTranscript.map((item) => ({
+      command: item.text,
+      timestamp: new Date(item.timestamp).toISOString(),
+      status: item.status ?? "unknown",
+    }));
 
-  const blob = new Blob(
-    [JSON.stringify(exportData, null, 2)],
-    { type: "application/json" }
-  );
+    const blob = new Blob(
+      [JSON.stringify(exportData, null, 2)],
+      { type: "application/json" }
+    );
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
 
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-}
+    URL.revokeObjectURL(url);
+  }
 
-function handleExportCsv() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
-
-  const headers = ["Timestamp", "Text", "Status", "Language"];
-  const rows = sessionTranscript.map((item) => [
-    escapeCSVCell(new Date(item.timestamp).toISOString()),
-    escapeCSVCell(item.text),
-    escapeCSVCell(item.status ?? "unknown"),
-    escapeCSVCell(item.language ?? "en-US"),
-  ]);
-
-  const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map((row) => row.join(","))].join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.csv`;
-
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  URL.revokeObjectURL(url);
-}
   return (
     <aside
       className={[
@@ -257,20 +268,77 @@ function handleExportCsv() {
 
       {!collapsed && (
         <>
-          <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border">
+          <div className="flex-shrink-0 space-y-2 border-b border-neutral-200 px-3 py-2 dark:border-border">
             <label htmlFor="vf-search" className="sr-only">
               Search history
             </label>
-            <div className="relative">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <div className="relative flex items-center">
+              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 text-neutral-400" />
               <input
                 id="vf-search"
-                type="search"
+                type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search messages..."
-                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
+                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-8 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter & Sort Controls */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <ArrowUpDown size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <select
+                  id="vf-sort-order"
+                  aria-label="Sort speech history"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="alpha-asc">A - Z</option>
+                  <option value="alpha-desc">Z - A</option>
+                </select>
+              </div>
+
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <Filter size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <select
+                  id="vf-date-filter"
+                  aria-label="Filter by timeframe"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  title="Reset search and filters"
+                  aria-label="Reset search and filters"
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-100 dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  <RotateCcw size={11} aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
 
