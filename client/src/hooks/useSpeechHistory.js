@@ -278,14 +278,14 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
     const newEntry = { id: generateUUID(), text: trimmed, timestamp, language: lang };
