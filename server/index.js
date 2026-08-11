@@ -3,15 +3,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
+import { env } from "./config/env.js";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
 import { logger } from "./utils/logger.js";
-
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 // Warn clearly when mock mode is active so it is never silently enabled.
 if (getIsMock()) {
@@ -23,8 +18,8 @@ if (getIsMock()) {
 }
 
 const app = express();
-const port = process.env.PORT || 3001;
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+const port = env.PORT;
+const clientUrl = env.CLIENT_URL;
 
 // Health endpoint rate limiter: 100 requests per 15 minutes per IP
 const healthLimiter = rateLimit({
