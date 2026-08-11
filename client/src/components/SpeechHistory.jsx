@@ -1,7 +1,25 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, X, ArrowUpDown, Filter, RotateCcw } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  Pin,
+  Search,
+  Trash2,
+  Download,
+  X,
+  ArrowUpDown,
+  Filter,
+  RotateCcw,
+} from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
+
+export function escapeCSVCell(val) {
+  if (val === null || val === undefined) return '""';
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
+}
 
 export function SpeechHistory({
   history,
@@ -108,24 +126,34 @@ export function SpeechHistory({
   };
 
   const visible = useMemo(() => {
-    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : [...history];
+    let messages =
+      tab === "pinned"
+        ? history.filter((message) => favorites.has(message.id))
+        : [...history];
 
     if (selectedTag !== "All Tags") {
-      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+      messages = messages.filter(
+        (message) => message.tags && message.tags.includes(selectedTag)
+      );
     }
 
     if (debouncedSearch.trim()) {
       const sanitized = escapeRegExp(debouncedSearch.trim()).toLowerCase();
       const query = debouncedSearch.toLowerCase().trim();
-      messages = messages.filter((message) =>
-        message.text.toLowerCase().includes(query) ||
-        message.text.toLowerCase().includes(sanitized)
+      messages = messages.filter(
+        (message) =>
+          message.text.toLowerCase().includes(query) ||
+          message.text.toLowerCase().includes(sanitized)
       );
     }
 
     if (dateFilter !== "all") {
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime();
 
       messages = messages.filter((message) => {
         const msgTime = new Date(message.timestamp || Date.now()).getTime();
@@ -143,19 +171,24 @@ export function SpeechHistory({
     }
 
     if (sortOrder === "oldest") {
-      messages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+      messages.sort(
+        (a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
+      );
     } else if (sortOrder === "alpha-asc") {
       messages.sort((a, b) => a.text.localeCompare(b.text));
     } else if (sortOrder === "alpha-desc") {
       messages.sort((a, b) => b.text.localeCompare(a.text));
     } else {
-      messages.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      messages.sort(
+        (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+      );
     }
 
     return messages;
   }, [history, favorites, tab, debouncedSearch, dateFilter, sortOrder]);
 
-  const hasActiveFilters = search.trim() !== "" || dateFilter !== "all" || sortOrder !== "newest";
+  const hasActiveFilters =
+    search.trim() !== "" || dateFilter !== "all" || sortOrder !== "newest";
 
   function handleResetFilters() {
     setSearch("");
@@ -168,14 +201,18 @@ export function SpeechHistory({
   function handleTabKeyDown(event, currentIndex) {
     let nextIndex = currentIndex;
 
-    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
-    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowRight")
+      nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft")
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
 
     if (nextIndex !== currentIndex) setTab(tabs[nextIndex]);
   }
 
   function handleClearHistory() {
-    if (window.confirm("Clear all history? Pinned messages will also be removed.")) {
+    if (
+      window.confirm("Clear all history? Pinned messages will also be removed.")
+    ) {
       onClearHistory();
     }
   }
@@ -215,10 +252,9 @@ export function SpeechHistory({
       status: item.status ?? "unknown",
     }));
 
-    const blob = new Blob(
-      [JSON.stringify(exportData, null, 2)],
-      { type: "application/json" }
-    );
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -245,11 +281,17 @@ export function SpeechHistory({
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-3 dark:border-border">
         <button
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "Expand history panel" : "Collapse history panel"}
+          aria-label={
+            collapsed ? "Expand history panel" : "Collapse history panel"
+          }
           aria-expanded={!collapsed}
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-400 dark:hover:bg-neutral-900"
         >
-          {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
+          {collapsed ? (
+            <ChevronRight size={15} aria-hidden="true" />
+          ) : (
+            <ChevronLeft size={15} aria-hidden="true" />
+          )}
         </button>
 
         {!collapsed && (
@@ -273,7 +315,11 @@ export function SpeechHistory({
               Search history
             </label>
             <div className="relative flex items-center">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 text-neutral-400" />
+              <Search
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 text-neutral-400"
+              />
               <input
                 id="vf-search"
                 type="text"
@@ -297,7 +343,11 @@ export function SpeechHistory({
             {/* Filter & Sort Controls */}
             <div className="flex items-center gap-1.5 text-xs">
               <div className="flex flex-1 items-center gap-1 min-w-0">
-                <ArrowUpDown size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <ArrowUpDown
+                  size={12}
+                  className="text-neutral-400 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <select
                   id="vf-sort-order"
                   aria-label="Sort speech history"
@@ -313,7 +363,11 @@ export function SpeechHistory({
               </div>
 
               <div className="flex flex-1 items-center gap-1 min-w-0">
-                <Filter size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <Filter
+                  size={12}
+                  className="text-neutral-400 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <select
                   id="vf-date-filter"
                   aria-label="Filter by timeframe"
@@ -349,30 +403,49 @@ export function SpeechHistory({
               aria-expanded={analyticsOpen}
               className="flex w-full items-center justify-between text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
             >
-              <span className="flex items-center gap-1">📊 Conversation Stats</span>
+              <span className="flex items-center gap-1">
+                📊 Conversation Stats
+              </span>
               <span>{analyticsOpen ? "Hide ▲" : "Show ▼"}</span>
             </button>
-            
+
             {analyticsOpen && (
               <div className="mt-2 rounded bg-neutral-100 p-2.5 text-[11px] text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400 space-y-2 border border-neutral-200 dark:border-border">
                 <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
-                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalSentences}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Phrases</p>
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalSentences}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Phrases
+                    </p>
                   </div>
                   <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
-                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{analyticsData.totalWords}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">Total Words</p>
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalWords}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Total Words
+                    </p>
                   </div>
                 </div>
                 {analyticsData.top.length > 0 && (
                   <div>
-                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Top Phrases:</p>
+                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Top Phrases:
+                    </p>
                     <ul className="space-y-1">
                       {analyticsData.top.map(({ text, count }) => (
-                        <li key={text} className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0">
-                          <span className="truncate flex-1" title={text}>{text}</span>
-                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">{count}x</span>
+                        <li
+                          key={text}
+                          className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0"
+                        >
+                          <span className="truncate flex-1" title={text}>
+                            {text}
+                          </span>
+                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">
+                            {count}x
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -385,14 +458,16 @@ export function SpeechHistory({
           {/* Dynamic Tag Filters Row */}
           {allUniqueTags.length > 0 && (
             <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border overflow-x-auto no-scrollbar flex items-center gap-1.5 scroll-smooth">
-              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">Tags:</span>
+              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">
+                Tags:
+              </span>
               <button
                 onClick={() => setSelectedTag("All Tags")}
                 className={[
                   "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
                   selectedTag === "All Tags"
                     ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
                 ].join(" ")}
               >
                 All
@@ -405,7 +480,7 @@ export function SpeechHistory({
                     "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
                     selectedTag === tag
                       ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400"
+                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
                   ].join(" ")}
                 >
                   #{tag}
@@ -454,7 +529,10 @@ export function SpeechHistory({
             tabIndex={0}
           >
             {visible.length === 0 ? (
-              <EmptyState tab={tab} hasSearch={Boolean(debouncedSearch.trim())} />
+              <EmptyState
+                tab={tab}
+                hasSearch={Boolean(debouncedSearch.trim())}
+              />
             ) : (
               <ul className="space-y-2" aria-label="Message list">
                 {visible.map((message) => (
@@ -477,82 +555,86 @@ export function SpeechHistory({
             )}
           </div>
 
-         {sessionTranscript?.length > 0 && (
-  <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-    <button
-      onClick={handleExportTranscript}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-    >
-      <Download size={13} aria-hidden="true" />
-      Export TXT
-    </button>
+          {sessionTranscript?.length > 0 && (
+            <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={handleExportTranscript}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export TXT
+              </button>
 
-    <button
-      onClick={handleExportCsv}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-    >
-      <Download size={13} aria-hidden="true" />
-      Export CSV
-    </button>
+              <button
+                onClick={handleExportCsv}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export CSV
+              </button>
 
-    <button
-      onClick={handleExportJson}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-    >
-      <Download size={13} aria-hidden="true" />
-      Export JSON
-    </button>
-  </div>
-)}
+              <button
+                onClick={handleExportJson}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export JSON
+              </button>
+            </div>
+          )}
 
-{storageStats && (
-  <div className="flex-shrink-0 border-t border-neutral-200 p-2.5 dark:border-border">
-    <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
-      <div className="flex items-center gap-1">
-        <HardDrive size={12} aria-hidden="true" />
-        <span>Storage Usage</span>
-      </div>
-      <span className="font-mono text-neutral-500">{storageStats.kbUsed || "0"} KB ({storageStats.usagePercentage || 0}%)</span>
-    </div>
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-      <div
-        className={`h-full transition-all duration-300 ${
-          storageStats.isHighCapacity ? "bg-amber-500" : "bg-blue-500"
-        }`}
-        style={{ width: `${storageStats.usagePercentage || 5}%` }}
-      />
-    </div>
-    {storageStats.isHighCapacity && (
-      <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-        ⚠️ Storage limit near capacity ({storageStats.usagePercentage}%).
-      </p>
-    )}
-  </div>
-)}
+          {storageStats && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2.5 dark:border-border">
+              <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+                <div className="flex items-center gap-1">
+                  <HardDrive size={12} aria-hidden="true" />
+                  <span>Storage Usage</span>
+                </div>
+                <span className="font-mono text-neutral-500">
+                  {storageStats.kbUsed || "0"} KB (
+                  {storageStats.usagePercentage || 0}%)
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    storageStats.isHighCapacity ? "bg-amber-500" : "bg-blue-500"
+                  }`}
+                  style={{ width: `${storageStats.usagePercentage || 5}%` }}
+                />
+              </div>
+              {storageStats.isHighCapacity && (
+                <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                  ⚠️ Storage limit near capacity ({storageStats.usagePercentage}
+                  %).
+                </p>
+              )}
+            </div>
+          )}
 
-{onArchive && (
-  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-    <button
-      onClick={onArchive}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-amber-700 transition hover:border-amber-400 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:border-border dark:text-amber-300 dark:hover:border-amber-800 dark:hover:bg-amber-500/15"
-    >
-      <Archive size={13} aria-hidden="true" />
-      Auto-Archive Old Entries
-    </button>
-  </div>
-)}
+          {onArchive && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={onArchive}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-amber-700 transition hover:border-amber-400 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:border-border dark:text-amber-300 dark:hover:border-amber-800 dark:hover:bg-amber-500/15"
+              >
+                <Archive size={13} aria-hidden="true" />
+                Auto-Archive Old Entries
+              </button>
+            </div>
+          )}
 
-{history.length > 0 && (
-  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-    <button
-      onClick={handleClearHistory}
-      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
-    >
-      <Trash2 size={13} aria-hidden="true" />
-      Clear all history
-    </button>
-  </div>
-)}
+          {history.length > 0 && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={handleClearHistory}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+              >
+                <Trash2 size={13} aria-hidden="true" />
+                Clear all history
+              </button>
+            </div>
+          )}
         </>
       )}
     </aside>
