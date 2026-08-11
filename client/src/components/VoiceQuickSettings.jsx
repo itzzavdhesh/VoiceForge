@@ -1,42 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react";
-
-const STORAGE_KEY = "voiceforge:voiceSettings";
-
-const DEFAULT_SETTINGS = {
-  stability: 0.45,
-  similarity_boost: 0.8,
-  style: 0.2,
-};
-
-/**
- * Reads voice settings from localStorage.
- * Falls back to defaults if the key is missing or JSON is malformed.
- */
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-/**
- * Persists voice settings to localStorage.
- */
-function persistSettings(settings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Storage unavailable — fail silently
-  }
-}
+import {
+  VOICE_SETTINGS_KEY,
+  loadVoiceSettings,
+  persistVoiceSettings,
+} from "../utils/voiceSettings.js";
 
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange }) {
+function SliderRow({ id, label, description, value, formattedValue, min = 0, max = 1, step = 0.01, onChange }) {
   return (
     <div className="space-y-1">
       <label
@@ -45,19 +18,19 @@ function SliderRow({ id, label, description, value, onChange }) {
       >
         <span>{label}</span>
         <span
-          className="tabular-nums text-neutral-500 dark:text-neutral-400"
+          className="tabular-nums text-neutral-500 dark:text-neutral-400 font-mono text-[11px]"
           aria-live="polite"
-          aria-label={`${label} value: ${value}`}
+          aria-label={`${label} value: ${formattedValue !== undefined ? formattedValue : value}`}
         >
-          {value}
+          {formattedValue !== undefined ? formattedValue : value}
         </span>
       </label>
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
-        step="0.01"
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={onChange}
         aria-label={label}
@@ -85,17 +58,21 @@ function SliderRow({ id, label, description, value, onChange }) {
  */
 export function VoiceQuickSettings({ defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [settings, setSettings] = useState(loadSettings);
+  const [settings, setSettings] = useState(loadVoiceSettings);
 
-  // Keep in sync when the Settings page changes localStorage from another tab/component.
+  // Keep in sync when settings change
   useEffect(() => {
     function handleStorage(event) {
-      if (event.key === STORAGE_KEY) {
-        setSettings(loadSettings());
+      if (event.key === VOICE_SETTINGS_KEY || event.type === "voiceforge:settingsChanged") {
+        setSettings(loadVoiceSettings());
       }
     }
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener("voiceforge:settingsChanged", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("voiceforge:settingsChanged", handleStorage);
+    };
   }, []);
 
   const updateSetting = useCallback(
@@ -103,7 +80,8 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
       const val = parseFloat(event.target.value);
       setSettings((prev) => {
         const next = { ...prev, [key]: val };
-        persistSettings(next);
+        persistVoiceSettings(next);
+        window.dispatchEvent(new Event("voiceforge:settingsChanged"));
         return next;
       });
     },
@@ -142,6 +120,28 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           className="space-y-4 border-t border-neutral-200 px-4 py-4 dark:border-border"
         >
           <SliderRow
+            id="vqs-pitch"
+            label="Pitch Transposition"
+            description="Transposes synthesized pitch up or down (-12 to +12 semitones)."
+            value={settings.pitchShift !== undefined ? settings.pitchShift : 0}
+            formattedValue={`${settings.pitchShift > 0 ? "+" : ""}${settings.pitchShift || 0} st`}
+            min={-12}
+            max={12}
+            step={1}
+            onChange={updateSetting("pitchShift")}
+          />
+          <SliderRow
+            id="vqs-tone"
+            label="DSP Tone Clarity"
+            description="Boosts high-frequency speech definition and acoustic presence."
+            value={settings.toneEq !== undefined ? settings.toneEq : 0.5}
+            formattedValue={((settings.toneEq !== undefined ? settings.toneEq : 0.5) * 100).toFixed(0) + "%"}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={updateSetting("toneEq")}
+          />
+          <SliderRow
             id="vqs-stability"
             label="Stability"
             description="Lower → more expressive. Higher → more consistent."
@@ -149,11 +149,11 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             onChange={updateSetting("stability")}
           />
           <SliderRow
-            id="vqs-similarity"
-            label="Similarity Boost"
-            description="Higher → closer to original voice. May add artifacts at max."
-            value={settings.similarity_boost}
-            onChange={updateSetting("similarity_boost")}
+            id="vqs-temperature"
+            label="Temperature"
+            description="Lower → steadier output. Higher → more variation."
+            value={settings.temperature}
+            onChange={updateSetting("temperature")}
           />
           <SliderRow
             id="vqs-style"
@@ -162,9 +162,69 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             value={settings.style}
             onChange={updateSetting("style")}
           />
+          <SliderRow
+            id="vqs-pitch"
+            label="Voice Pitch"
+            description="Adjust voice pitch."
+            value={settings.dspPitch}
+            onChange={updateSetting("dspPitch")}
+            min={0.5}
+            max={1.5}
+            step={0.05}
+          />
+          <SliderRow
+            id="vqs-speed"
+            label="Speech Pace (Speed)"
+            description="Adjust speech playback speed."
+            value={settings.dspSpeed}
+            onChange={updateSetting("dspSpeed")}
+            min={0.5}
+            max={2.0}
+            step={0.05}
+          />
+
+          <details className="group border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-neutral-600 dark:text-neutral-400 focus:outline-none">
+              <span>Graphic Equalizer (EQ)</span>
+              <span className="text-[10px] text-neutral-400 group-open:hidden">Show</span>
+              <span className="text-[10px] text-neutral-400 hidden group-open:inline">Hide</span>
+            </summary>
+            <div className="space-y-4 mt-3 pl-1">
+              <SliderRow
+                id="vqs-bass"
+                label="Bass (200 Hz)"
+                description="Adjust low-end bass frequencies."
+                value={settings.dspBass}
+                onChange={updateSetting("dspBass")}
+                min={-10}
+                max={10}
+                step={1}
+              />
+              <SliderRow
+                id="vqs-mid"
+                label="Mid (1000 Hz)"
+                description="Adjust mid-range vocal presence."
+                value={settings.dspMid}
+                onChange={updateSetting("dspMid")}
+                min={-10}
+                max={10}
+                step={1}
+              />
+              <SliderRow
+                id="vqs-treble"
+                label="Treble (4000 Hz)"
+                description="Adjust high-frequency clarity."
+                value={settings.dspTreble}
+                onChange={updateSetting("dspTreble")}
+                min={-10}
+                max={10}
+                step={1}
+              />
+            </div>
+          </details>
 
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
-            Changes apply to ElevenLabs voice synthesis.{" "}
+            Changes apply to Chatterbox voice synthesis.{" "}
             <span className="font-medium text-neutral-500 dark:text-neutral-400">
               Full controls in Settings →
             </span>

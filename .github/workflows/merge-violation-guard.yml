@@ -43,13 +43,16 @@ jobs:
             // ─────────────────────────────────────────────────────────────
             const MENTORS = [
               'sabeenaviklar',
-              '1754riya',
               'Anushreebasics',
               'itsdakshjain',
               'snehkris',
-              'leonagoel',
+              'Mrigakshi-Rathore',
               'joyprakashk',
-              'rushi-k12'
+              'rushi-k12',
+              'itzzavdheshh',
+              'Nitya-003',
+              '4f4d',
+              'lovestaco'
             ];
             const ADMINS = ['itzzavdhesh'];
             // ─────────────────────────────────────────────────────────────
