@@ -1,7 +1,7 @@
 // Searchable, accessible language picker with flag indicators and region grouping.
 //
 // Used on the Call page, Compose page (compact mode), and Settings page
-// as the unified way to select an output language for ElevenLabs TTS.
+// as the unified way to select an output language for Chatterbox TTS.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Check, Search, Globe, X } from "lucide-react";
@@ -28,6 +28,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
   const containerRef = useRef(null);
   const searchRef = useRef(null);
   const listRef = useRef(null);
+  const triggerRef = useRef(null);
 
   const selectedLang = getLanguageByCode(value);
   const regions = useMemo(() => getRegions(), []);
@@ -81,6 +82,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     setIsOpen(false);
     setSearch("");
     setFocusIndex(-1);
+    // Restore focus to the trigger button
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
   const toggle = useCallback(() => {
@@ -179,6 +182,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
       {/* ── Trigger Button ─────────────────────────────────────────────── */}
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         onClick={toggle}
@@ -216,7 +220,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
             "absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg",
             "border-neutral-200/80 bg-white dark:border-border dark:bg-surface",
             "animate-fade-in-up",
-            compact ? "right-0 w-72" : "left-0 right-0 min-w-[320px] sm:w-96",
+            "max-w-[calc(100vw-2rem)]",
+            compact ? "left-0 w-72" : "left-0 right-0 min-w-0 sm:min-w-[320px] sm:w-96", 
           ].join(" ")}
           style={{ maxHeight: "420px" }}
         >
@@ -237,6 +242,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
               }}
               placeholder="Search languages..."
               aria-label="Search languages"
+              aria-activedescendant={focusIndex >= 0 && flatItems[focusIndex] ? `lang-option-${flatItems[focusIndex].code ?? "auto"}` : undefined}
               className="flex-1 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />
             {search && (
@@ -274,6 +280,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                     key="auto-detect"
                     type="button"
                     role="option"
+                    id="lang-option-auto"
                     aria-selected={isSelected}
                     data-index={index}
                     onClick={() => selectLanguage("")}
@@ -320,6 +327,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                   key={item.code}
                   type="button"
                   role="option"
+                  id={`lang-option-${item.code}`}
                   aria-selected={isSelected}
                   data-index={index}
                   onClick={() => selectLanguage(item.code)}

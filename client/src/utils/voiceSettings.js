@@ -9,15 +9,72 @@
 export const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
 
 /**
- * Canonical defaults for every ElevenLabs voice-settings field.
+ * Canonical defaults for every Chatterbox voice-settings field.
  * Components that only surface a subset of these sliders still load the full
  * object so their writes never drop unknown fields from storage.
  */
 export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
-  similarity_boost: 0.8,
-  style: 0.2,
-  use_speaker_boost: true,
+  style: 0.5,
+  temperature: 0.8,
+  pitchShift: 0, // Transposition in semitones [-12, +12]
+  toneEq: 0.5, // DSP tone clarity multiplier [0, 1]
+  dspPitch: 1.0,
+  dspSpeed: 1.0,
+  dspBass: 0.0,
+  dspMid: 0.0,
+  dspTreble: 0.0,
+};
+
+/**
+ * Predefined presets for Voice Synthesis Settings.
+ * Each preset defines stability, temperature, and style.
+ */
+export const VOICE_PRESETS = {
+  neutral: {
+    name: "Narrator / Neutral",
+    stability: 0.7,
+    temperature: 0.6,
+    style: 0.3,
+    dspPitch: 1.0,
+    dspSpeed: 1.0,
+    dspBass: 0.0,
+    dspMid: 0.0,
+    dspTreble: 0.0,
+  },
+  excited: {
+    name: "Excited / Energetic",
+    stability: 0.4,
+    temperature: 0.95,
+    style: 0.75,
+    dspPitch: 1.1,
+    dspSpeed: 1.15,
+    dspBass: -2.0,
+    dspMid: 1.0,
+    dspTreble: 4.0,
+  },
+  robotic: {
+    name: "Robotic / Flat",
+    stability: 0.95,
+    temperature: 0.1,
+    style: 0.05,
+    dspPitch: 0.9,
+    dspSpeed: 0.95,
+    dspBass: 2.0,
+    dspMid: -3.0,
+    dspTreble: -2.0,
+  },
+  soft: {
+    name: "Soft / Whispering",
+    stability: 0.55,
+    temperature: 0.5,
+    style: 0.2,
+    dspPitch: 1.05,
+    dspSpeed: 0.85,
+    dspBass: -4.0,
+    dspMid: 2.0,
+    dspTreble: 2.0,
+  },
 };
 
 /**
@@ -38,7 +95,11 @@ export function loadVoiceSettings() {
     const raw = localStorage.getItem(VOICE_SETTINGS_KEY);
     if (raw) {
       const candidate = JSON.parse(raw);
-      if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
+      if (
+        candidate !== null &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+      ) {
         parsed = candidate;
       }
     }
@@ -54,9 +115,18 @@ export function loadVoiceSettings() {
       const coerced = parsed[key] == null ? NaN : Number(parsed[key]);
       if (Number.isNaN(coerced)) {
         result[key] = defaultVal;
-      } else if (defaultVal >= 0 && defaultVal <= 1) {
+      } else if (["stability", "style", "temperature"].includes(key)) {
         // Slider range: clamp to [0, 1].
         result[key] = Math.min(1, Math.max(0, coerced));
+      } else if (["dspBass", "dspMid", "dspTreble"].includes(key)) {
+        // Clamp to [-10, 10]
+        result[key] = Math.min(10, Math.max(-10, coerced));
+      } else if (key === "dspPitch") {
+        // Clamp to [0.5, 1.5]
+        result[key] = Math.min(1.5, Math.max(0.5, coerced));
+      } else if (key === "dspSpeed") {
+        // Clamp to [0.5, 2.0]
+        result[key] = Math.min(2.0, Math.max(0.5, coerced));
       } else {
         // Non-slider numeric: accept coerced value as-is.
         result[key] = coerced;
@@ -66,7 +136,8 @@ export function loadVoiceSettings() {
       result[key] = typeof parsed[key] === "boolean" ? parsed[key] : defaultVal;
     } else {
       // For any future non-numeric, non-boolean key, copy only on type match.
-      result[key] = typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
+      result[key] =
+        typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
     }
   }
   return result;
