@@ -365,7 +365,9 @@ export default function Settings() {
 
               onChange={(event) => setApiKeyInput(event.target.value)}
               className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
-
+            />
+          </label>
+        </div>
 
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
