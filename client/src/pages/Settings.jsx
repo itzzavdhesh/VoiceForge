@@ -1,38 +1,14 @@
 // Lets users manage browser-stored voice profiles and configure voice synthesis settings.
 import React from "react";
-import {
-  DEFAULT_VOICE_SETTINGS,
-  loadVoiceSettings,
-  persistVoiceSettings,
-  VOICE_PRESETS,
-} from "../utils/voiceSettings.js";
-import {
-  loadAccessibilitySettings,
-  persistAccessibilitySettings,
-  ACCESSIBILITY_SETTINGS_CHANGED_EVENT,
-  ACCESSIBILITY_SETTINGS_KEY
-} from "../utils/accessibilitySettings.js";
-import {
-  loadLanguage,
-  persistLanguage,
-  getLanguageByCode,
-  LANGUAGE_STORAGE_KEY,
-} from "../utils/languages.js";
-
-import { Trash2, CircleAlert, Download, Upload, Globe, Webcam } from "lucide-react";
-import { useToast, ToastContainer } from "../components/useToast.jsx";
-import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { ExternalLink, Trash2, CircleAlert, RotateCcw } from "lucide-react";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
   subscribeProfileChanges,
 } from "../hooks/useVoiceClone.js";
-import { saveProfile } from "../utils/db.js";
-import { ProfileCard } from "../components/ProfileCard.jsx";
-import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
-import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
-import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
+import useOnboarding from "../hooks/useOnboarding.js";
+
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -58,9 +34,23 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
-  const [sharingProfile, setSharingProfile] = React.useState(null);
-  const [isReceiving, setIsReceiving] = React.useState(false);
-  const { toasts, showToast } = useToast();
+  const { resetTour } = useOnboarding();
+  const [apiKey, setApiKey] = React.useState(() => {
+    try {
+      return getApiKey();
+    } catch {
+      return "";
+    }
+  });
+
+  React.useEffect(() => {
+    const migrated = migrateFromLocalStorage();
+    if (migrated) {
+      setApiKeyInput(getApiKey());
+      setMigratedNotice(true);
+    }
+  }, []);
+
   React.useEffect(() => {
     async function loadProfiles() {
       try {
@@ -77,8 +67,16 @@ export default function Settings() {
 
 
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+
+  React.useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
+
   const selectedLangObj = getLanguageByCode(language);
 
   const [accSettings, setAccSettings] = React.useState(loadAccessibilitySettings);
@@ -313,7 +311,10 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section
+        data-tour="settings-overview"
+        className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk"
+      >
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
           Step 3 of 3
         </p>
@@ -330,8 +331,41 @@ export default function Settings() {
     )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
-        <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+        <div
+          data-tour="restart-onboarding"
+          className="mb-5 flex flex-col gap-3 rounded-md border border-moss/20 bg-mint/40 p-4 dark:border-glow/25 dark:bg-glow/10 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 className="text-base font-bold">Onboarding tour</h2>
+            <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+              Replay the guided workflow for recording, cloning, and generating speech.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={resetTour}
+            aria-label="Restart onboarding tour"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-4 font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black dark:hover:bg-glow/90"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Restart Onboarding Tour
+          </button>
+        </div>
+
+        <div
+          data-tour="settings-api-key"
+          className="flex flex-col gap-3 lg:flex-row lg:items-end"
+        >
+          <label className="flex-1 text-sm font-bold" htmlFor="api-key">
+            ElevenLabs API key
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+
+              onChange={(event) => setApiKeyInput(event.target.value)}
+              className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+
 
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
@@ -562,6 +596,11 @@ export default function Settings() {
             </p>
           </div>
         </div>
+
+        {/* Audio Peak Level VU Meter & Clipping Warning */}
+        <div className="mt-5 pt-4 border-t border-ink/10 dark:border-border">
+          <PeakLevelMeter isActive={true} />
+        </div>
       </section>
 
       {/* ── Language & Region ─────────────────────────────────────────── */}
@@ -626,6 +665,40 @@ export default function Settings() {
           Configure hardware routing for synthesized speech playback across video calls and webcams.
         </p>
         <AudioOutputSelector />
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Appearance & Accessibility</h2>
+        <p className="text-sm text-ink/65 mb-5 dark:text-muted">
+          Customize high-contrast accessibility options, contrast ratios, and visual boundaries.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-between rounded-md border border-ink/10 bg-amber-50/40 p-4 dark:border-border dark:bg-black">
+          <div className="flex items-start gap-3">
+            <Eye size={20} className="mt-0.5 text-moss dark:text-glow" aria-hidden="true" />
+            <div>
+              <h3 className="font-semibold text-sm text-ink dark:text-neutral-100">
+                High-Contrast Accessibility Mode
+              </h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">
+                Enforces maximum WCAG AAA contrast ratios, thick element borders, and bright yellow focus rings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleHighContrast}
+            aria-pressed={isHighContrast}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+              isHighContrast
+                ? "bg-amber-500 text-black shadow-sm ring-2 ring-amber-400"
+                : "bg-ink/10 text-ink hover:bg-ink/20 dark:bg-neutral-800 dark:text-neutral-200"
+            }`}
+          >
+            {isHighContrast ? "High-Contrast ON" : "High-Contrast OFF"}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
