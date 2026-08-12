@@ -34,10 +34,23 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     setIsExtracting(true);
     setRecorderError("");
     try {
+      if (file.size > 12 * 1024 * 1024) {
+        throw new Error("File exceeds 12MB limit. Please upload a smaller file.");
+      }
+
       const res = await extractAudioFromFile(file);
       if (!isMountedRef.current) return;
       const audioBlob = res?.audioBlob || res?.blob;
       if (!audioBlob) throw new Error("Invalid audio extracted from file.");
+
+      if (res.duration > 300) {
+        throw new Error("Audio duration exceeds 5 minutes. Please upload a shorter clip to prevent browser freezing.");
+      }
+
+      if (audioBlob.size > 15 * 1024 * 1024) {
+        throw new Error("Extracted audio is too large. Please upload a shorter clip.");
+      }
+
       setRawAudioBlob(audioBlob);
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(previous => {

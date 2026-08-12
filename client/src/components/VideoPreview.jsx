@@ -25,7 +25,7 @@ export default React.forwardRef(function VideoPreview({
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
   const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleTextRef = React.useRef(subtitleText);
+  const subtitleTextRef = React.useRef(activeText);
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
   const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
@@ -37,10 +37,6 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
-
-  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
-  const subtitleBgOpacityRef = React.useRef(subtitleBgOpacity);
   const activeTextRef = React.useRef(activeText);
 
   const pipVideoRef = React.useRef(null);
@@ -77,8 +73,8 @@ export default React.forwardRef(function VideoPreview({
   }, [subtitlesEnabled]);
 
   React.useEffect(() => {
-    subtitleTextRef.current = subtitleText;
-  }, [subtitleText]);
+    subtitleTextRef.current = activeText;
+  }, [activeText]);
 
   React.useEffect(() => {
     subtitleFontSizeRef.current = subtitleFontSize;
