@@ -1,4 +1,4 @@
-// Configures Multer for in-memory reference audio uploads sent to ElevenLabs.
+// Configures Multer for in-memory reference audio uploads used by the Chatterbox voice cloning flow.
 import multer from "multer";
 
 const ALLOWED_MIME_TYPES = [
