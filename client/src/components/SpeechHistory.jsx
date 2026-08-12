@@ -1,65 +1,318 @@
-import React, { useMemo, useState, useDeferredValue } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  Pin,
+  Search,
+  Trash2,
+  Download,
+  X,
+  ArrowUpDown,
+  Filter,
+  RotateCcw,
+} from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
+export function escapeCSVCell(val) {
+  if (val === null || val === undefined) return '""';
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
 export function SpeechHistory({
-  history,
-  favorites,
+  history = [],
+  favorites = new Set(),
   sessionTranscript = [],
+  storageStats,
   onReuse,
   onReplay,
   onToggleFav,
   onDelete,
   onClearHistory,
+  onArchive,
   onCopy,
+  onImportBackup,
+  onAddTag = () => {},
+  onRemoveTag = () => {},
+  onAddToQuickReplies = () => {},
+  showToast,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [dateFilter, setDateFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  const fileInputRef = useRef(null);
+
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((msg) => {
+      if (Array.isArray(msg?.tags)) {
+        msg.tags.forEach((t) => {
+          if (typeof t === "string" && t.trim()) {
+            tagsSet.add(t.trim());
+          }
+        });
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  React.useEffect(() => {
+    if (selectedTag !== "All Tags" && !allUniqueTags.includes(selectedTag)) {
+      setSelectedTag("All Tags");
+    }
+  }, [allUniqueTags, selectedTag]);
+
+  const analyticsData = useMemo(() => {
+    const source = sessionTranscript && sessionTranscript.length > 0 ? sessionTranscript : history;
+    const totalSentences = source.length;
+    const totalWords = source.reduce((acc, msg) => acc + (msg?.text ? msg.text.split(/\s+/).length : 0), 0);
+    const counts = {};
+    source.forEach((msg) => {
+      if (msg?.text) {
+        const key = msg.text.trim();
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+    return { totalSentences, totalWords, top };
+  }, [history, sessionTranscript]);
+
+  const handleExport = () => {
+    try {
+      const backupData = {
+        history,
+        favorites: Array.from(favorites),
+      };
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "voiceforge-speech-history-backup.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast?.("Backup exported successfully", "success");
+    } catch (error) {
+      showToast?.("Failed to export history", "error");
+    }
+  };
+
+  const validateBackupSchema = (data) => {
+    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data.history)) return false;
+
+    for (const message of data.history) {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        typeof message.text !== "string" ||
+        typeof message.timestamp !== "number"
+      ) {
+        return false;
+      }
+      if (message.tags !== undefined) {
+        if (!Array.isArray(message.tags)) return false;
+        message.tags = message.tags.filter((t) => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
+      }
+    }
+
+    if (data.favorites !== undefined) {
+      if (!Array.isArray(data.favorites)) return false;
+      for (const favId of data.favorites) {
+        if (typeof favId !== "string") {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (validateBackupSchema(data)) {
+          onImportBackup?.(data.history, data.favorites || []);
+          showToast?.("Backup imported successfully", "success");
+        } else {
+          showToast?.("Error: Invalid backup schema", "error");
+        }
+      } catch (error) {
+        showToast?.("Error: Invalid JSON structure", "error");
+      }
+      event.target.value = "";
+    };
+    reader.onerror = () => {
+      showToast?.("Error reading backup file", "error");
+      event.target.value = "";
+    };
+    reader.readAsText(file);
+  };
 
   const visible = useMemo(() => {
-    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
+    let messages =
+      tab === "pinned"
+        ? history.filter((message) => favorites.has(message.id))
+        : [...history];
+
+    if (selectedTag !== "All Tags") {
+      messages = messages.filter(
+        (message) => message.tags && message.tags.includes(selectedTag)
+      );
+    }
 
     if (debouncedSearch.trim()) {
-      const query = debouncedSearch.toLowerCase();
-      messages = messages.filter((message) => message.text.toLowerCase().includes(query));
+      const sanitized = escapeRegExp(debouncedSearch.trim()).toLowerCase();
+      const query = debouncedSearch.toLowerCase().trim();
+      messages = messages.filter(
+        (message) =>
+          message.text.toLowerCase().includes(query) ||
+          message.text.toLowerCase().includes(sanitized)
+      );
+    }
+
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime();
+
+      messages = messages.filter((message) => {
+        const msgTime = new Date(message.timestamp || Date.now()).getTime();
+        if (dateFilter === "today") {
+          return msgTime >= startOfDay;
+        } else if (dateFilter === "7days") {
+          const sevenDaysAgo = startOfDay - 6 * 24 * 60 * 60 * 1000;
+          return msgTime >= sevenDaysAgo;
+        } else if (dateFilter === "30days") {
+          const thirtyDaysAgo = startOfDay - 29 * 24 * 60 * 60 * 1000;
+          return msgTime >= thirtyDaysAgo;
+        }
+        return true;
+      });
+    }
+
+    if (sortOrder === "oldest") {
+      messages.sort(
+        (a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
+      );
+    } else if (sortOrder === "alpha-asc") {
+      messages.sort((a, b) => a.text.localeCompare(b.text));
+    } else if (sortOrder === "alpha-desc") {
+      messages.sort((a, b) => b.text.localeCompare(a.text));
+    } else {
+      messages.sort(
+        (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+      );
     }
 
     return messages;
-  }, [history, favorites, tab, debouncedSearch]);
+  }, [history, favorites, tab, debouncedSearch, dateFilter, sortOrder]);
+
+  const hasActiveFilters =
+    search.trim() !== "" || dateFilter !== "all" || sortOrder !== "newest";
+
+  function handleResetFilters() {
+    setSearch("");
+    setDateFilter("all");
+    setSortOrder("newest");
+  }
 
   const tabs = ["all", "pinned"];
 
   function handleTabKeyDown(event, currentIndex) {
     let nextIndex = currentIndex;
 
-    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
-    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowRight")
+      nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft")
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
 
     if (nextIndex !== currentIndex) setTab(tabs[nextIndex]);
   }
 
   function handleClearHistory() {
-    if (window.confirm("Clear all history? Pinned messages will also be removed.")) {
+    if (
+      window.confirm("Clear all history? Pinned messages will also be removed.")
+    ) {
       onClearHistory();
     }
   }
 
   function handleExportTranscript() {
     if (!sessionTranscript || sessionTranscript.length === 0) return;
-    
+
     const formattedText = sessionTranscript
-      .map(item => `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text}`)
+      .map(
+        (item) =>
+          `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
+            item.status ?? "unknown"
+          }`
+      )
       .join("\n");
-      
+
     const blob = new Blob([formattedText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
+
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+  }
+
+  function handleExportJson() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+
+    const exportData = sessionTranscript.map((item) => ({
+      command: item.text,
+      timestamp: new Date(item.timestamp).toISOString(),
+      status: item.status ?? "unknown",
+    }));
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
     URL.revokeObjectURL(url);
   }
 
@@ -75,11 +328,17 @@ export function SpeechHistory({
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-3 dark:border-border">
         <button
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "Expand history panel" : "Collapse history panel"}
+          aria-label={
+            collapsed ? "Expand history panel" : "Collapse history panel"
+          }
           aria-expanded={!collapsed}
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-400 dark:hover:bg-neutral-900"
         >
-          {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
+          {collapsed ? (
+            <ChevronRight size={15} aria-hidden="true" />
+          ) : (
+            <ChevronLeft size={15} aria-hidden="true" />
+          )}
         </button>
 
         {!collapsed && (
@@ -98,22 +357,184 @@ export function SpeechHistory({
 
       {!collapsed && (
         <>
-          <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border">
+          <div className="flex-shrink-0 space-y-2 border-b border-neutral-200 px-3 py-2 dark:border-border">
             <label htmlFor="vf-search" className="sr-only">
               Search history
             </label>
-            <div className="relative">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <div className="relative flex items-center">
+              <Search
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 text-neutral-400"
+              />
               <input
                 id="vf-search"
-                type="search"
+                type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search messages..."
-                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
+                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-8 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter & Sort Controls */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <ArrowUpDown
+                  size={12}
+                  className="text-neutral-400 flex-shrink-0"
+                  aria-hidden="true"
+                />
+                <select
+                  id="vf-sort-order"
+                  aria-label="Sort speech history"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="alpha-asc">A - Z</option>
+                  <option value="alpha-desc">Z - A</option>
+                </select>
+              </div>
+
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <Filter
+                  size={12}
+                  className="text-neutral-400 flex-shrink-0"
+                  aria-hidden="true"
+                />
+                <select
+                  id="vf-date-filter"
+                  aria-label="Filter by timeframe"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  title="Reset search and filters"
+                  aria-label="Reset search and filters"
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-100 dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  <RotateCcw size={11} aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Collapsible Analytics Section */}
+          <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border">
+            <button
+              onClick={() => setAnalyticsOpen(!analyticsOpen)}
+              aria-expanded={analyticsOpen}
+              className="flex w-full items-center justify-between text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"
+            >
+              <span className="flex items-center gap-1">
+                📊 Conversation Stats
+              </span>
+              <span>{analyticsOpen ? "Hide ▲" : "Show ▼"}</span>
+            </button>
+
+            {analyticsOpen && (
+              <div className="mt-2 rounded bg-neutral-100 p-2.5 text-[11px] text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400 space-y-2 border border-neutral-200 dark:border-border">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalSentences}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Phrases
+                    </p>
+                  </div>
+                  <div className="rounded bg-white p-1 dark:bg-surface border border-neutral-200 dark:border-border">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">
+                      {analyticsData.totalWords}
+                    </p>
+                    <p className="text-[9px] uppercase tracking-wider text-neutral-400">
+                      Total Words
+                    </p>
+                  </div>
+                </div>
+                {analyticsData.top.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Top Phrases:
+                    </p>
+                    <ul className="space-y-1">
+                      {analyticsData.top.map(({ text, count }) => (
+                        <li
+                          key={text}
+                          className="flex justify-between items-start gap-1 py-0.5 border-b border-neutral-200/50 dark:border-border/30 last:border-0"
+                        >
+                          <span className="truncate flex-1" title={text}>
+                            {text}
+                          </span>
+                          <span className="font-bold shrink-0 bg-neutral-200 dark:bg-neutral-800 px-1 rounded text-[9px]">
+                            {count}x
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Dynamic Tag Filters Row */}
+          {allUniqueTags.length > 0 && (
+            <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border overflow-x-auto no-scrollbar flex items-center gap-1.5 scroll-smooth">
+              <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase mr-1 shrink-0">
+                Tags:
+              </span>
+              <button
+                onClick={() => setSelectedTag("All Tags")}
+                className={[
+                  "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
+                  selectedTag === "All Tags"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                    : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
+                ].join(" ")}
+              >
+                All
+              </button>
+              {allUniqueTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTag(tag)}
+                  className={[
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition shrink-0",
+                    selectedTag === tag
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400",
+                  ].join(" ")}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div
             className="flex flex-shrink-0 gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-border"
@@ -155,7 +576,10 @@ export function SpeechHistory({
             tabIndex={0}
           >
             {visible.length === 0 ? (
-              <EmptyState tab={tab} hasSearch={Boolean(debouncedSearch.trim())} />
+              <EmptyState
+                tab={tab}
+                hasSearch={Boolean(debouncedSearch.trim())}
+              />
             ) : (
               <ul className="space-y-2" aria-label="Message list">
                 {visible.map((message) => (
@@ -168,6 +592,9 @@ export function SpeechHistory({
                       onToggleFav={onToggleFav}
                       onDelete={onDelete}
                       onCopy={onCopy}
+                      onAddTag={onAddTag}
+                      onRemoveTag={onRemoveTag}
+                      onAddToQuickReplies={onAddToQuickReplies}
                     />
                   </li>
                 ))}
@@ -175,17 +602,77 @@ export function SpeechHistory({
             )}
           </div>
 
-          {history.length > 0 && (
+          {sessionTranscript?.length > 0 && (
             <div className="flex flex-col gap-2 flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
-              {sessionTranscript && sessionTranscript.length > 0 && (
-                <button
-                  onClick={handleExportTranscript}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                >
-                  <Download size={13} aria-hidden="true" />
-                  Export Transcript
-                </button>
+              <button
+                onClick={handleExportTranscript}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export TXT
+              </button>
+
+              <button
+                onClick={handleExportCsv}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export CSV
+              </button>
+
+              <button
+                onClick={handleExportJson}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Download size={13} aria-hidden="true" />
+                Export JSON
+              </button>
+            </div>
+          )}
+
+          {storageStats && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2.5 dark:border-border">
+              <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+                <div className="flex items-center gap-1">
+                  <HardDrive size={12} aria-hidden="true" />
+                  <span>Storage Usage</span>
+                </div>
+                <span className="font-mono text-neutral-500">
+                  {storageStats.kbUsed || "0"} KB (
+                  {storageStats.usagePercentage || 0}%)
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    storageStats.isHighCapacity ? "bg-amber-500" : "bg-blue-500"
+                  }`}
+                  style={{ width: `${storageStats.usagePercentage || 5}%` }}
+                />
+              </div>
+              {storageStats.isHighCapacity && (
+                <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                  ⚠️ Storage limit near capacity ({storageStats.usagePercentage}
+                  %).
+                </p>
               )}
+            </div>
+          )}
+
+          {onArchive && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+              <button
+                onClick={onArchive}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-amber-700 transition hover:border-amber-400 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:border-border dark:text-amber-300 dark:hover:border-amber-800 dark:hover:bg-amber-500/15"
+              >
+                <Archive size={13} aria-hidden="true" />
+                Auto-Archive Old Entries
+              </button>
+            </div>
+          )}
+
+          {history.length > 0 && (
+            <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
               <button
                 onClick={handleClearHistory}
                 className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-border dark:hover:border-red-800 dark:hover:bg-red-500/15 dark:hover:text-red-400"
