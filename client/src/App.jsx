@@ -155,7 +155,7 @@ export default function App() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+    <div className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
