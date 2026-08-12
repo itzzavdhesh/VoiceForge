@@ -235,13 +235,10 @@ if (estimatedDuration > 30) {
         className="min-h-64 flex-1 resize-none rounded-md border border-ink/15 bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:border-moss focus:ring-4 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-60 dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
         placeholder="Type what you want to say..."
       />
-      <button
-        data-tour="generate-speech"
-        type="button"
-        onClick={submit}
-        disabled={disabled || !text.trim() || status === "speaking"}
-        aria-label={status === "speaking" ? "Generating cloned speech" : "Generate cloned speech"}
-        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
+      <p
+        className={`mt-2 text-right text-xs font-semibold ${
+          characterCount > MAX_CHARS ? "text-coral" : "text-ink/60 dark:text-neutral-400"
+        }`}
       >
         Characters: {characterCount}
       </p>
@@ -254,6 +251,7 @@ if (estimatedDuration > 30) {
 
       <div className="mt-4 flex gap-3">
         <button
+          data-tour="generate-speech"
           type="button"
           onClick={submit}
           disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
