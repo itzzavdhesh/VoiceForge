@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, X, Check, Pencil } from "lucide-react";
+import { Plus, X, Check, Pencil, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DEFAULT_CATEGORIES = ["General", "Social", "Needs", "Urgent"];
 const CATEGORIES_KEY = "vf_quick_reply_categories";
@@ -7,13 +7,13 @@ const CATEGORIES_KEY = "vf_quick_reply_categories";
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const DEFAULT_QUICK_REPLIES = [
-  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social" },
-  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social" },
-  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent" },
-  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent" },
-  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
-  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
-  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs" },
+  { id: generateId(), label: "Hello", phrase: "Hello", category: "Social", hotkey: "1" },
+  { id: generateId(), label: "Thank you", phrase: "Thank you", category: "Social", hotkey: "2" },
+  { id: generateId(), label: "Please wait", phrase: "Please wait", category: "Urgent", hotkey: "3" },
+  { id: generateId(), label: "I need help", phrase: "I need help", category: "Urgent", hotkey: "4" },
+  { id: generateId(), label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs", hotkey: "5" },
+  { id: generateId(), label: "Yes, I understand", phrase: "Yes, I understand", category: "Social", hotkey: "6" },
+  { id: generateId(), label: "No, thank you", phrase: "No, thank you", category: "Needs", hotkey: "7" },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
@@ -422,13 +422,8 @@ export function QuickReplies({ onSelect, showToast }) {
         )}
       </div>
 
-      <div
-        id={`tabpanel-${selectedCategoryTab}`}
-        role="tabpanel"
-        aria-label={`${selectedCategoryTab} quick replies`}
-        className="flex flex-wrap items-center gap-2"
-      >
-        {filteredReplies.map(({ id, label, phrase, category }) => {
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
+        {filteredReplies.map(({ id, label, phrase, category, hotkey }) => {
           const isCurrentlyEditing = editingReplyId === id;
 
           if (isEditing) {
@@ -484,12 +479,34 @@ export function QuickReplies({ onSelect, showToast }) {
             return (
               <div
                 key={`view-${id}`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, id)}
                 className={[
-                  "flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 pl-3 pr-2 py-1.5",
+                  "flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 pl-2 pr-2 py-1.5 cursor-grab active:cursor-grabbing transition-all",
+                  draggedId === id ? "opacity-40 border-blue-400" : "",
                   "text-sm text-neutral-700 dark:border-border dark:bg-surface dark:text-neutral-300",
                 ].join(" ")}
               >
+                <GripVertical size={14} className="text-neutral-400" aria-hidden="true" />
                 <span className="truncate max-w-[150px]">{label}</span>
+                <button
+                  type="button"
+                  onClick={() => handleMove(id, "left")}
+                  aria-label={`Move ${phrase} left`}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                >
+                  <ChevronLeft size={12} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMove(id, "right")}
+                  aria-label={`Move ${phrase} right`}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                >
+                  <ChevronRight size={12} aria-hidden="true" />
+                </button>
                 <button
                   onClick={() => handleEditStart(id, { phrase, category })}
                   aria-label={`Edit quick reply: ${phrase}`}
@@ -511,9 +528,13 @@ export function QuickReplies({ onSelect, showToast }) {
           return (
             <button
               key={id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, id)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, id)}
               onClick={() => onSelect(phrase)}
               className={[
-                "rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5",
+                "rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 cursor-pointer",
                 "text-sm text-neutral-700 transition-all duration-150",
                 "hover:-translate-y-px hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1",
@@ -521,9 +542,14 @@ export function QuickReplies({ onSelect, showToast }) {
                 "dark:border-border dark:bg-surface dark:text-neutral-300",
                 "dark:hover:border-blue-500 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:focus:ring-offset-black",
               ].join(" ")}
-              aria-label={`Quick reply: ${phrase}`}
+              aria-label={`Quick reply: ${phrase} (Hotkey: ${hotkey || "None"})`}
             >
-              {label}
+              <span>{label}</span>
+              {hotkey && (
+                <span className="rounded bg-neutral-200/80 px-1 py-0.5 font-mono text-[10px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                  {hotkey}
+                </span>
+              )}
             </button>
           );
         })}

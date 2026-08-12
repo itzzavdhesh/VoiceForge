@@ -11,20 +11,16 @@ export function getSavedProfiles() {
   return getAllProfiles();
 }
 
-export async function saveVoiceProfile(profile, audioBlob = null) {
+export async function saveVoiceProfile(profile, audioBlob = null, colorTag = "emerald", avatarIcon = "user") {
   const profiles = await getSavedProfiles();
   const nextProfile = {
     id: profile.voice_id,
     voice_id: profile.voice_id,
     name: profile.name || `Voice ${profiles.length + 1}`,
-    // Fix (Broken Voice Synthesis): persist the owner_token returned by
-    // POST /api/voice/clone alongside the profile. The server now requires
-    // this token on /api/voice/speak to prove ownership of voice_id, so it
-    // must be retrievable later from the saved profile, not just held in
-    // memory during the clone flow.
-    ownerToken: profile.ownerToken || profile.owner_token || null,
-    createdAt: new Date().toISOString(),
-    audioBlob // Store the binary reference audio Blob
+    colorTag: profile.colorTag || colorTag || "emerald",
+    avatarIcon: profile.avatarIcon || avatarIcon || "user",
+    createdAt: profile.createdAt || new Date().toISOString(),
+    audioBlob: audioBlob || profile.audioBlob || null // Store the binary reference audio Blob
   };
   await saveProfile(nextProfile);
   localStorage.setItem(ACTIVE_KEY, nextProfile.voice_id);
@@ -77,7 +73,7 @@ export default function useVoiceClone() {
   const [status, setStatus] = React.useState("idle");
   const [error, setError] = React.useState("");
 
-  async function cloneVoice(audioBlob, name = "VoiceForge profile") {
+  async function cloneVoice(audioBlob, name = "VoiceForge profile", colorTag = "emerald", avatarIcon = "user") {
     setStatus("cloning");
     setError("");
 
@@ -125,8 +121,9 @@ export default function useVoiceClone() {
       // (see ownerToken field above) instead of being silently dropped.
       const profile = await saveVoiceProfile({
         voice_id: payload.voice_id,
-        owner_token: payload.owner_token,
-        name: payload.name || name
+        name: payload.name || name,
+        colorTag,
+        avatarIcon
       }, audioBlob);
 
       setStatus("success");

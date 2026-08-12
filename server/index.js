@@ -50,6 +50,21 @@ app.get("/api/health", healthLimiter, (_request, response) => {
 
 app.use("/api/voice", voiceRoutes);
 
+// In production or when client/dist exists, serve compiled React SPA static files
+const staticDistPath = path.resolve(__dirname, "../client/dist");
+app.use(express.static(staticDistPath));
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.path.startsWith("/api") || !req.headers.accept?.includes("text/html")) {
+    return next();
+  }
+  res.sendFile(path.join(staticDistPath, "index.html"), (err) => {
+    if (err) {
+      next();
+    }
+  });
+});
+
 app.use((error, _request, response, _next) => {
   logger.error({ err: error }, "Unhandled server error");
   response.status(error.status || 500).json({

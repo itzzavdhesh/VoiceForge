@@ -1,26 +1,74 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
-import { MessageCard } from "./MessageCard";
-import useDebounce from "../hooks/useDebounce";
+import { MessageCard } from "./MessageCard.jsx";
+import useDebounce from "../hooks/useDebounce.js";
 
-export function SpeechHistory({history,
-  favorites,
+export function SpeechHistory({
+  history = [],
+  favorites = new Set(),
   sessionTranscript = [],
+  storageStats,
   onReuse,
   onReplay,
   onToggleFav,
   onDelete,
   onClearHistory,
+  onArchive,
   onCopy,
   onImportBackup,
+  onAddTag = () => {},
+  onRemoveTag = () => {},
+  onAddToQuickReplies = () => {},
   showToast,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [dateFilter, setDateFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((msg) => {
+      if (Array.isArray(msg?.tags)) {
+        msg.tags.forEach((t) => {
+          if (typeof t === "string" && t.trim()) {
+            tagsSet.add(t.trim());
+          }
+        });
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  React.useEffect(() => {
+    if (selectedTag !== "All Tags" && !allUniqueTags.includes(selectedTag)) {
+      setSelectedTag("All Tags");
+    }
+  }, [allUniqueTags, selectedTag]);
+
+  const analyticsData = useMemo(() => {
+    const source = sessionTranscript && sessionTranscript.length > 0 ? sessionTranscript : history;
+    const totalSentences = source.length;
+    const totalWords = source.reduce((acc, msg) => acc + (msg?.text ? msg.text.split(/\s+/).length : 0), 0);
+    const counts = {};
+    source.forEach((msg) => {
+      if (msg?.text) {
+        const key = msg.text.trim();
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+    return { totalSentences, totalWords, top };
+  }, [history, sessionTranscript]);
 
   const handleExport = () => {
     try {
@@ -57,6 +105,10 @@ export function SpeechHistory({history,
         typeof message.timestamp !== "number"
       ) {
         return false;
+      }
+      if (message.tags !== undefined) {
+        if (!Array.isArray(message.tags)) return false;
+        message.tags = message.tags.filter((t) => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
       }
     }
 
@@ -103,22 +155,59 @@ export function SpeechHistory({history,
   };
 
   const visible = useMemo(() => {
-    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;
+    let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : [...history];
 
     if (selectedTag !== "All Tags") {
-      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+      messages = messages.filter((message) => Array.isArray(message.tags) && message.tags.includes(selectedTag));
     }
 
     if (debouncedSearch.trim()) {
       const query = debouncedSearch.toLowerCase();
       messages = messages.filter((message) => 
-        message.text.toLowerCase().includes(query) ||
-        (message.tags && message.tags.some(t => t.toLowerCase().includes(query)))
+        (message.text && message.text.toLowerCase().includes(query)) ||
+        (Array.isArray(message.tags) && message.tags.some((t) => typeof t === "string" && t.toLowerCase().includes(query)))
       );
     }
 
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      messages = messages.filter((message) => {
+        const msgTime = new Date(message.timestamp || Date.now()).getTime();
+        if (dateFilter === "today") {
+          return msgTime >= startOfDay;
+        } else if (dateFilter === "7days") {
+          const sevenDaysAgo = startOfDay - 6 * 24 * 60 * 60 * 1000;
+          return msgTime >= sevenDaysAgo;
+        } else if (dateFilter === "30days") {
+          const thirtyDaysAgo = startOfDay - 29 * 24 * 60 * 60 * 1000;
+          return msgTime >= thirtyDaysAgo;
+        }
+        return true;
+      });
+    }
+
+    if (sortOrder === "oldest") {
+      messages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    } else if (sortOrder === "alpha-asc") {
+      messages.sort((a, b) => a.text.localeCompare(b.text));
+    } else if (sortOrder === "alpha-desc") {
+      messages.sort((a, b) => b.text.localeCompare(a.text));
+    } else {
+      messages.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    }
+
     return messages;
-  }, [history, favorites, tab, selectedTag, debouncedSearch]);
+  }, [history, favorites, tab, debouncedSearch, dateFilter, sortOrder]);
+
+  const hasActiveFilters = search.trim() !== "" || dateFilter !== "all" || sortOrder !== "newest";
+
+  function handleResetFilters() {
+    setSearch("");
+    setDateFilter("all");
+    setSortOrder("newest");
+  }
 
   const tabs = ["all", "pinned"];
 
@@ -138,56 +227,58 @@ export function SpeechHistory({history,
   }
 
   function handleExportTranscript() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const formattedText = sessionTranscript
-    .map(
-      (item) =>
-        `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
-          item.status ?? "unknown"
-        }`
-    )
-    .join("\n");
+    const formattedText = sessionTranscript
+      .map(
+        (item) =>
+          `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.text} - ${
+            item.status ?? "unknown"
+          }`
+      )
+      .join("\n");
 
-  const blob = new Blob([formattedText], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
+    const blob = new Blob([formattedText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.txt`;
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-}
-function handleExportJson() {
-  if (!sessionTranscript || sessionTranscript.length === 0) return;
+    URL.revokeObjectURL(url);
+  }
 
-  const exportData = sessionTranscript.map((item) => ({
-    command: item.text,
-    timestamp: new Date(item.timestamp).toISOString(),
-    status: item.status ?? "unknown",
-  }));
+  function handleExportJson() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
 
-  const blob = new Blob(
-    [JSON.stringify(exportData, null, 2)],
-    { type: "application/json" }
-  );
+    const exportData = sessionTranscript.map((item) => ({
+      command: item.text,
+      timestamp: new Date(item.timestamp).toISOString(),
+      status: item.status ?? "unknown",
+    }));
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+    const blob = new Blob(
+      [JSON.stringify(exportData, null, 2)],
+      { type: "application/json" }
+    );
 
-  a.href = url;
-  a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.json`;
 
-  URL.revokeObjectURL(url);
-}
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <aside
       className={[
@@ -223,20 +314,77 @@ function handleExportJson() {
 
       {!collapsed && (
         <>
-          <div className="flex-shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-border">
+          <div className="flex-shrink-0 space-y-2 border-b border-neutral-200 px-3 py-2 dark:border-border">
             <label htmlFor="vf-search" className="sr-only">
               Search history
             </label>
-            <div className="relative">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <div className="relative flex items-center">
+              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 text-neutral-400" />
               <input
                 id="vf-search"
-                type="search"
+                type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search messages..."
-                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
+                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pl-8 pr-8 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-border dark:bg-surface dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:ring-blue-500/30"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter & Sort Controls */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <ArrowUpDown size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <select
+                  id="vf-sort-order"
+                  aria-label="Sort speech history"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="alpha-asc">A - Z</option>
+                  <option value="alpha-desc">Z - A</option>
+                </select>
+              </div>
+
+              <div className="flex flex-1 items-center gap-1 min-w-0">
+                <Filter size={12} className="text-neutral-400 flex-shrink-0" aria-hidden="true" />
+                <select
+                  id="vf-date-filter"
+                  aria-label="Filter by timeframe"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full truncate rounded border border-neutral-200 bg-white py-1 px-1.5 text-[11px] text-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-border dark:bg-surface dark:text-neutral-300"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  title="Reset search and filters"
+                  aria-label="Reset search and filters"
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-100 dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  <RotateCcw size={11} aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -386,11 +534,56 @@ function handleExportJson() {
     </button>
 
     <button
+      onClick={handleExportCsv}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+    >
+      <Download size={13} aria-hidden="true" />
+      Export CSV
+    </button>
+
+    <button
       onClick={handleExportJson}
       className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-border dark:text-neutral-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
     >
       <Download size={13} aria-hidden="true" />
       Export JSON
+    </button>
+  </div>
+)}
+
+{storageStats && (
+  <div className="flex-shrink-0 border-t border-neutral-200 p-2.5 dark:border-border">
+    <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+      <div className="flex items-center gap-1">
+        <HardDrive size={12} aria-hidden="true" />
+        <span>Storage Usage</span>
+      </div>
+      <span className="font-mono text-neutral-500">{storageStats.kbUsed || "0"} KB ({storageStats.usagePercentage || 0}%)</span>
+    </div>
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+      <div
+        className={`h-full transition-all duration-300 ${
+          storageStats.isHighCapacity ? "bg-amber-500" : "bg-blue-500"
+        }`}
+        style={{ width: `${storageStats.usagePercentage || 5}%` }}
+      />
+    </div>
+    {storageStats.isHighCapacity && (
+      <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+        ⚠️ Storage limit near capacity ({storageStats.usagePercentage}%).
+      </p>
+    )}
+  </div>
+)}
+
+{onArchive && (
+  <div className="flex-shrink-0 border-t border-neutral-200 p-2 dark:border-border">
+    <button
+      onClick={onArchive}
+      className="flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-amber-700 transition hover:border-amber-400 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 dark:border-border dark:text-amber-300 dark:hover:border-amber-800 dark:hover:bg-amber-500/15"
+    >
+      <Archive size={13} aria-hidden="true" />
+      Auto-Archive Old Entries
     </button>
   </div>
 )}

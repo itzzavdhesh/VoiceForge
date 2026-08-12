@@ -1,17 +1,18 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, ShieldCheck } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Download } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import DeviceSelector from "../components/DeviceSelector.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
+import { AACSymbolBoard } from "../components/AACSymbolBoard.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
-import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
+import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
@@ -19,14 +20,35 @@ export default function Call() {
   const [retryCamera, setRetryCamera] = React.useState(0);
   const { toasts, showToast } = useToast();
   const [isSpeaking, setIsSpeaking] = React.useState(false);
+  const [subtitleText, setSubtitleText] = React.useState("");
   const canvasRef = React.useRef(null);
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
-  const [privacyMode, setPrivacyMode] = React.useState(false);
-  const [avatarImage, setAvatarImage] = React.useState(null);
-  const [videoDevices, setVideoDevices] = React.useState([]);
-  const [selectedDeviceId, setSelectedDeviceId] = React.useState(null);
+  const [sessionHistory, setSessionHistory] = React.useState([]);
+
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitlesEnabled") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
+    } catch {
+      return "medium";
+    }
+  });
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
+    } catch {
+      return "0.6";
+    }
+  });
+  const [activeText, setActiveText] = React.useState("");
 
   React.useEffect(() => {
     persistLanguage(language);
@@ -34,6 +56,7 @@ export default function Call() {
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
+  const [isSymbolBoardOpen, setIsSymbolBoardOpen] = React.useState(false);
 
   React.useEffect(() => {
     async function loadActiveProfile() {
@@ -58,10 +81,9 @@ export default function Call() {
 
   const [isCalibrationOpen, setIsCalibrationOpen] = React.useState(false);
   const [calibration, setCalibration] = React.useState(() => {
-  try {
-    const savedX     = localStorage.getItem("voiceforge:calibrationXOffset");
-    const savedY     = localStorage.getItem("voiceforge:calibrationYOffset");
-    const savedScale = localStorage.getItem("voiceforge:calibrationScale");
+    const savedX = getStoredValue("voiceforge:calibrationXOffset");
+    const savedY = getStoredValue("voiceforge:calibrationYOffset");
+    const savedScale = getStoredValue("voiceforge:calibrationScale");
 
     let x = savedX !== null ? parseInt(savedX, 10) : 0;
     let y = savedY !== null ? parseInt(savedY, 10) : 0;
@@ -89,12 +111,9 @@ export default function Call() {
     return {
       xOffset: x,
       yOffset: y,
-      scale
+      scale,
     };
-  } catch {
-    return { xOffset: 0, yOffset: 0, scale: 1.0 };
-  }
-});
+  });
 
   const handleCalibrationChange = (key, value) => {
     let parsedValue = typeof value === "string" ? parseFloat(value) : value;
@@ -111,12 +130,10 @@ export default function Call() {
 
     setCalibration((prev) => {
       const updated = { ...prev, [key]: parsedValue };
-      try {
-        localStorage.setItem(
-          `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
-          parsedValue.toString()
-        );
-      } catch { /* storage unavailable – continue without persisting */ }
+      setStoredValue(
+        `voiceforge:calibration${key.charAt(0).toUpperCase() + key.slice(1)}`,
+        parsedValue.toString()
+      );
       return updated;
     });
   };
@@ -124,9 +141,9 @@ export default function Call() {
   const handleResetCalibration = () => {
     const defaults = { xOffset: 0, yOffset: 0, scale: 1.0 };
     setCalibration(defaults);
-    localStorage.setItem("voiceforge:calibrationXOffset", "0");
-    localStorage.setItem("voiceforge:calibrationYOffset", "0");
-    localStorage.setItem("voiceforge:calibrationScale", "1.0");
+    setStoredValue("voiceforge:calibrationXOffset", "0");
+    setStoredValue("voiceforge:calibrationYOffset", "0");
+    setStoredValue("voiceforge:calibrationScale", "1.0");
   };
 
   React.useEffect(() => {
@@ -212,13 +229,24 @@ export default function Call() {
   async function handleSpeak(text, voice_settings_override) {
     if (!activeProfile?.voice_id) return;
 
+    setActiveText(text);
+
     try {
       const result = await speak({
         text,
         voiceId: activeProfile.voice_id,
         language_code: language,
-        voice_settings_override,
       });
+
+      setSessionHistory((prev) => [
+        ...prev,
+        {
+          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+          text,
+          timestamp: new Date().toISOString(),
+          voiceName: activeProfile?.name || "Default Voice",
+        },
+      ]);
 
       if (result?.fallback) {
         showToast("Using browser voice fallback", "info");
@@ -226,8 +254,129 @@ export default function Call() {
     } catch (err) {
       console.error("TTS streaming error:", err);
       showToast("Speech generation failed", "error");
+    } finally {
+      setActiveText("");
     }
   }
+
+  function handleExportTranscript() {
+    if (sessionHistory.length === 0) {
+      showToast("No speech history in current session to export", "info");
+      return;
+    }
+
+    const dateStr = new Date().toISOString().split("T")[0];
+    const header = `# VoiceForge Call Session Transcript\n**Date:** ${new Date().toLocaleString()}\n**Voice Profile:** ${activeProfile?.name || "Default Voice"}\n**Total Messages:** ${sessionHistory.length}\n\n---\n\n`;
+
+    const lines = sessionHistory
+      .map((item) => {
+        const time = new Date(item.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        return `- **[${time}]** ${item.text}`;
+      })
+      .join("\n");
+
+    const content = header + lines;
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `VoiceForge-Call-Transcript-${dateStr}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast("Call transcript exported successfully", "success");
+  }
+
+  const playSoundEffect = (type) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const destination = audioCtx.destination;
+
+      if (type === "ping") {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+        osc.connect(gain);
+        gain.connect(destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      } else if (type === "chime") {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        const gain2 = audioCtx.createGain();
+        
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime);
+        gain1.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+        osc1.connect(gain1);
+        gain1.connect(destination);
+        osc1.start();
+        osc1.stop(audioCtx.currentTime + 0.6);
+        
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.4);
+        gain2.gain.setValueAtTime(0.4, audioCtx.currentTime + 0.4);
+        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+        osc2.connect(gain2);
+        gain2.connect(destination);
+        osc2.start(audioCtx.currentTime + 0.4);
+        osc2.stop(audioCtx.currentTime + 1.2);
+      } else if (type === "alert") {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(460, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } else if (type === "applaud") {
+        const bufferSize = audioCtx.sampleRate * 1.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.value = 1000;
+        filter.Q.value = 1.0;
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(destination);
+        noise.start();
+        noise.stop(audioCtx.currentTime + 1.5);
+      }
+      showToast(`Triggered ${type} sound effect`, "success");
+    } catch (err) {
+      console.error("Failed to play sound effect:", err);
+      showToast("Sound effect trigger failed", "error");
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -247,13 +396,23 @@ export default function Call() {
               Call control room
             </h2>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span className="rounded-md bg-mint px-3 py-2 text-ink dark:bg-glow/20 dark:text-glow">
               Voice: {activeProfile?.name || "No profile selected"}
             </span>
             <span className="rounded-md bg-cloud px-3 py-2 text-ink dark:bg-black dark:text-neutral-200">
               Virtual camera: {virtualCamera.isLive ? "Live" : "Idle"}
             </span>
+            <button
+              type="button"
+              onClick={handleExportTranscript}
+              disabled={sessionHistory.length === 0}
+              title={sessionHistory.length === 0 ? "No speech history in current session" : "Download call transcript (.md)"}
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-2 text-ink shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-surface dark:text-neutral-200 dark:hover:bg-black"
+            >
+              <Download size={15} aria-hidden="true" />
+              <span>Export Transcript ({sessionHistory.length})</span>
+            </button>
           </div>
         </div>
       </section>
@@ -418,7 +577,7 @@ export default function Call() {
               checked={subtitlesEnabled}
               onChange={(e) => {
                 setSubtitlesEnabled(e.target.checked);
-                localStorage.setItem("voiceforge:subtitlesEnabled", e.target.checked.toString());
+                setStoredValue("voiceforge:subtitlesEnabled", e.target.checked.toString());
               }}
               className="sr-only peer"
             />
@@ -440,7 +599,7 @@ export default function Call() {
                 value={subtitleFontSize}
                 onChange={(e) => {
                   setSubtitleFontSize(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleFontSize", e.target.value);
+                  setStoredValue("voiceforge:subtitleFontSize", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -459,7 +618,7 @@ export default function Call() {
                 value={subtitleBgOpacity}
                 onChange={(e) => {
                   setSubtitleBgOpacity(e.target.value);
-                  localStorage.setItem("voiceforge:subtitleBgOpacity", e.target.value);
+                  setStoredValue("voiceforge:subtitleBgOpacity", e.target.value);
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -474,6 +633,74 @@ export default function Call() {
       </section>
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
+        <div className="space-y-5">
+          <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+            <div className="mb-4 flex items-center gap-2">
+              <Camera
+                size={19}
+                aria-hidden="true"
+                className="dark:text-neutral-300"
+              />
+              <h2 className="text-lg font-bold dark:text-neutral-100">
+                Live webcam
+              </h2>
+            </div>
+            {/* Video element: bg-black already looks fine in dark mode */}
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="aspect-video w-full rounded-md bg-black object-cover"
+            />
+            {cameraError && (
+              <p className="mt-3 text-sm font-semibold text-coral">
+                {cameraError}
+              </p>
+            )}
+          </section>
+
+          {/* Sound Board & Chimes Board */}
+          <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+            <div className="mb-3 flex items-center gap-2">
+              <Sliders size={18} className="text-moss dark:text-glow" />
+              <h2 className="text-lg font-bold dark:text-neutral-100">Sound Board &amp; Chimes</h2>
+            </div>
+            <p className="text-xs text-ink/65 dark:text-muted mb-4">
+              Play quick alerts and expressions to other call participants.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => playSoundEffect("ping")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                🔔 Ping Attention
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("chime")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                🚪 Doorbell Chime
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("alert")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                ⚠️ Warning Beep
+              </button>
+              <button
+                type="button"
+                onClick={() => playSoundEffect("applaud")}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:bg-neutral-900"
+              >
+                👏 Applaud Tone
+              </button>
+            </div>
+          </section>
+        </div>
         <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
           {privacyMode ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -532,21 +759,51 @@ export default function Call() {
           )}
         </section>
 
-        <TextToSpeech
-          onSpeak={handleSpeak}
-          disabled={!activeProfile}
-          status={status}
-        />
+        {/* Text to Speech Panel with AAC Symbol Board Toggle */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border border-ink/10 bg-white px-4 py-2.5 shadow-soft dark:border-border dark:bg-surface">
+            <div className="flex items-center gap-2">
+              <Grid size={16} className="text-moss dark:text-glow" aria-hidden="true" />
+              <span className="text-xs font-bold text-ink dark:text-neutral-200">
+                AAC Picture-Symbol Board
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSymbolBoardOpen(!isSymbolBoardOpen)}
+              className="rounded-md bg-mint/80 px-3 py-1 text-xs font-bold text-ink transition hover:bg-mint dark:bg-glow/20 dark:text-glow"
+            >
+              {isSymbolBoardOpen ? "Hide Board" : "Show Symbol Board"}
+            </button>
+          </div>
+
+          {isSymbolBoardOpen && (
+            <AACSymbolBoard
+              onSelectSymbol={handleSpeak}
+              onClose={() => setIsSymbolBoardOpen(false)}
+            />
+          )}
+
+          <TextToSpeech
+            onSpeak={handleSpeak}
+            disabled={!activeProfile}
+            status={status}
+          />
+        </div>
 
         <VideoPreview
           ref={canvasRef}
           webcamStream={webcamStream}
           audioUrl={audioUrl}
           isSpeaking={isSpeaking}
-          onSpeakingChange={setIsSpeaking}
+          onSpeakingChange={handleSpeakingChange}
           calibration={calibration}
           isCalibrating={isCalibrationOpen}
           avatarImage={avatarImage}
+          subtitlesEnabled={subtitlesEnabled}
+          subtitleFontSize={subtitleFontSize}
+          subtitleBgOpacity={subtitleBgOpacity}
+          activeText={activeText}
         />
       </div>
 
