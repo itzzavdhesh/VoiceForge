@@ -3,15 +3,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
+import { env } from "./config/env.js";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
 import { logger } from "./utils/logger.js";
-
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 // Warn clearly when mock mode is active so it is never silently enabled.
 if (getIsMock()) {
@@ -23,8 +18,8 @@ if (getIsMock()) {
 }
 
 const app = express();
-const port = process.env.PORT || 3001;
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+const port = env.PORT;
+const clientUrl = env.CLIENT_URL;
 
 // Health endpoint rate limiter: 100 requests per 15 minutes per IP
 const healthLimiter = rateLimit({
@@ -49,6 +44,21 @@ app.get("/api/health", healthLimiter, (_request, response) => {
 });
 
 app.use("/api/voice", voiceRoutes);
+
+// In production or when client/dist exists, serve compiled React SPA static files
+const staticDistPath = path.resolve(__dirname, "../client/dist");
+app.use(express.static(staticDistPath));
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.path.startsWith("/api") || !req.headers.accept?.includes("text/html")) {
+    return next();
+  }
+  res.sendFile(path.join(staticDistPath, "index.html"), (err) => {
+    if (err) {
+      next();
+    }
+  });
+});
 
 app.use((error, _request, response, _next) => {
   logger.error({ err: error }, "Unhandled server error");

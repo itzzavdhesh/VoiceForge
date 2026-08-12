@@ -90,54 +90,68 @@ export async function getProfile(voiceId) {
   });
 }
 
+let writeQueue = Promise.resolve();
+
+function enqueueWrite(operation) {
+  const result = writeQueue.then(operation);
+  writeQueue = result.catch(() => {});
+  return result;
+}
+
 export async function saveProfile(profile) {
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.put(profile);
+  return enqueueWrite(async () => {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(profile);
 
-    request.onsuccess = () => {
-      resolve(profile);
-    };
+      request.onsuccess = () => {
+        resolve(profile);
+      };
 
-    request.onerror = (event) => {
-      reject(new Error("Failed to save profile: " + (event.target.error?.message || "Unknown error")));
-    };
+      request.onerror = (event) => {
+        reject(new Error("Failed to save profile: " + (event.target.error?.message || "Unknown error")));
+      };
+    });
   });
 }
 
 export async function deleteProfile(voiceId) {
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.delete(voiceId);
+  return enqueueWrite(async () => {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(voiceId);
 
-    request.onsuccess = () => {
-      resolve(true);
-    };
+      request.onsuccess = () => {
+        resolve(true);
+      };
 
-    request.onerror = (event) => {
-      reject(new Error("Failed to delete profile: " + (event.target.error?.message || "Unknown error")));
-    };
+      request.onerror = (event) => {
+        reject(new Error("Failed to delete profile: " + (event.target.error?.message || "Unknown error")));
+      };
+    });
   });
 }
 
 export async function clearStorage() {
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.clear();
+  return enqueueWrite(async () => {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.clear();
 
-    request.onsuccess = () => {
-      resolve(true);
-    };
+      request.onsuccess = () => {
+        resolve(true);
+      };
 
-    request.onerror = (event) => {
-      reject(new Error("Failed to clear storage: " + (event.target.error?.message || "Unknown error")));
-    };
+      request.onerror = (event) => {
+        reject(new Error("Failed to clear storage: " + (event.target.error?.message || "Unknown error")));
+      };
+    });
   });
 }
 

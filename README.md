@@ -18,7 +18,6 @@ VoiceForge is a browser-based assistive video tool that lets a user type during 
 - [API](#api)
 - [Roadmap](#roadmap)
 - [License](#license)
-- [About](#about)
 
 ---
 
@@ -80,6 +79,8 @@ npm run dev
 ```
 
 6. Open `http://localhost:5173` in Chrome or Edge.
+
+For more details on how to develop locally, including Docker instructions and our mock architecture, see the [Development Workflow & Local-First Architecture Guide](docs/development-workflow.md).
 
 ---
 
@@ -210,36 +211,5 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 
 MIT
 
----
 
-## About
-
-VoiceForge is an open-source, browser-based assistive communication platform built to make video conversations more accessible for everyone. It combines voice cloning, multilingual text-to-speech, and a synchronized lip-synced avatar to help users communicate naturally during online meetings.
-
-Designed with a local-first approach, VoiceForge prioritizes accessibility, privacy, and ease of use while leveraging free, open-source AI technologies to deliver an inclusive communication experience.
-
-## Troubleshooting
-
-### Installation fails
-- Ensure you are using the supported Node.js version.
-- Run `npm install` or `npm ci`.
-- Delete `node_modules` and reinstall dependencies if necessary.
-
-### Environment variables not loading
-- Verify that a `.env` file exists.
-- Ensure all required variables are defined.
-- Restart the development server after making changes.
-
-## FAQ
-
-### How do I start the project?
-Run:
-
-```bash
-npm install
-npm run dev
-```
-
-### How do I report a bug?
-Please open a GitHub issue with reproduction steps and relevant logs.
-
+<!-- GSSoC Contribution: Resolves #760 -->
