@@ -12,6 +12,14 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
+const MAX_FAVORITES = 10;
+
+function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+}
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -350,17 +358,17 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
-    const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };
+    const newEntry = { id: generateUUID(), text: trimmed, timestamp, language: lang };
     const updated = [newEntry, ...prev];
     return updated.slice(0, MAX_ANALYTICS);
   });
@@ -373,7 +381,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     // so re-spoken messages sort correctly after a page reload.
     const updatedEntry = existing
       ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
-      : { id: msgId, text: trimmed, timestamp: Date.now(), tags: [] };
+      : { id: generateUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
     // Move duplicate to top instead of recreating
     const updated = [
@@ -437,6 +445,69 @@ const addMessage = useCallback((text, lang = "en-US") => {
   }, []);
 
   /**
+   * Calculates storage utilization metrics (entry counts, byte size, usage percentage).
+   */
+  const storageStats = useCallback(() => {
+    const totalEntries = history.length + analyticsHistory.length + sessionTranscript.length;
+    let bytesUsed = 0;
+    try {
+      if (typeof localStorage !== "undefined") {
+        bytesUsed = (localStorage.getItem(HISTORY_KEY) || "").length +
+                    (localStorage.getItem(ANALYTICS_KEY) || "").length +
+                    (localStorage.getItem(FAVS_KEY) || "").length;
+      }
+    } catch {
+      bytesUsed = totalEntries * 120;
+    }
+    const kbUsed = (bytesUsed / 1024).toFixed(1);
+    const maxEntries = MAX_ANALYTICS;
+    const usagePercentage = Math.min(100, Math.round((analyticsHistory.length / maxEntries) * 100));
+    const isHighCapacity = usagePercentage >= 80 || analyticsHistory.length >= 1600;
+
+    return {
+      totalEntries,
+      analyticsCount: analyticsHistory.length,
+      historyCount: history.length,
+      kbUsed,
+      usagePercentage,
+      isHighCapacity,
+    };
+  }, [history, analyticsHistory, sessionTranscript]);
+
+  /**
+   * Auto-archives history entries older than 30 days into a downloadable JSON backup,
+   * then purges unpinned archived items to free up database capacity.
+   */
+  const archiveOldHistory = useCallback(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const toArchive = analyticsHistory.filter((m) => m.timestamp < thirtyDaysAgo);
+
+    if (toArchive.length === 0 && analyticsHistory.length === 0) return 0;
+
+    const archiveData = (toArchive.length > 0 ? toArchive : analyticsHistory).map((item) => ({
+      ...item,
+      archivedAt: new Date().toISOString(),
+    }));
+
+    // Trigger JSON backup download
+    if (typeof document !== "undefined") {
+      const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VoiceForge-Archive-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Prune archived items from analytics history
+    setAnalyticsHistory((prev) => prev.filter((m) => m.timestamp >= thirtyDaysAgo));
+    return archiveData.length;
+  }, [analyticsHistory]);
+
+  /**
    * Wipes all history and favorites.
    */
   const clearHistory = useCallback(() => {
@@ -492,15 +563,41 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setFavorites(cleanedFavorites);
   }, [history, favorites]);
 
+  const addTag = useCallback((id, tag) => {
+    const cleanTag = tag.trim().replace(/^#/, "");
+    if (!cleanTag) return;
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        if (currentTags.includes(cleanTag)) return msg;
+        return { ...msg, tags: [...currentTags, cleanTag] };
+      })
+    );
+  }, []);
+
+  const removeTag = useCallback((id, tagToRemove) => {
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        return { ...msg, tags: currentTags.filter((t) => t !== tagToRemove) };
+      })
+    );
+  }, []);
+
   return {
     history,
     favorites,
     sessionTranscript,
     analyticsHistory,
+    storageStats: storageStats(),
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
     importBackup,
+    addTag,
+    removeTag,
   };
 }

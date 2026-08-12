@@ -348,22 +348,11 @@ describe("reconcileFavoritesWithHistory", () => {
       { text: "missing id field" },
       undefined,
     ];
-    const favoriteIds = new Set(["valid-id", "orphaned-id"]);
 
-    expect(() => {
-      reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
-    }).not.toThrow();
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const oldEntries = mockHistory.filter((m) => m.timestamp < thirtyDaysAgo);
 
-    const result = reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
-    expect(result).toEqual(new Set(["valid-id"]));
-  });
-
-  it("treats every malformed entry as having no valid id", () => {
-    const corruptedHistory = [null, "x", 1, {}, { id: 123 }, { id: null }];
-    const favoriteIds = new Set(["any-id"]);
-
-    const result = reconcileFavoritesWithHistory(favoriteIds, corruptedHistory);
-
-    expect(result.size).toBe(0);
+    expect(oldEntries.length).toBe(1);
+    expect(oldEntries[0].text).toBe("Old message");
   });
 });

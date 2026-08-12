@@ -9,16 +9,15 @@ const MIN_DURATION = 10;
 export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isInitializing, setIsInitializing] = React.useState(false);
+  const [isExtracting, setIsExtracting] = React.useState(false);
+  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
   const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
 
-  const [isExtracting, setIsExtracting] = React.useState(false);
-  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
   const fileInputRef = React.useRef(null);
   const [isDragOver, setIsDragOver] = React.useState(false);
-
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -34,25 +33,43 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const processFile = async (file) => {
     setIsExtracting(true);
     setRecorderError("");
-    setRawAudioBlob(null);
     try {
-      const { audioBlob, duration: extDuration } = await extractAudioFromFile(file);
+      if (file.size > 12 * 1024 * 1024) {
+        throw new Error("File exceeds 12MB limit. Please upload a smaller file.");
+      }
+
+      const res = await extractAudioFromFile(file);
+      if (!isMountedRef.current) return;
+      const audioBlob = res?.audioBlob || res?.blob;
+      if (!audioBlob) throw new Error("Invalid audio extracted from file.");
+
+      if (res.duration > 300) {
+        throw new Error("Audio duration exceeds 5 minutes. Please upload a shorter clip to prevent browser freezing.");
+      }
+
+      if (audioBlob.size > 15 * 1024 * 1024) {
+        throw new Error("Extracted audio is too large. Please upload a shorter clip.");
+      }
+
       setRawAudioBlob(audioBlob);
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(previous => {
         if (previous) URL.revokeObjectURL(previous);
         return url;
       });
-      const roundedDuration = Math.round(extDuration);
+      const roundedDuration = Math.round(res.duration || 0);
       setDuration(roundedDuration);
       durationRef.current = roundedDuration;
       chunksRef.current = [audioBlob];
       onRecordingReady(audioBlob, { duration: roundedDuration, isValid: roundedDuration >= MIN_DURATION });
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.error(err);
       setRecorderError(err.message || "Failed to extract audio from file.");
     } finally {
-      setIsExtracting(false);
+      if (isMountedRef.current) {
+        setIsExtracting(false);
+      }
     }
   };
 
@@ -128,7 +145,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }
 
   async function startRecording() {
-    if (isInitializing || isRecording) return;
+    if (isInitializing || isRecording || isExtracting) return;
     didFinalizeRef.current = false;
     setIsInitializing(true);
     setRecorderError("");
@@ -348,15 +365,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }, [isRecording]);
 
   return (
-    <section 
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`rounded-lg border bg-white p-5 shadow-soft transition-colors dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk ${
-        isDragOver 
-          ? "border-coral bg-coral/5 dark:border-coral/60 dark:bg-coral/10" 
-          : "border-ink/10 dark:border-border"
-      }`}
+    <section
+      data-tour="record-voice"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -366,7 +377,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
             background noise low. You can also upload a video (.mp4, .mov) or audio file.
           </p>
         </div>
-        <span className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
+        <span aria-live="polite" aria-atomic="true" role="timer" className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
           {duration}s
         </span>
       </div>
@@ -401,7 +412,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
         <button
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={disabled || isInitializing}
+          disabled={disabled || isInitializing || isExtracting}
           className={`inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 font-bold text-white transition ${
             isRecording
               ? "bg-coral hover:bg-coral/90"

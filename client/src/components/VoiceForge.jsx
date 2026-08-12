@@ -5,26 +5,55 @@ import React, {
   useEffect,
 } from "react";
 import { Copy, Eraser, Mic2, History, X } from "lucide-react";
-import { VoiceQuickSettings } from "./VoiceQuickSettings";
-import { FavoriteMessages } from "./FavoriteMessages";
-import { QuickReplies } from "./QuickReplies";
-import { SpeechHistory } from "./SpeechHistory";
+import { VoiceQuickSettings } from "./VoiceQuickSettings.jsx";
+import { FavoriteMessages } from "./FavoriteMessages.jsx";
+import { QuickReplies } from "./QuickReplies.jsx";
+import { SpeechHistory } from "./SpeechHistory.jsx";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
-import useTTS from "../hooks/useTTS.js";
-import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
-import { saveAudioBlob, getAudioBlob } from "../utils/db.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 
-const MAX_CHARS = 300;
+const MAX_CHARS = 500;
+const COMPOSE_DRAFT_KEY = "voiceforge:draft_speech";
 
 export default function VoiceForge() {
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(COMPOSE_DRAFT_KEY) || "";
+      }
+    } catch {
+      // Storage unavailable
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (inputText) {
+          localStorage.setItem(COMPOSE_DRAFT_KEY, inputText);
+        } else {
+          localStorage.removeItem(COMPOSE_DRAFT_KEY);
+        }
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }, [inputText]);
+
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [language, setLanguage] = useState(loadLanguage);
+
+  useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
+  const historyToggleRef = useRef(null);
 
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
@@ -33,11 +62,14 @@ export default function VoiceForge() {
     history,
     favorites,
     sessionTranscript,
+    storageStats,
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
     importBackup,
+    addTag,
+    removeTag,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -231,6 +263,55 @@ export default function VoiceForge() {
     }
   }, [historyOpen]);
 
+  // Restore focus to the history toggle button when drawer closes
+  const prevHistoryOpen = useRef(historyOpen);
+  useEffect(() => {
+    if (prevHistoryOpen.current && !historyOpen) {
+      historyToggleRef.current?.focus();
+    }
+    prevHistoryOpen.current = historyOpen;
+  }, [historyOpen]);
+
+  // Escape key closes the history drawer
+  useEffect(() => {
+    if (!historyOpen) return;
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setHistoryOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [historyOpen]);
+
+  // Focus trap inside the history drawer when open on mobile
+  useEffect(() => {
+    if (!historyOpen || !drawerRef.current) return;
+
+    function handleTab(event) {
+      if (event.key !== "Tab") return;
+      const focusable = drawerRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first || document.activeElement === drawerRef.current) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    window.addEventListener("keydown", handleTab);
+    return () => window.removeEventListener("keydown", handleTab);
+  }, [historyOpen]);
+
   useEffect(() => {
     if (charsLeft < 50 && !hasAnnouncedRef.current) {
       hasAnnouncedRef.current = true;
@@ -286,27 +367,28 @@ export default function VoiceForge() {
           history={history}
           favorites={favorites}
           sessionTranscript={sessionTranscript}
+          storageStats={storageStats}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
           onToggleFav={handleToggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
+          onArchive={archiveOldHistory}
           onCopy={handleCopy}
           onImportBackup={importBackup}
+          onAddTag={addTag}
+          onRemoveTag={removeTag}
+          onAddToQuickReplies={handleAddToQuickReplies}
           showToast={showToast}
         />
       </div>
 
-      <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
-        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
-          {/* Mobile: history toggle */}
-          <button
-            className="mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 text-neutral-500 transition hover:bg-neutral-100 lg:hidden dark:border-border dark:text-neutral-400"
-            onClick={() => setHistoryOpen((o) => !o)}
-            aria-label={historyOpen ? "Close history" : "Open history"}
-          >
-            {historyOpen ? <X size={15} aria-hidden="true" /> : <History size={15} aria-hidden="true" />}
-          </button>
+      <main
+        data-tour="compose-workspace"
+        className="flex flex-1 flex-col overflow-hidden"
+        aria-label="Speech composer"
+      >
+        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-5 py-3.5 dark:border-border dark:bg-black">
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
@@ -335,6 +417,10 @@ export default function VoiceForge() {
           onUnpin={toggleFavorite}
         />
 
+        <div className="px-4 pt-2">
+          <AACSymbolBoard onSelectSymbol={handleQuickReply} />
+        </div>
+
         <QuickReplies onSelect={handleQuickReply} showToast={showToast} />
 
         <div className="flex flex-1 flex-col gap-3 overflow-auto p-5 dark:bg-black">
@@ -360,6 +446,7 @@ export default function VoiceForge() {
           </div>
 
           <textarea
+            data-tour="compose-message"
             id="vf-compose"
             ref={textareaRef}
             value={inputText}
@@ -450,6 +537,7 @@ export default function VoiceForge() {
             </button>
 
             <button
+              data-tour="compose-speak"
               onClick={handleSpeak}
               disabled={!inputText.trim() || isSpeaking}
               aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
