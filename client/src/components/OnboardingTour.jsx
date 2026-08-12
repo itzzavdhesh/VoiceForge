@@ -1,11 +1,4 @@
 import React from "react";
-import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
-import VoiceRecorder from "../components/VoiceRecorder.jsx";
-import useVoiceClone from "../hooks/useVoiceClone.js";
-import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
-import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
-import { useToast, ToastContainer } from "../components/useToast.jsx";
-
 import {
   ACTIONS,
   EVENTS,
@@ -219,24 +212,9 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
       const direction = action === ACTIONS.PREV ? -1 : 1;
       const nextIndex = index + direction;
 
-  React.useEffect(() => {
-    localStorage.setItem("voiceforge:maxUnlockedStep", maxUnlockedStep.toString());
-  }, [maxUnlockedStep]);
-
-  async function handleClone() {
-    // 1. Strict validation guards: recording and a valid name are required.
-    if (!hasKey || !recording) return;
-    if (recording.duration !== undefined && recording.duration < 10) return;
-    if (nameError) return; // block on empty / whitespace / over-limit name
-
-    try {
-      // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(recording.blob || recording, voiceName.trim(), selectedColor, selectedIcon);
-      if (profile) {
-        setSuccessProfile(profile);
-        setMaxUnlockedStep(2);
-        showToast("Voice cloned successfully", "success");
-        setActiveStep(2); // Move user to Step 2 instantly upon real success
+      if (nextIndex >= steps.length) {
+        finishTour();
+        return;
       }
 
       moveToStep(nextIndex);
@@ -265,8 +243,8 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
           next: "Next",
           skip: "Skip",
         }}
-        callback={handleCallback}
-        disableOverlayClose        
+        onEvent={handleCallback}
+        overlayClickAction={false}
         run={runTour}
         scrollOffset={96}
         scrollToFirstStep

@@ -244,6 +244,8 @@ export default function Call() {
     } catch (err) {
       console.error("TTS streaming error:", err);
       showToast("Speech generation failed", "error");
+    } finally {
+      setActiveText("");
     }
   }
 
@@ -789,9 +791,9 @@ export default function Call() {
           isCalibrating={isCalibrationOpen}
           avatarImage={avatarImage}
           subtitlesEnabled={subtitlesEnabled}
-          subtitleText={subtitleText}
           subtitleFontSize={subtitleFontSize}
           subtitleBgOpacity={subtitleBgOpacity}
+          activeText={activeText}
         />
       </div>
 

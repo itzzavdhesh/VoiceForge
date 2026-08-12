@@ -326,7 +326,10 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section
+        data-tour="settings-overview"
+        className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk"
+      >
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
           Step 3 of 3
         </p>
@@ -343,8 +346,41 @@ export default function Settings() {
     )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
-        <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+        <div
+          data-tour="restart-onboarding"
+          className="mb-5 flex flex-col gap-3 rounded-md border border-moss/20 bg-mint/40 p-4 dark:border-glow/25 dark:bg-glow/10 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 className="text-base font-bold">Onboarding tour</h2>
+            <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+              Replay the guided workflow for recording, cloning, and generating speech.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={resetTour}
+            aria-label="Restart onboarding tour"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-4 font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black dark:hover:bg-glow/90"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Restart Onboarding Tour
+          </button>
+        </div>
+
+        <div
+          data-tour="settings-api-key"
+          className="flex flex-col gap-3 lg:flex-row lg:items-end"
+        >
+          <label className="flex-1 text-sm font-bold" htmlFor="api-key">
+            ElevenLabs API key
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+
+              onChange={(event) => setApiKeyInput(event.target.value)}
+              className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+
 
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">

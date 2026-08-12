@@ -10,8 +10,8 @@ export function escapeCSVCell(val) {
 }
 
 export function SpeechHistory({
-  history,
-  favorites,
+  history = [],
+  favorites = new Set(),
   sessionTranscript = [],
   storageStats,
   onReuse,
@@ -35,6 +35,8 @@ export function SpeechHistory({
   const [selectedTag, setSelectedTag] = useState("All Tags");
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -122,6 +124,10 @@ export function SpeechHistory({
       ) {
         return false;
       }
+      if (message.tags !== undefined) {
+        if (!Array.isArray(message.tags)) return false;
+        message.tags = message.tags.filter((t) => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
+      }
     }
 
     if (data.favorites !== undefined) {
@@ -170,15 +176,14 @@ export function SpeechHistory({
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : [...history];
 
     if (selectedTag !== "All Tags") {
-      messages = messages.filter((message) => message.tags && message.tags.includes(selectedTag));
+      messages = messages.filter((message) => Array.isArray(message.tags) && message.tags.includes(selectedTag));
     }
 
     if (debouncedSearch.trim()) {
-      const sanitized = escapeRegExp(debouncedSearch.trim()).toLowerCase();
-      const query = debouncedSearch.toLowerCase().trim();
-      messages = messages.filter((message) =>
-        message.text.toLowerCase().includes(query) ||
-        message.text.toLowerCase().includes(sanitized)
+      const query = debouncedSearch.toLowerCase();
+      messages = messages.filter((message) => 
+        (message.text && message.text.toLowerCase().includes(query)) ||
+        (Array.isArray(message.tags) && message.tags.some((t) => typeof t === "string" && t.toLowerCase().includes(query)))
       );
     }
 
