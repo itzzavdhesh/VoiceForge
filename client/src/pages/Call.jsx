@@ -13,6 +13,7 @@ import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
+import { getStoredValue, setStoredValue } from "../utils/storage.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
