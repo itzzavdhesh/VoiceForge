@@ -67,6 +67,7 @@ const MAX_CHARS = 300;
 const DRAFT_KEY = "voiceforge:draft_call_speech";
 
 export default function TextToSpeech({ onSpeak, disabled = false, status = "idle" }) {
+  const [activeEmotion, setActiveEmotion] = React.useState("neutral");
   const [text, setText] = React.useState(() => {
     try {
       if (typeof localStorage !== "undefined") {
@@ -125,32 +126,30 @@ if (estimatedDuration > 30) {
   }
 
   async function submit() {
-  if (!trimmedText || disabled) return;
+    if (!trimmedText || disabled || characterCount > MAX_CHARS) return;
 
-  // Build the final text with the emotion prompt prefix
-  const finalText = activePreset.promptPrefix
-    ? `${activePreset.promptPrefix}${trimmedText}`
-    : trimmedText;
+    // Build the final text with the emotion prompt prefix
+    const finalText = activePreset.promptPrefix
+      ? `${activePreset.promptPrefix}${trimmedText}`
+      : trimmedText;
 
-  // Merge emotion overrides on top of the user's saved voice settings
-  let voice_settings_override = undefined;
-  if (Object.keys(activePreset.settingsOverride).length > 0) {
-    const base = loadVoiceSettings();
-    voice_settings_override = { ...base, ...activePreset.settingsOverride };
-  }
-
-  await onSpeak(finalText, voice_settings_override);
-  if (!trimmedText || disabled || characterCount > MAX_CHARS) return;
-  await onSpeak(trimmedText);
-  setText("");
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(DRAFT_KEY);
+    // Merge emotion overrides on top of the user's saved voice settings
+    let voice_settings_override = undefined;
+    if (Object.keys(activePreset.settingsOverride).length > 0) {
+      const base = loadVoiceSettings();
+      voice_settings_override = { ...base, ...activePreset.settingsOverride };
     }
-  } catch {
-    // Storage unavailable
+
+    await onSpeak(finalText, voice_settings_override);
+    setText("");
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      // Storage unavailable
+    }
   }
-}
 
   function handleKeyDown(event) {
     if (event.key === "Enter" && !event.shiftKey) {
