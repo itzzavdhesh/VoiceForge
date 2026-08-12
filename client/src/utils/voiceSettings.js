@@ -19,6 +19,11 @@ export const DEFAULT_VOICE_SETTINGS = {
   temperature: 0.8,
   pitchShift: 0, // Transposition in semitones [-12, +12]
   toneEq: 0.5, // DSP tone clarity multiplier [0, 1]
+  dspPitch: 1.0,
+  dspSpeed: 1.0,
+  dspBass: 0.0,
+  dspMid: 0.0,
+  dspTreble: 0.0,
 };
 
 /**

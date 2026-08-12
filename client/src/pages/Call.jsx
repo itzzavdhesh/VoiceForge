@@ -206,9 +206,6 @@ export default function Call() {
   async function handleSpeak(text, voice_settings_override) {
     if (!activeProfile?.voice_id) return;
 
-  async function handleSpeak(text) {
-    if (!activeProfile?.voice_id) return;
-
     try {
       const result = await speak({
         text,

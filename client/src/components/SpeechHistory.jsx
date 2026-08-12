@@ -3,6 +3,12 @@ import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, X, Arr
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
+export function escapeCSVCell(val) {
+  if (val === null || val === undefined) return '""';
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
 export function SpeechHistory({
   history,
   favorites,

@@ -16,6 +16,8 @@ import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import WebcamNavigation from "./components/WebcamNavigation";
 import { loadAccessibilitySettings, ACCESSIBILITY_SETTINGS_CHANGED_EVENT } from "./utils/accessibilitySettings";
+import { importSetupPayload } from "./utils/profileExport.js";
+import { useToast, ToastContainer } from "./components/useToast.jsx";
 
 const tabs = [
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
@@ -60,6 +62,7 @@ function saveActiveTab(tab) {
 export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
+  const { toasts, showToast } = useToast();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [webcamNavEnabled, setWebcamNavEnabled] = React.useState(
     () => loadAccessibilitySettings().webcamNavigationEnabled
@@ -154,6 +157,29 @@ export default function App() {
     } catch {
       // ignore
     }
+  }, []);
+
+  // On initial load, detect and import compressed deep-link payload if present
+  React.useEffect(() => {
+    async function checkDeepLinkPayload() {
+      try {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const payload = params.get("import_payload") || params.get("payload");
+        if (!payload) return;
+
+        await importSetupPayload(payload);
+        showToast("Setup and voice profiles imported successfully!", "success");
+
+        // Clean up URL without triggering a page reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+        selectTab("settings");
+      } catch (err) {
+        showToast("Failed to import setup from link: " + (err.message || String(err)), "error");
+      }
+    }
+    checkDeepLinkPayload();
   }, []);
 
   return (
@@ -309,6 +335,7 @@ export default function App() {
       <ScrollToTopButton activeTab={activeTab} />
       <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
       <WebcamNavigation enabled={webcamNavEnabled} />
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

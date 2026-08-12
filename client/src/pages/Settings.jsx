@@ -20,7 +20,7 @@ import {
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe, Eye } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye, QrCode } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import { useTheme } from "../components/ThemeContext.jsx";
@@ -34,6 +34,7 @@ import { saveProfile } from "../utils/db.js";
 import { ProfileCard } from "../components/ProfileCard.jsx";
 import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { TransferSetupModal } from "../components/TransferSetupModal.jsx";
 import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 
 function AudioPlayback({ blob }) {
@@ -62,6 +63,7 @@ export default function Settings() {
   const [dbError, setDbError] = React.useState("");
   const [sharingProfile, setSharingProfile] = React.useState(null);
   const [isReceiving, setIsReceiving] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
   const { toasts, showToast } = useToast();
   React.useEffect(() => {
     async function loadProfiles() {
@@ -708,6 +710,15 @@ export default function Settings() {
               className="sr-only"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-ink px-5 font-bold text-white transition hover:bg-ink/85 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+          >
+            <QrCode size={18} aria-hidden="true" />
+            Transfer Setup (QR / Link)
+          </button>
         </div>
       </section>
 
@@ -715,6 +726,14 @@ export default function Settings() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsTransferOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200"
+            >
+              <QrCode size={16} />
+              Transfer Setup
+            </button>
             <button
               type="button"
               onClick={() => setIsReceiving(true)}
@@ -766,6 +785,12 @@ export default function Settings() {
             setIsReceiving(false);
             showToast("Profile received successfully!", "success");
           }}
+        />
+      )}
+
+      {isTransferOpen && (
+        <TransferSetupModal
+          onClose={() => setIsTransferOpen(false)}
         />
       )}
       <ToastContainer toasts={toasts} />
