@@ -82,8 +82,6 @@ describe("voiceSettings utility", () => {
       stability: 0.88,
       temperature: 0.77,
       style: 0.66,
-      pitchShift: 0,
-      toneEq: 0.5,
       dspPitch: 1.0,
       dspSpeed: 1.0,
       dspBass: 0.0,

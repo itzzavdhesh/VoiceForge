@@ -487,5 +487,6 @@ const addMessage = useCallback((text, lang = "en-US") => {
     toggleFavorite,
     clearHistory,
     archiveOldHistory,
+    importBackup,
   };
 }

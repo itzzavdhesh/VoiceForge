@@ -14,6 +14,9 @@ import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
+import useTTS from "../hooks/useTTS.js";
+import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
+import { saveAudioBlob, getAudioBlob } from "../utils/db.js";
 
 const MAX_CHARS = 500;
 const COMPOSE_DRAFT_KEY = "voiceforge:draft_speech";
@@ -69,6 +72,7 @@ export default function VoiceForge() {
     toggleFavorite,
     clearHistory,
     archiveOldHistory,
+    importBackup,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
@@ -369,7 +373,7 @@ export default function VoiceForge() {
           storageStats={storageStats}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
-          onToggleFav={handleToggleFavorite}
+          onToggleFav={toggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
           onArchive={archiveOldHistory}
