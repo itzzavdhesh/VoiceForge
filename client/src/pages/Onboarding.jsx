@@ -1,4 +1,3 @@
-// Renders the first-time setup flow for recording and cloning a reference voice.
 import React from "react";
 import {
   CheckCircle2,
@@ -13,212 +12,200 @@ import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 
 import {
-  DEFAULT_VOICE_SETTINGS,
-  loadVoiceSettings,
-  persistVoiceSettings,
-} from "../utils/voiceSettings.js";
+  ACTIONS,
+  EVENTS,
+  Joyride,
+  STATUS,
+} from "react-joyride";
+import useOnboarding from "../hooks/useOnboarding.js";
 
-/**
- * A labelled range slider for a 0–1 voice parameter.
- */
-function VoiceSlider({ id, label, description, value, onChange }) {
-  return (
-    <div className="space-y-1.5">
-      <label
-        htmlFor={id}
-        className="flex items-center justify-between text-sm font-semibold text-ink dark:text-neutral-200"
-      >
-        <span>{label}</span>
-        <span
-          className="tabular-nums rounded bg-cloud px-2 py-0.5 text-xs font-bold text-moss dark:bg-glow/10 dark:text-glow"
-          aria-live="polite"
-          aria-label={`${label} value: ${value}`}
-        >
-          {value.toFixed(2)}
-        </span>
-      </label>
-      <input
-        id={id}
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={value}
-        onChange={onChange}
-        aria-label={label}
-        aria-describedby={`${id}-desc`}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-neutral-200 accent-moss focus:outline-none focus:ring-2 focus:ring-mint dark:bg-neutral-700 dark:accent-glow"
-      />
-      <p
-        id={`${id}-desc`}
-        className="text-xs leading-snug text-ink/55 dark:text-muted"
-      >
-        {description}
-      </p>
-    </div>
-  );
+const steps = [
+  {
+    target: '[data-tour="record-voice"]',
+    title: "Record Voice",
+    content: "Record a voice sample to create your AI voice clone.",
+    tab: "onboarding",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="clone-voice"]',
+    title: "Clone Voice",
+    content: "Clone and manage your voice model here.",
+    tab: "onboarding",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="virtual-camera"]',
+    title: "Enable Camera",
+    content: "Enable virtual camera access for lip-sync generation.",
+    tab: "call",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="tts-input"]',
+    title: "Write Message",
+    content: "Type a message that your cloned voice will speak.",
+    tab: "call",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="generate-speech"]',
+    title: "Generate Speech",
+    content: "Generate speech using your cloned voice.",
+    tab: "call",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="video-preview"]',
+    title: "Preview Result",
+    content: "Preview your generated video and lip-sync output.",
+    tab: "call",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="compose-workspace"]',
+    title: "Compose Workspace",
+    content: "Use the Compose page for quick browser speech and saved message workflows.",
+    tab: "compose",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="compose-message"]',
+    title: "Write a Quick Message",
+    content: "Draft a message, choose a quick reply, or reuse a saved phrase from your history.",
+    tab: "compose",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="compose-speak"]',
+    title: "Speak and Save",
+    content: "Speak the composed message and save it into your local message history.",
+    tab: "compose",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="settings-overview"]',
+    title: "Settings",
+    content: "Manage local voice profiles, API key setup, and synthesis preferences.",
+    tab: "settings",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="settings-api-key"]',
+    title: "API Key",
+    content: "Save your ElevenLabs API key locally for voice cloning and speech generation.",
+    tab: "settings",
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="restart-onboarding"]',
+    title: "Restart the Tour",
+    content: "Use this control any time you want to replay the guided instructions.",
+    tab: "settings",
+    skipBeacon: true,
+  },
+  {
+    target: "body",
+    title: "You're Ready",
+    content: "VoiceForge is ready for recording, cloning, speech generation, and lip-sync preview.",
+    placement: "center",
+    tab: "settings",
+    skipBeacon: true,
+  },
+];
+
+function getInitialStepIndex(tab) {
+  const index = steps.findIndex((step) => step.tab === tab);
+  return index >= 0 ? index : 0;
 }
 
-// ---------------------------------------------------------------------------
-// Step2VoiceSettings
-// A self-contained panel that lives inside the onboarding Step 2 slot.
-// Reads/writes the same localStorage key as the Settings page and
-// VoiceQuickSettings so all three views remain in sync automatically.
-// ---------------------------------------------------------------------------
-function Step2VoiceSettings({ onBack, onContinue }) {
-  const [settings, setSettings] = React.useState(loadVoiceSettings);
-  const [saved, setSaved] = React.useState(false);
-  const savedTimerRef = React.useRef(null);
+const joyrideStyles = {
+  options: {
+    arrowColor: "var(--bg-card)",
+    backgroundColor: "var(--bg-card)",
+    beaconSize: 36,
+    overlayColor: "rgba(0, 0, 0, 0.52)",
+    primaryColor: "#3f5f4d",
+    textColor: "var(--text-base)",
+    zIndex: 10000,
+  },
+  buttonBack: {
+    color: "var(--text-muted)",
+    fontWeight: 700,
+    marginRight: 8,
+  },
+  buttonClose: {
+    color: "var(--text-muted)",
+    height: 36,
+    width: 36,
+  },
+  buttonNext: {
+    backgroundColor: "#3f5f4d",
+    borderRadius: 6,
+    fontWeight: 800,
+    minHeight: 44,
+    padding: "10px 16px",
+  },
+  buttonSkip: {
+    color: "var(--text-muted)",
+    fontWeight: 700,
+    minHeight: 44,
+    padding: "10px 12px",
+  },
+  tooltip: {
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.22)",
+    maxWidth: "min(420px, calc(100vw - 32px))",
+  },
+  tooltipContainer: {
+    lineHeight: 1.55,
+    textAlign: "left",
+  },
+  tooltipContent: {
+    color: "var(--text-muted)",
+    padding: "8px 0 16px",
+  },
+  tooltipTitle: {
+    color: "var(--text-base)",
+    fontSize: 20,
+    fontWeight: 800,
+    margin: "4px 0 0",
+  },
+};
 
-  // Show a brief "Saved" badge then clear it.
-  function flashSaved() {
-    setSaved(true);
-    clearTimeout(savedTimerRef.current);
-    savedTimerRef.current = setTimeout(() => setSaved(false), 1800);
-  }
+export default function OnboardingTour({ activeTab, onSelectTab }) {
+  const { runTour, stopTour, tourStartIndex } = useOnboarding({ autoStart: true });
+  const [stepIndex, setStepIndex] = React.useState(() => getInitialStepIndex(activeTab));
+  const wasRunningRef = React.useRef(false);
 
-  // Cleanup the timer on unmount.
   React.useEffect(() => {
-    return () => clearTimeout(savedTimerRef.current);
-  }, []);
+    if (!runTour) return;
+    const currentTab = steps[stepIndex]?.tab;
+    if (currentTab && currentTab !== activeTab) {
+      onSelectTab(currentTab);
+    }
+  }, [activeTab, onSelectTab, runTour, stepIndex]);
 
-  function updateSlider(key) {
-    return (event) => {
-      const val = parseFloat(event.target.value);
-      setSettings((prev) => {
-        const next = { ...prev, [key]: val };
-        persistVoiceSettings(next);
-        flashSaved();
-        return next;
-      });
-    };
-  }
+  React.useEffect(() => {
+    if (runTour && !wasRunningRef.current) {
+      setStepIndex(Number.isInteger(tourStartIndex) ? tourStartIndex : getInitialStepIndex(activeTab));
+    }
+    wasRunningRef.current = runTour;
+  }, [activeTab, runTour, tourStartIndex]);
 
-  function resetToDefaults() {
-    const defaults = { ...DEFAULT_VOICE_SETTINGS };
-    setSettings(defaults);
-    persistVoiceSettings(defaults);
-    flashSaved();
-  }
+  const finishTour = React.useCallback(() => {
+    setStepIndex(getInitialStepIndex(activeTab));
+    stopTour();
+  }, [activeTab, stopTour]);
 
-  return (
-    <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-bold text-ink dark:text-neutral-100">
-            Voice Workspace Parameters
-          </h3>
-          <p className="mt-1 text-sm text-ink/60 dark:text-muted">
-            Fine-tune how Chatterbox generates your cloned speech. Changes are
-            saved instantly and shared across all tabs.
-          </p>
-        </div>
+  const moveToStep = React.useCallback((nextIndex) => {
+    const boundedIndex = Math.max(0, Math.min(nextIndex, steps.length - 1));
+    const nextTab = steps[boundedIndex]?.tab;
 
-        {/* Saved badge */}
-        <span
-          aria-live="polite"
-          className={[
-            "flex-shrink-0 rounded-full px-3 py-1 text-xs font-bold transition-all duration-300",
-            saved
-              ? "bg-mint text-moss opacity-100 dark:bg-glow/20 dark:text-glow"
-              : "opacity-0",
-          ].join(" ")}
-        >
-          Saved ✓
-        </span>
-      </div>
-
-      {/* ── Sliders ── */}
-      <div className="mt-6 space-y-6">
-        <VoiceSlider
-          id="ob-stability"
-          label="Stability"
-          description="Lower values are more expressive and varied; higher values are more consistent and predictable."
-          value={settings.stability}
-          onChange={updateSlider("stability")}
-        />
-        <VoiceSlider
-          id="ob-temperature"
-          label="Temperature"
-          description="Lower values are steadier; higher values allow more variation in the generated speech."
-          value={settings.temperature}
-          onChange={updateSlider("temperature")}
-        />
-        <VoiceSlider
-          id="ob-style"
-          label="Style Exaggeration"
-          description="Higher values exaggerate the style and prosody of the reference audio. Keep low for neutral delivery."
-          value={settings.style}
-          onChange={updateSlider("style")}
-        />
-      </div>
-
-      {/* Audio Peak Level VU Meter & Clipping Warning */}
-      <div className="mt-5 pt-3 border-t border-ink/10 dark:border-border">
-        <PeakLevelMeter isActive={true} />
-      </div>
-
-      {/* ── Info note ── */}
-      <p className="mt-4 text-xs text-ink/50 dark:text-muted">
-        These values are also adjustable in the{" "}
-        <strong className="font-semibold">Settings</strong> tab and the{" "}
-        <strong className="font-semibold">Compose</strong> tab's quick-settings
-        panel at any time.
-      </p>
-
-      {/* ── Footer actions ── */}
-      <div className="mt-6 flex items-center justify-between border-t border-ink/10 pt-4 dark:border-border">
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-sm font-bold text-ink hover:underline dark:text-neutral-300"
-        >
-          ← Back to Profile
-        </button>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={resetToDefaults}
-            className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-bold text-ink/70 transition hover:border-coral/50 hover:text-coral dark:border-border dark:text-neutral-400 dark:hover:border-coral/40 dark:hover:text-coral"
-            aria-label="Reset voice settings to defaults"
-          >
-            <RotateCcw size={13} aria-hidden="true" />
-            Reset to defaults
-          </button>
-
-          <button
-            type="button"
-            id="ob-continue-step3"
-            onClick={onContinue}
-            className="inline-flex items-center gap-2 rounded-md bg-coral px-5 py-2 font-bold text-white transition hover:bg-coral/90 focus:outline-none focus:ring-2 focus:ring-coral/50"
-          >
-            Continue to Step 3
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const MIN_NAME_LENGTH = 3;
-const MAX_NAME_LENGTH = 100;
-
-export default function Onboarding({ onReady }) {
-  const [recording, setRecording] = React.useState(null); // stores { blob, duration, isValid }
-  const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
-  const [selectedColor, setSelectedColor] = React.useState("emerald");
-  const [selectedIcon, setSelectedIcon] = React.useState("user");
-  const [successProfile, setSuccessProfile] = React.useState(null);
-  const { cloneVoice, status, error: apiError } = useVoiceClone();
-  const { toasts, showToast } = useToast();
-  const isCloning = status === "cloning";
-
-  const handleRecordingReady = React.useCallback((blob, metadata) => {
-    if (!blob) {
-      setRecording(null);
+    if (nextTab && nextTab !== activeTab) {
+      onSelectTab(nextTab);
+      window.setTimeout(() => setStepIndex(boundedIndex), 180);
       return;
     }
     const duration =
@@ -233,12 +220,8 @@ export default function Onboarding({ onReady }) {
     hasServerKey: false,
   });
 
-  React.useEffect(() => {
-    fetch("/api/voice/status")
-      .then((res) => res.json())
-      .then((data) => setServerStatus(data))
-      .catch((err) => console.error("Failed to fetch server status:", err));
-  }, []);
+    setStepIndex(boundedIndex);
+  }, [activeTab, onSelectTab]);
 
   // Chatterbox needs no API key — just ensure the local server is reachable.
   const hasKey = React.useMemo(() => {
@@ -299,10 +282,9 @@ export default function Onboarding({ onReady }) {
     },
   };
 
-  // Persist values to localStorage on step changes
-  React.useEffect(() => {
-    localStorage.setItem("voiceforge:onboardingStep", activeStep.toString());
-  }, [activeStep]);
+    if (type === EVENTS.TARGET_NOT_FOUND || type === EVENTS.STEP_AFTER) {
+      const direction = action === ACTIONS.PREV ? -1 : 1;
+      const nextIndex = index + direction;
 
   React.useEffect(() => {
     localStorage.setItem(
@@ -331,18 +313,10 @@ export default function Onboarding({ onReady }) {
         showToast("Voice cloned successfully", "success");
         setActiveStep(2); // Move user to Step 2 instantly upon real success
       }
-    } catch (err) {
-      console.error("Voice cloning process failed:", err);
-      showToast("Voice cloning failed. Please try again.", "error");
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
-    }
-  }
 
-  function handleManualStepNavigation(targetStep) {
-    if (targetStep <= maxUnlockedStep) {
-      setActiveStep(targetStep);
+      moveToStep(nextIndex);
     }
-  }
+  }, [finishTour, moveToStep]);
 
   return (
     <div className="space-y-6">

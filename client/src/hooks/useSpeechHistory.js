@@ -14,6 +14,13 @@ const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
 const MAX_FAVORITES = 10;
 
+function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+}
+
 /**
  * Safely reads a JSON value from localStorage.
  * Returns `fallback` if the key is missing or the value is unparseable.
@@ -187,11 +194,51 @@ export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
  * @returns {Object} Speech history state and actions
  */
 
+/**
+ * Prunes history based on the retention policy and favorite status.
+ */
+export function pruneHistory(historyList, favoritesList, policy) {
+  if (!policy || policy === "forever" || policy === "session") {
+    return historyList;
+  }
+
+  const now = Date.now();
+  let maxAgeMs = 0;
+  if (policy === "7days") {
+    maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+  } else if (policy === "30days") {
+    maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+  } else {
+    return historyList;
+  }
+
+  const cutoff = now - maxAgeMs;
+  const favSet = new Set(favoritesList);
+
+  return historyList.filter((item) => favSet.has(item.id) || item.timestamp >= cutoff);
+}
+
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => {
-    const raw = readStorage(HISTORY_KEY, []);
-    return raw.map((item) => ({
+    let raw = readStorage(HISTORY_KEY, []);
+    const favs = readStorage(FAVS_KEY, []);
+    const policy = localStorage.getItem("vf_history_retention") || "forever";
+    const favSet = new Set(favs);
+
+    // 1. Session check: if session is new and policy is "session", clear non-pinned
+    const isNewSession = !sessionStorage.getItem("vf_session_active");
+    if (isNewSession) {
+      sessionStorage.setItem("vf_session_active", "true");
+      if (policy === "session") {
+        raw = raw.filter((item) => favSet.has(item.id));
+      }
+    }
+
+    // 2. Duration check: prune items older than 7 or 30 days
+    const pruned = pruneHistory(raw, favs, policy);
+
+    return pruned.map((item) => ({
       ...item,
       tags: Array.isArray(item.tags) ? item.tags : [],
     }));
@@ -245,6 +292,46 @@ export function useSpeechHistory() {
     }
   }, [analyticsHistory]);
 
+  // ── Retention Policy Effect ──────────────────────────────────────────────
+  useEffect(() => {
+    const handlePolicyChange = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "forever" || policy === "session") return;
+
+      setHistory((prev) => {
+        const favs = readStorage(FAVS_KEY, []);
+        return pruneHistory(prev, favs, policy);
+      });
+    };
+
+    window.addEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    return () => {
+      window.removeEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "session") {
+        const rawHistory = readStorage(HISTORY_KEY, []);
+        const favs = readStorage(FAVS_KEY, []);
+        const favSet = new Set(favs);
+        const pruned = rawHistory.filter((item) => favSet.has(item.id));
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, []);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -281,7 +368,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
   ]);
 
   setAnalyticsHistory((prev) => {
-    const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };
+    const newEntry = { id: generateUUID(), text: trimmed, timestamp, language: lang };
     const updated = [newEntry, ...prev];
     return updated.slice(0, MAX_ANALYTICS);
   });
@@ -294,7 +381,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     // so re-spoken messages sort correctly after a page reload.
     const updatedEntry = existing
       ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
-      : { id: msgId, text: trimmed, timestamp: Date.now(), tags: [] };
+      : { id: generateUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
     // Move duplicate to top instead of recreating
     const updated = [
@@ -476,6 +563,29 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setFavorites(cleanedFavorites);
   }, [history, favorites]);
 
+  const addTag = useCallback((id, tag) => {
+    const cleanTag = tag.trim().replace(/^#/, "");
+    if (!cleanTag) return;
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        if (currentTags.includes(cleanTag)) return msg;
+        return { ...msg, tags: [...currentTags, cleanTag] };
+      })
+    );
+  }, []);
+
+  const removeTag = useCallback((id, tagToRemove) => {
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        return { ...msg, tags: currentTags.filter((t) => t !== tagToRemove) };
+      })
+    );
+  }, []);
+
   return {
     history,
     favorites,
@@ -486,6 +596,8 @@ const addMessage = useCallback((text, lang = "en-US") => {
     removeMessage,
     toggleFavorite,
     clearHistory,
-    archiveOldHistory,
+    importBackup,
+    addTag,
+    removeTag,
   };
 }

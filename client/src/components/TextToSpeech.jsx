@@ -1,6 +1,6 @@
 // Provides the large in-call typing surface and Speak command for generated speech.
 import React from "react";
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, Eraser } from "lucide-react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 
 /**
@@ -167,12 +167,22 @@ if (estimatedDuration > 30) {
           <p className="mt-1 text-sm text-ink/65 dark:text-muted">Press Enter to speak. Shift + Enter adds a new line.</p>
         </div>
         <div className="text-right">
-  <span
-    aria-label="Character count"
-    className={["rounded-md border border-ink/10 px-3 py-1 text-sm font-semibold dark:border-border", getCounterColor()].join(" ")}
-  >
-    {characterCount} / {MAX_CHARS}
-  </span>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setText("")}
+              disabled={!text}
+              aria-label="Clear text"
+              title="Clear text"
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-cloud px-3 py-1 text-sm font-semibold text-ink/70 transition-all duration-200 hover:border-moss/40 hover:bg-mint/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:bg-black dark:text-neutral-400 dark:hover:border-glow/40 dark:hover:bg-glow/10"
+            >
+              <Eraser size={15} aria-hidden="true" />
+              Clear
+            </button>
+            <span className={["rounded-md border border-ink/10 px-3 py-1 text-sm font-semibold dark:border-border", getCounterColor()].join(" ")}>
+              {characterCount} / {MAX_CHARS}
+            </span>
+          </div>
 
           <p
             aria-live="polite"
@@ -226,23 +236,19 @@ if (estimatedDuration > 30) {
       </div>
 
       <textarea
-        id="tts-input"
+        data-tour="tts-input"
         value={text}
         onChange={(event) => setText(event.target.value.slice(0, 300))}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        aria-label="Text to speak"
-        aria-describedby="tts-char-hint"
-        className={["min-h-64 flex-1 resize-none rounded-md border bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500",
-          charsLeft < 0
-            ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-700 dark:focus:ring-red-900/30"
-            : "border-ink/15 focus:border-moss focus:ring-mint dark:border-border dark:focus:border-glow dark:focus:ring-glow/25"
-        ].join(" ")}
+        aria-label="Message for cloned voice speech"
+        className="min-h-64 flex-1 resize-none rounded-md border border-ink/15 bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:border-moss focus:ring-4 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-60 dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
         placeholder="Type what you want to say..."
       />
       <p
-        className="mt-2 text-sm text-ink/65 dark:text-muted"
-        aria-live="polite"
+        className={`mt-2 text-right text-xs font-semibold ${
+          characterCount > MAX_CHARS ? "text-coral" : "text-ink/60 dark:text-neutral-400"
+        }`}
       >
         Characters: {characterCount}
       </p>
@@ -255,6 +261,7 @@ if (estimatedDuration > 30) {
 
       <div className="mt-4 flex gap-3">
         <button
+          data-tour="generate-speech"
           type="button"
           onClick={submit}
           disabled={disabled || !trimmedText || status === "speaking" || characterCount > MAX_CHARS}
