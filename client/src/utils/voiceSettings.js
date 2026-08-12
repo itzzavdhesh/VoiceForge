@@ -17,6 +17,8 @@ export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
   style: 0.5,
   temperature: 0.8,
+  pitchShift: 0, // Transposition in semitones [-12, +12]
+  toneEq: 0.5, // DSP tone clarity multiplier [0, 1]
   dspPitch: 1.0,
   dspSpeed: 1.0,
   dspBass: 0.0,
@@ -31,9 +33,9 @@ export const DEFAULT_VOICE_SETTINGS = {
 export const VOICE_PRESETS = {
   neutral: {
     name: "Narrator / Neutral",
-    stability: 0.70,
-    temperature: 0.60,
-    style: 0.30,
+    stability: 0.7,
+    temperature: 0.6,
+    style: 0.3,
     dspPitch: 1.0,
     dspSpeed: 1.0,
     dspBass: 0.0,
@@ -42,10 +44,10 @@ export const VOICE_PRESETS = {
   },
   excited: {
     name: "Excited / Energetic",
-    stability: 0.40,
+    stability: 0.4,
     temperature: 0.95,
     style: 0.75,
-    dspPitch: 1.10,
+    dspPitch: 1.1,
     dspSpeed: 1.15,
     dspBass: -2.0,
     dspMid: 1.0,
@@ -54,9 +56,9 @@ export const VOICE_PRESETS = {
   robotic: {
     name: "Robotic / Flat",
     stability: 0.95,
-    temperature: 0.10,
+    temperature: 0.1,
     style: 0.05,
-    dspPitch: 0.90,
+    dspPitch: 0.9,
     dspSpeed: 0.95,
     dspBass: 2.0,
     dspMid: -3.0,
@@ -65,44 +67,13 @@ export const VOICE_PRESETS = {
   soft: {
     name: "Soft / Whispering",
     stability: 0.55,
-    temperature: 0.50,
-    style: 0.20,
+    temperature: 0.5,
+    style: 0.2,
     dspPitch: 1.05,
     dspSpeed: 0.85,
     dspBass: -4.0,
     dspMid: 2.0,
     dspTreble: 2.0,
-  },
-};
-
-/**
- * Predefined presets for Voice Synthesis Settings.
- * Each preset defines stability, temperature, and style (Style Exaggeration).
- */
-export const VOICE_PRESETS = {
-  neutral: {
-    name: "Narrator / Neutral",
-    stability: 0.70,
-    temperature: 0.60,
-    style: 0.30,
-  },
-  excited: {
-    name: "Excited / Energetic",
-    stability: 0.40,
-    temperature: 0.95,
-    style: 0.75,
-  },
-  robotic: {
-    name: "Robotic / Flat",
-    stability: 0.95,
-    temperature: 0.10,
-    style: 0.05,
-  },
-  soft: {
-    name: "Soft / Whispering",
-    stability: 0.55,
-    temperature: 0.50,
-    style: 0.20,
   },
 };
 
@@ -124,7 +95,11 @@ export function loadVoiceSettings() {
     const raw = localStorage.getItem(VOICE_SETTINGS_KEY);
     if (raw) {
       const candidate = JSON.parse(raw);
-      if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
+      if (
+        candidate !== null &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+      ) {
         parsed = candidate;
       }
     }
@@ -161,7 +136,8 @@ export function loadVoiceSettings() {
       result[key] = typeof parsed[key] === "boolean" ? parsed[key] : defaultVal;
     } else {
       // For any future non-numeric, non-boolean key, copy only on type match.
-      result[key] = typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
+      result[key] =
+        typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
     }
   }
   return result;

@@ -18,7 +18,6 @@ VoiceForge is a browser-based assistive video tool that lets a user type during 
 - [API](#api)
 - [Roadmap](#roadmap)
 - [License](#license)
-- [About](#about)
 
 ---
 
@@ -80,6 +79,8 @@ npm run dev
 ```
 
 6. Open `http://localhost:5173` in Chrome or Edge.
+
+For more details on how to develop locally, including Docker instructions and our mock architecture, see the [Development Workflow & Local-First Architecture Guide](docs/development-workflow.md).
 
 ---
 
@@ -209,3 +210,6 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 ## License
 
 MIT
+
+
+<!-- GSSoC Contribution: Resolves #760 -->

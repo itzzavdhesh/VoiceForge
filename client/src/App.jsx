@@ -5,14 +5,16 @@ import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
 import VoiceForge from "./components/VoiceForge";
+import Analytics from "./pages/Analytics.jsx";
+import VoiceForge from "./components/VoiceForge.jsx";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
 import ScrollToBottomButton from "./components/ScrollToBottomButton.jsx";
-import ScrollToTopButton from "./components/ScrollToTopButton";
+import ScrollToTopButton from "./components/ScrollToTopButton.jsx";
 import Contributors from "./pages/Contributors.jsx";
-import About from "./pages/About";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
+import About from "./pages/About.jsx";
+import PrivacyPolicy from "./pages/PrivacyPolicy.jsx";
 
 const tabs = [
   { id: "onboarding", label: "Onboarding", icon: Mic2 },
@@ -20,6 +22,13 @@ const tabs = [
   { id: "compose", label: "Compose", icon: MessageSquare },
   { id: "settings", label: "Settings", icon: SettingsIcon },
   { id: "contributors", label: "Contributors", icon: Users },
+  { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
+  { id: "call",         label: "Call",          icon: Camera },
+  { id: "compose",      label: "Compose",       icon: MessageSquare },
+  { id: "analytics",    label: "Analytics",     icon: BarChart2 },
+  { id: "settings",     label: "Settings",      icon: SettingsIcon },
+  { id: "contributors", label: "Contributors",  icon: Users },
+  { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -47,6 +56,27 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  const [webcamNavEnabled, setWebcamNavEnabled] = React.useState(
+    () => loadAccessibilitySettings().webcamNavigationEnabled
+  );
+
+  React.useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "voiceforge:accessibilitySettings") {
+        setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    // Custom event for same-window updates since storage event doesn't fire in the same window
+    const handleCustomChange = () => {
+      setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+    };
+    window.addEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    };
+  }, []);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -73,7 +103,6 @@ export default function App() {
       behavior: "auto",
     });
   }
-
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
 
@@ -82,6 +111,35 @@ export default function App() {
     scrollToTop();
   }
 
+  // Arrow key navigation for desktop nav tabs (WAI-ARIA Tabs pattern)
+  function handleNavKeyDown(event) {
+    const tabArray = tabs.map((t) => t.id);
+    const currentIndex = tabArray.indexOf(activeTab);
+    let nextIndex = -1;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % tabArray.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + tabArray.length) % tabArray.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabArray.length - 1;
+    }
+
+    if (nextIndex >= 0) {
+      event.preventDefault();
+      selectTab(tabArray[nextIndex]);
+      // Focus the newly selected tab button
+      const navEl = desktopNavRef.current;
+      if (navEl) {
+        const buttons = navEl.querySelectorAll('[role="tab"]');
+        buttons[nextIndex]?.focus();
+      }
+    }
+  }
+
+  // Support navigation to non-tab routes such as the privacy policy.
   function navigateTo(route) {
     if (route === "privacy-policy") {
       scrollToTop();
@@ -128,6 +186,20 @@ export default function App() {
             <div className="min-w-0">
               <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow sm:block">
                 Open source assistive video
+    <div className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+      <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
+      <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex items-center gap-4">
+            <img
+              src="/models/logo5.png"
+              alt="VoiceForge Logo"
+              className="h-14 w-14 object-contain"
+            />
+
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow">
+               Open source assistive video
               </p>
               <h1 className="text-xl font-bold tracking-normal text-ink dark:text-neutral-50 sm:text-2xl lg:text-3xl">
                 VoiceForge
@@ -148,7 +220,13 @@ export default function App() {
 
           {/* Desktop nav + theme toggle */}
           <div className="hidden items-center gap-2 sm:flex">
-            <nav className="flex gap-2" aria-label="VoiceForge pages">
+            <nav
+              ref={desktopNavRef}
+              className="flex gap-2"
+              role="tablist"
+              aria-label="VoiceForge pages"
+              onKeyDown={handleNavKeyDown}
+            >
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const selected = activeTab === tab.id;
@@ -156,6 +234,10 @@ export default function App() {
                   <button
                     key={tab.id}
                     type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls={`tabpanel-${tab.id}`}
+                    tabIndex={selected ? 0 : -1}
                     onClick={() => selectTab(tab.id)}
                     className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${selected
                       ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
@@ -185,14 +267,22 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-grow">
-        {activeTab === "compose" && <VoiceForge />}
+      <main id="main-content" className="flex-grow" role="main">
+        {activeTab === "compose" && (
+          <div id="tabpanel-compose" role="tabpanel" aria-label="Compose panel">
+            <VoiceForge />
+          </div>
+        )}
 
         {activeTab !== "compose" && (
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-label={`${activeTab} panel`} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
             {activeTab === "call" && <Call />}
             {activeTab === "settings" && <Settings />}
+            {activeTab === "call"       && <Call />}
+            {activeTab === "settings"   && <Settings />}
+            {activeTab === "analytics"  && <Analytics />}
+            {activeTab === "voice-profiles" && <VoiceProfiles />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
@@ -236,6 +326,7 @@ export default function App() {
       <ScrollToBottomButton activeTab={activeTab} />
       <ScrollToTopButton activeTab={activeTab} />
       <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      <WebcamNavigation enabled={webcamNavEnabled} />
     </div>
   );
 }
