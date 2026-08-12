@@ -111,3 +111,33 @@ textarea {
 .animate-fade-in-up {
   animation: fade-in-up 0.2s ease-out;
 }
+
+/* React Joyride onboarding tour */
+.react-joyride__tooltip {
+  background: var(--bg-card) !important;
+  color: var(--text-base) !important;
+}
+
+.react-joyride__tooltip div,
+.react-joyride__tooltip h4,
+.react-joyride__tooltip p {
+  letter-spacing: 0;
+}
+
+.react-joyride__tooltip button {
+  touch-action: manipulation;
+}
+
+.react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(63, 95, 77, 0.18) !important;
+}
+
+.dark .react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22) !important;
+}
+
+@media (max-width: 640px) {
+  .react-joyride__tooltip {
+    max-width: calc(100vw - 24px) !important;
+  }
+}
