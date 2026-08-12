@@ -60,6 +60,7 @@ function saveActiveTab(tab) {
 }
 
 export default function App() {
+  const desktopNavRef = React.useRef(null);
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const { toasts, showToast } = useToast();
