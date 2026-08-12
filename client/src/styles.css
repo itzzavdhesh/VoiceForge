@@ -112,165 +112,32 @@ textarea {
   animation: fade-in-up 0.2s ease-out;
 }
 
-/* ── Accessibility: Respect prefers-reduced-motion ────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+/* React Joyride onboarding tour */
+.react-joyride__tooltip {
+  background: var(--bg-card) !important;
+  color: var(--text-base) !important;
+}
+
+.react-joyride__tooltip div,
+.react-joyride__tooltip h4,
+.react-joyride__tooltip p {
+  letter-spacing: 0;
+}
+
+.react-joyride__tooltip button {
+  touch-action: manipulation;
+}
+
+.react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(63, 95, 77, 0.18) !important;
+}
+
+.dark .react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22) !important;
+}
+
+@media (max-width: 640px) {
+  .react-joyride__tooltip {
+    max-width: calc(100vw - 24px) !important;
   }
-}
-
-/* ── Accessibility: Skip-to-main link ─────────────────────────────────── */
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: auto;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  z-index: 9999;
-  padding: 0.75rem 1.5rem;
-  background: #16201d;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.875rem;
-  border-radius: 0 0 0.5rem 0;
-  text-decoration: none;
-}
-.skip-link:focus {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: auto;
-  height: auto;
-  overflow: visible;
-  outline: 2px solid #22c55e;
-  outline-offset: 2px;
-}
-
-/* Privacy Mode: subtle pulse on the shield icon when first activated */
-@keyframes privacy-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(63, 95, 77, 0.45); }
-  70%  { box-shadow: 0 0 0 10px rgba(63, 95, 77, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(63, 95, 77, 0); }
-}
-@keyframes privacy-pulse-dark {
-  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
-  70%  { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-}
-.animate-privacy-pulse {
-  animation: privacy-pulse 1.2s ease-out 1;
-}
-.dark .animate-privacy-pulse {
-  animation: privacy-pulse-dark 1.2s ease-out 1;
-}
-
-/* Privacy Mode: drop zone active hover glow */
-.privacy-drop-zone:focus-visible {
-  outline: 2px solid #3f5f4d;
-  outline-offset: 2px;
-}
-.dark .privacy-drop-zone:focus-visible {
-  outline-color: #22c55e;
-}
-
-/* Custom scrollbar to match VoiceForge color palette */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-page);
-}
-::-webkit-scrollbar-thumb {
-  background: #22c55e;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #16a34a;
-}
-
-/* Firefox fallback (Standard CSS scrollbars) */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #22c55e var(--bg-page);
-}
-
-/* Webcam Navigation Cursor */
-.webcam-cursor {
-  position: fixed;
-  z-index: 9999;
-  width: 50px;
-  height: 50px;
-  transform: translate(-50%, -50%);
-  pointer-events: none; /* so we don't hover our own cursor */
-}
-
-.webcam-cursor-dot {
-  width: 20px;
-  height: 20px;
-  background-color: rgba(34, 197, 94, 0.8);
-  border-radius: 50%;
-  position: absolute;
-  top: 15px;
-  left: 15px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s ease;
-}
-
-.webcam-click-feedback .webcam-cursor-dot {
-  transform: scale(1.5);
-  background-color: rgba(255, 255, 255, 0.9);
-}
-
-.webcam-cursor-ring {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
-.webcam-cursor-progress {
-  fill: transparent;
-  stroke: #22c55e;
-  stroke-width: 4;
-  stroke-dasharray: 125.6;
-  stroke-dashoffset: 125.6;
-  transition: stroke-dashoffset 0.1s linear, opacity 0.1s ease;
-  opacity: 0;
-}
-
-/* High-Contrast Accessibility Mode */
-.high-contrast {
-  --bg-page: #000000 !important;
-  --bg-card: #000000 !important;
-  --bg-input: #000000 !important;
-  --text-base: #ffffff !important;
-  --text-muted: #ffff00 !important;
-  --border: #ffffff !important;
-  --ring: #ffff00 !important;
-  color: #ffffff !important;
-  background-color: #000000 !important;
-}
-
-.high-contrast * {
-  border-color: #ffffff !important;
-  box-shadow: none !important;
-}
-
-.high-contrast button,
-.high-contrast input,
-.high-contrast select,
-.high-contrast textarea,
-.high-contrast a {
-  border: 2px solid #ffffff !important;
-}
-
-.high-contrast :focus-visible {
-  outline: 3px solid #ffff00 !important;
-  outline-offset: 3px !important;
 }

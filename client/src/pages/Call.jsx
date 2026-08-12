@@ -27,6 +27,29 @@ export default function Call() {
   const [language, setLanguage] = React.useState(loadLanguage);
   const [sessionHistory, setSessionHistory] = React.useState([]);
 
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitlesEnabled") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
+    } catch {
+      return "medium";
+    }
+  });
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
+    } catch {
+      return "0.6";
+    }
+  });
+  const [activeText, setActiveText] = React.useState("");
+
   React.useEffect(() => {
     persistLanguage(language);
   }, [language]);
@@ -206,8 +229,7 @@ export default function Call() {
   async function handleSpeak(text, voice_settings_override) {
     if (!activeProfile?.voice_id) return;
 
-  async function handleSpeak(text) {
-    if (!activeProfile?.voice_id) return;
+    setActiveText(text);
 
     try {
       const result = await speak({
@@ -232,6 +254,8 @@ export default function Call() {
     } catch (err) {
       console.error("TTS streaming error:", err);
       showToast("Speech generation failed", "error");
+    } finally {
+      setActiveText("");
     }
   }
 
@@ -777,9 +801,9 @@ export default function Call() {
           isCalibrating={isCalibrationOpen}
           avatarImage={avatarImage}
           subtitlesEnabled={subtitlesEnabled}
-          subtitleText={subtitleText}
           subtitleFontSize={subtitleFontSize}
           subtitleBgOpacity={subtitleBgOpacity}
+          activeText={activeText}
         />
       </div>
 

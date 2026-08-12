@@ -226,23 +226,22 @@ if (estimatedDuration > 30) {
       </div>
 
       <textarea
-        id="tts-input"
+        data-tour="tts-input"
         value={text}
         onChange={(event) => setText(event.target.value.slice(0, 300))}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        aria-label="Text to speak"
-        aria-describedby="tts-char-hint"
-        className={["min-h-64 flex-1 resize-none rounded-md border bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500",
-          charsLeft < 0
-            ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-700 dark:focus:ring-red-900/30"
-            : "border-ink/15 focus:border-moss focus:ring-mint dark:border-border dark:focus:border-glow dark:focus:ring-glow/25"
-        ].join(" ")}
+        aria-label="Message for cloned voice speech"
+        className="min-h-64 flex-1 resize-none rounded-md border border-ink/15 bg-cloud p-4 text-lg leading-8 text-ink outline-none transition focus:border-moss focus:ring-4 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-60 dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
         placeholder="Type what you want to say..."
       />
-      <p
-        className="mt-2 text-sm text-ink/65 dark:text-muted"
-        aria-live="polite"
+      <button
+        data-tour="generate-speech"
+        type="button"
+        onClick={submit}
+        disabled={disabled || !text.trim() || status === "speaking"}
+        aria-label={status === "speaking" ? "Generating cloned speech" : "Generate cloned speech"}
+        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-coral px-5 py-3 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Characters: {characterCount}
       </p>

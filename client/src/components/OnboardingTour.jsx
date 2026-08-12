@@ -1,11 +1,4 @@
 import React from "react";
-import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
-import VoiceRecorder from "../components/VoiceRecorder.jsx";
-import useVoiceClone from "../hooks/useVoiceClone.js";
-import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
-import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
-import { useToast, ToastContainer } from "../components/useToast.jsx";
-
 import {
   ACTIONS,
   EVENTS,
@@ -250,8 +243,8 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
           next: "Next",
           skip: "Skip",
         }}
-        callback={handleCallback}
-        disableOverlayClose        
+        onEvent={handleCallback}
+        overlayClickAction={false}
         run={runTour}
         scrollOffset={96}
         scrollToFirstStep
