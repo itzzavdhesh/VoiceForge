@@ -6,7 +6,6 @@ import useVoiceClone from "../hooks/useVoiceClone.js";
 import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
 import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
-import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
 
 import {
   DEFAULT_VOICE_SETTINGS,
