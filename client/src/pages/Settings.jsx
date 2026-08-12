@@ -20,7 +20,7 @@ import {
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe, Eye, QrCode } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye, QrCode, Webcam } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import { useTheme } from "../components/ThemeContext.jsx";
@@ -36,6 +36,7 @@ import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
 import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
 import { TransferSetupModal } from "../components/TransferSetupModal.jsx";
 import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
+import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
