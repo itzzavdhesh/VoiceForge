@@ -352,15 +352,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   }, [isRecording]);
 
   return (
-    <section 
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`rounded-lg border bg-white p-5 shadow-soft transition-colors dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk ${
-        isDragOver 
-          ? "border-coral bg-coral/5 dark:border-coral/60 dark:bg-coral/10" 
-          : "border-ink/10 dark:border-border"
-      }`}
+    <section
+      data-tour="record-voice"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

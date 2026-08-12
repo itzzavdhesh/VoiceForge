@@ -1,32 +1,14 @@
 // Lets users manage browser-stored voice profiles and configure voice synthesis settings.
 import React from "react";
-import {
-  DEFAULT_VOICE_SETTINGS,
-  loadVoiceSettings,
-  persistVoiceSettings,
-  VOICE_PRESETS,
-} from "../utils/voiceSettings.js";
-import {
-  loadLanguage,
-  persistLanguage,
-  getLanguageByCode,
-  LANGUAGE_STORAGE_KEY,
-} from "../utils/languages.js";
-
-import { Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
-import { useToast, ToastContainer } from "../components/useToast.jsx";
-import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { ExternalLink, Trash2, CircleAlert, RotateCcw } from "lucide-react";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
   subscribeProfileChanges,
 } from "../hooks/useVoiceClone.js";
-import { saveProfile } from "../utils/db.js";
-import { ProfileCard } from "../components/ProfileCard.jsx";
-import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
-import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
-import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
+import useOnboarding from "../hooks/useOnboarding.js";
+
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -52,9 +34,23 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
-  const [sharingProfile, setSharingProfile] = React.useState(null);
-  const [isReceiving, setIsReceiving] = React.useState(false);
-  const { toasts, showToast } = useToast();
+  const { resetTour } = useOnboarding();
+  const [apiKey, setApiKey] = React.useState(() => {
+    try {
+      return getApiKey();
+    } catch {
+      return "";
+    }
+  });
+
+  React.useEffect(() => {
+    const migrated = migrateFromLocalStorage();
+    if (migrated) {
+      setApiKeyInput(getApiKey());
+      setMigratedNotice(true);
+    }
+  }, []);
+
   React.useEffect(() => {
     async function loadProfiles() {
       try {
@@ -71,9 +67,20 @@ export default function Settings() {
 
 
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+  const [retentionPolicy, setRetentionPolicy] = React.useState(() => {
+    return localStorage.getItem("vf_history_retention") || "forever";
+  });
   const selectedLangObj = getLanguageByCode(language);
+
+  function handleRetentionPolicyChange(value) {
+    setRetentionPolicy(value);
+    localStorage.setItem("vf_history_retention", value);
+    showToast("History retention policy updated", "success");
+    window.dispatchEvent(new Event("voiceforge:retentionPolicyChanged"));
+  }
 
 
   function saveVoiceSettings(newSettings) {
@@ -122,11 +129,14 @@ export default function Settings() {
         history: localStorage.getItem("vf_history"),
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
+        quick_reply_categories: localStorage.getItem("vf_quick_reply_categories"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        accessibilitySettings: localStorage.getItem(ACCESSIBILITY_SETTINGS_KEY),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+        historyRetention: localStorage.getItem("vf_history_retention"),
       };
 
       const rawProfiles = await getSavedProfiles();
@@ -237,11 +247,14 @@ export default function Settings() {
         history: "vf_history",
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
+        quick_reply_categories: "vf_quick_reply_categories",
         voiceSettings: "voiceforge:voiceSettings",
+        accessibilitySettings: ACCESSIBILITY_SETTINGS_KEY,
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
         calibrationScale: "voiceforge:calibrationScale",
+        historyRetention: "vf_history_retention",
       };
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
@@ -259,7 +272,9 @@ export default function Settings() {
       const loaded = await getSavedProfiles();
       setProfiles(loaded);
       setVoiceSettings(loadVoiceSettings());
+      setAccSettings(loadAccessibilitySettings());
       setLanguage(loadLanguage());
+      setRetentionPolicy(localStorage.getItem("vf_history_retention") || "forever");
       event.target.value = "";
     } catch (err) {
       showToast("Import failed: " + (err.message || String(err)), "error");
@@ -296,7 +311,10 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section
+        data-tour="settings-overview"
+        className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk"
+      >
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
           Step 3 of 3
         </p>
@@ -313,8 +331,43 @@ export default function Settings() {
     )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
-        <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+        <div
+          data-tour="restart-onboarding"
+          className="mb-5 flex flex-col gap-3 rounded-md border border-moss/20 bg-mint/40 p-4 dark:border-glow/25 dark:bg-glow/10 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 className="text-base font-bold">Onboarding tour</h2>
+            <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+              Replay the guided workflow for recording, cloning, and generating speech.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={resetTour}
+            aria-label="Restart onboarding tour"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-4 font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black dark:hover:bg-glow/90"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Restart Onboarding Tour
+          </button>
+        </div>
+
+        <div
+          data-tour="settings-api-key"
+          className="flex flex-col gap-3 lg:flex-row lg:items-end"
+        >
+          <label className="flex-1 text-sm font-bold" htmlFor="api-key">
+            ElevenLabs API key
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+
+              onChange={(event) => setApiKeyInput(event.target.value)}
+              className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+            />
+          </label>
+        </div>
 
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
@@ -494,6 +547,64 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Accessibility ─────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center gap-2 mb-1">
+          <Webcam size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <h2 className="text-xl font-bold">Accessibility</h2>
+        </div>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Enable hands-free navigation using your webcam to track head movements.
+        </p>
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-bold block" htmlFor="webcam-nav-toggle">
+                Webcam Navigation
+              </label>
+              <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+                Control the cursor with your head. Click by dwelling over an element.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                id="webcam-nav-toggle"
+                type="checkbox"
+                className="peer sr-only"
+                checked={accSettings.webcamNavigationEnabled}
+                onChange={(e) => saveAccSettings({ ...accSettings, webcamNavigationEnabled: e.target.checked })}
+              />
+              <div className="peer h-6 w-11 rounded-full bg-ink/20 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-moss peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-moss dark:bg-ink/60 dark:peer-checked:bg-glow dark:peer-focus:ring-glow"></div>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dwell-time">
+              <span>Dwell Time (Click Delay)</span>
+              <span className="text-ink/65">{accSettings.dwellTime / 1000}s</span>
+            </label>
+            <input
+              id="dwell-time"
+              type="range"
+              min="500" max="3000" step="100"
+              value={accSettings.dwellTime}
+              onChange={(e) => saveAccSettings({ ...accSettings, dwellTime: parseInt(e.target.value, 10) })}
+              className="w-full mt-2"
+              disabled={!accSettings.webcamNavigationEnabled}
+            />
+            <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+              How long you must look at a button before it clicks.
+            </p>
+          </div>
+        </div>
+
+        {/* Audio Peak Level VU Meter & Clipping Warning */}
+        <div className="mt-5 pt-4 border-t border-ink/10 dark:border-border">
+          <PeakLevelMeter isActive={true} />
+        </div>
+      </section>
+
       {/* ── Language & Region ─────────────────────────────────────────── */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <div className="flex items-center gap-2 mb-1">
@@ -549,6 +660,34 @@ export default function Settings() {
         </p>
       </section>
 
+      {/* ── Privacy & Retention ────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Privacy &amp; Retention</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Configure how long your speech history is kept on this device.
+        </p>
+
+        <div className="mb-5">
+          <label
+            htmlFor="history-retention"
+            className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+          >
+            History Retention
+          </label>
+          <select
+            id="history-retention"
+            value={retentionPolicy}
+            onChange={(e) => handleRetentionPolicyChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="forever">Keep Forever</option>
+            <option value="7days">Clear after 7 days</option>
+            <option value="30days">Clear after 30 days</option>
+            <option value="session">Clear on session close</option>
+          </select>
+        </div>
+      </section>
+
       {/* ── Audio & Hardware ───────────────────────────────────────────── */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
@@ -556,6 +695,40 @@ export default function Settings() {
           Configure hardware routing for synthesized speech playback across video calls and webcams.
         </p>
         <AudioOutputSelector />
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Appearance & Accessibility</h2>
+        <p className="text-sm text-ink/65 mb-5 dark:text-muted">
+          Customize high-contrast accessibility options, contrast ratios, and visual boundaries.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-between rounded-md border border-ink/10 bg-amber-50/40 p-4 dark:border-border dark:bg-black">
+          <div className="flex items-start gap-3">
+            <Eye size={20} className="mt-0.5 text-moss dark:text-glow" aria-hidden="true" />
+            <div>
+              <h3 className="font-semibold text-sm text-ink dark:text-neutral-100">
+                High-Contrast Accessibility Mode
+              </h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">
+                Enforces maximum WCAG AAA contrast ratios, thick element borders, and bright yellow focus rings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleHighContrast}
+            aria-pressed={isHighContrast}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+              isHighContrast
+                ? "bg-amber-500 text-black shadow-sm ring-2 ring-amber-400"
+                : "bg-ink/10 text-ink hover:bg-ink/20 dark:bg-neutral-800 dark:text-neutral-200"
+            }`}
+          >
+            {isHighContrast ? "High-Contrast ON" : "High-Contrast OFF"}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">

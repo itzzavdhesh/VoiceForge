@@ -30,6 +30,12 @@ export default function VoiceForge() {
   });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [language, setLanguage] = useState(loadLanguage);
+
+  useEffect(() => {
+    return subscribeLanguageChange((newLang) => {
+      setLanguage(newLang);
+    });
+  }, []);
   const [historyOpen, setHistoryOpen] = useState(false);
   const drawerRef = useRef(null);
   const historyToggleRef = useRef(null);
@@ -53,6 +59,7 @@ export default function VoiceForge() {
     history,
     favorites,
     sessionTranscript,
+    storageStats,
     addMessage,
     removeMessage,
     toggleFavorite,
@@ -361,11 +368,13 @@ export default function VoiceForge() {
           history={history}
           favorites={favorites}
           sessionTranscript={sessionTranscript}
+          storageStats={storageStats}
           onReuse={(text) => { handleReuse(text); setHistoryOpen(false); }}
           onReplay={handleReplay}
           onToggleFav={handleToggleFavorite}
           onDelete={removeMessage}
           onClearHistory={clearHistory}
+          onArchive={archiveOldHistory}
           onCopy={handleCopy}
           onImportBackup={importBackup}
           onAddTag={addTag}
@@ -375,18 +384,12 @@ export default function VoiceForge() {
         />
       </div>
 
-      <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
-        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
-          {/* Mobile: history toggle */}
-          <button
-            ref={historyToggleRef}
-            className="mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 text-neutral-500 transition hover:bg-neutral-100 lg:hidden dark:border-border dark:text-neutral-400"
-            onClick={() => setHistoryOpen((o) => !o)}
-            aria-label={historyOpen ? "Close history" : "Open history"}
-            aria-expanded={historyOpen}
-          >
-            {historyOpen ? <X size={15} aria-hidden="true" /> : <History size={15} aria-hidden="true" />}
-          </button>
+      <main
+        data-tour="compose-workspace"
+        className="flex flex-1 flex-col overflow-hidden"
+        aria-label="Speech composer"
+      >
+        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-5 py-3.5 dark:border-border dark:bg-black">
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
@@ -415,6 +418,10 @@ export default function VoiceForge() {
           onUnpin={toggleFavorite}
         />
 
+        <div className="px-4 pt-2">
+          <AACSymbolBoard onSelectSymbol={handleQuickReply} />
+        </div>
+
         <QuickReplies onSelect={handleQuickReply} showToast={showToast} />
 
         <div className="flex flex-1 flex-col gap-3 overflow-auto p-5 dark:bg-black">
@@ -440,6 +447,7 @@ export default function VoiceForge() {
           </div>
 
           <textarea
+            data-tour="compose-message"
             id="vf-compose"
             ref={textareaRef}
             value={inputText}
@@ -530,6 +538,7 @@ export default function VoiceForge() {
             </button>
 
             <button
+              data-tour="compose-speak"
               onClick={handleSpeak}
               disabled={!inputText.trim() || isSpeaking}
               aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}

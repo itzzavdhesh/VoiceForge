@@ -22,6 +22,7 @@ const tabs = [
   { id: "analytics",    label: "Analytics",     icon: BarChart2 },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
+  { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -59,7 +60,27 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  const desktopNavRef = React.useRef(null);
+  const [webcamNavEnabled, setWebcamNavEnabled] = React.useState(
+    () => loadAccessibilitySettings().webcamNavigationEnabled
+  );
+
+  React.useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "voiceforge:accessibilitySettings") {
+        setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    // Custom event for same-window updates since storage event doesn't fire in the same window
+    const handleCustomChange = () => {
+      setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
+    };
+    window.addEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    };
+  }, []);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -135,32 +156,20 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
-      {/* Skip to main content link for keyboard/screen-reader users */}
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
-      
-      {/* Global Header */}
-      <header className="sticky top-0 z-40 border-b border-ink/10 bg-white/70 backdrop-blur-md dark:border-border dark:bg-surface/70">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          {/* Logo + Title */}
-            <div
-              className="flex items-center gap-3 min-w-0 cursor-pointer"
-              onClick={() => selectTab("onboarding")}
-              role="button"
-              tabIndex={0}
-              aria-label="Go to home"
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectTab("onboarding")}
-            >
-              <img
-                src="/models/logo5.png"
-                alt="VoiceForge Logo"
-                className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
-              />
-            <div className="min-w-0">
-              <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow sm:block">
-                Open source assistive video
+    <div className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+      <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
+      <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex items-center gap-4">
+            <img
+              src="/models/logo5.png"
+              alt="VoiceForge Logo"
+              className="h-14 w-14 object-contain"
+            />
+
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow">
+               Open source assistive video
               </p>
               <h1 className="text-xl font-bold tracking-normal text-ink dark:text-neutral-50 sm:text-2xl lg:text-3xl">
                 VoiceForge
@@ -242,6 +251,7 @@ export default function App() {
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}
             {activeTab === "analytics"  && <Analytics />}
+            {activeTab === "voice-profiles" && <VoiceProfiles />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
@@ -286,6 +296,7 @@ export default function App() {
       <ScrollToBottomButton activeTab={activeTab} />
       <ScrollToTopButton activeTab={activeTab} />
       <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      <WebcamNavigation enabled={webcamNavEnabled} />
     </div>
   );
 }

@@ -2,9 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    environment: "node",
+    environment: "happy-dom",
     globals: true,
-    include: ["src/**/*.test.js"],
+    include: ["src/**/*.test.{js,jsx}"],
     pool: "vmForks",
   },
 });

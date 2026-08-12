@@ -24,6 +24,10 @@ export default React.forwardRef(function VideoPreview({
   const audioRef = useRef(null);   
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
+  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
+  const subtitleTextRef = React.useRef(activeText);
+  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
+  const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
   const waveRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
@@ -33,6 +37,7 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
+  const activeTextRef = React.useRef(activeText);
 
   const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
@@ -406,7 +411,7 @@ export default React.forwardRef(function VideoPreview({
       if (isSpeaking && subtitlesEnabledRef.current) {
         drawSubtitles(
           context,
-          activeTextRef.current,
+          subtitleTextRef.current,
           subtitleFontSizeRef.current,
           subtitleBgOpacityRef.current
         );
@@ -430,7 +435,10 @@ export default React.forwardRef(function VideoPreview({
   }, [ref, isSpeaking, theme, avatarImage]);
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section
+      data-tour="video-preview"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">

@@ -194,11 +194,51 @@ export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
  * @returns {Object} Speech history state and actions
  */
 
+/**
+ * Prunes history based on the retention policy and favorite status.
+ */
+export function pruneHistory(historyList, favoritesList, policy) {
+  if (!policy || policy === "forever" || policy === "session") {
+    return historyList;
+  }
+
+  const now = Date.now();
+  let maxAgeMs = 0;
+  if (policy === "7days") {
+    maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+  } else if (policy === "30days") {
+    maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+  } else {
+    return historyList;
+  }
+
+  const cutoff = now - maxAgeMs;
+  const favSet = new Set(favoritesList);
+
+  return historyList.filter((item) => favSet.has(item.id) || item.timestamp >= cutoff);
+}
+
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => {
-    const raw = readStorage(HISTORY_KEY, []);
-    return raw.map((item) => ({
+    let raw = readStorage(HISTORY_KEY, []);
+    const favs = readStorage(FAVS_KEY, []);
+    const policy = localStorage.getItem("vf_history_retention") || "forever";
+    const favSet = new Set(favs);
+
+    // 1. Session check: if session is new and policy is "session", clear non-pinned
+    const isNewSession = !sessionStorage.getItem("vf_session_active");
+    if (isNewSession) {
+      sessionStorage.setItem("vf_session_active", "true");
+      if (policy === "session") {
+        raw = raw.filter((item) => favSet.has(item.id));
+      }
+    }
+
+    // 2. Duration check: prune items older than 7 or 30 days
+    const pruned = pruneHistory(raw, favs, policy);
+
+    return pruned.map((item) => ({
       ...item,
       tags: Array.isArray(item.tags) ? item.tags : [],
     }));
@@ -252,6 +292,46 @@ export function useSpeechHistory() {
     }
   }, [analyticsHistory]);
 
+  // ── Retention Policy Effect ──────────────────────────────────────────────
+  useEffect(() => {
+    const handlePolicyChange = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "forever" || policy === "session") return;
+
+      setHistory((prev) => {
+        const favs = readStorage(FAVS_KEY, []);
+        return pruneHistory(prev, favs, policy);
+      });
+    };
+
+    window.addEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    return () => {
+      window.removeEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "session") {
+        const rawHistory = readStorage(HISTORY_KEY, []);
+        const favs = readStorage(FAVS_KEY, []);
+        const favSet = new Set(favs);
+        const pruned = rawHistory.filter((item) => favSet.has(item.id));
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, []);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -278,14 +358,14 @@ const addMessage = useCallback((text, lang = "en-US") => {
   const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
     const newEntry = { id: generateUUID(), text: trimmed, timestamp, language: lang };
@@ -363,6 +443,69 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setFavorites(next);
     return applied;
   }, []);
+
+  /**
+   * Calculates storage utilization metrics (entry counts, byte size, usage percentage).
+   */
+  const storageStats = useCallback(() => {
+    const totalEntries = history.length + analyticsHistory.length + sessionTranscript.length;
+    let bytesUsed = 0;
+    try {
+      if (typeof localStorage !== "undefined") {
+        bytesUsed = (localStorage.getItem(HISTORY_KEY) || "").length +
+                    (localStorage.getItem(ANALYTICS_KEY) || "").length +
+                    (localStorage.getItem(FAVS_KEY) || "").length;
+      }
+    } catch {
+      bytesUsed = totalEntries * 120;
+    }
+    const kbUsed = (bytesUsed / 1024).toFixed(1);
+    const maxEntries = MAX_ANALYTICS;
+    const usagePercentage = Math.min(100, Math.round((analyticsHistory.length / maxEntries) * 100));
+    const isHighCapacity = usagePercentage >= 80 || analyticsHistory.length >= 1600;
+
+    return {
+      totalEntries,
+      analyticsCount: analyticsHistory.length,
+      historyCount: history.length,
+      kbUsed,
+      usagePercentage,
+      isHighCapacity,
+    };
+  }, [history, analyticsHistory, sessionTranscript]);
+
+  /**
+   * Auto-archives history entries older than 30 days into a downloadable JSON backup,
+   * then purges unpinned archived items to free up database capacity.
+   */
+  const archiveOldHistory = useCallback(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const toArchive = analyticsHistory.filter((m) => m.timestamp < thirtyDaysAgo);
+
+    if (toArchive.length === 0 && analyticsHistory.length === 0) return 0;
+
+    const archiveData = (toArchive.length > 0 ? toArchive : analyticsHistory).map((item) => ({
+      ...item,
+      archivedAt: new Date().toISOString(),
+    }));
+
+    // Trigger JSON backup download
+    if (typeof document !== "undefined") {
+      const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VoiceForge-Archive-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Prune archived items from analytics history
+    setAnalyticsHistory((prev) => prev.filter((m) => m.timestamp >= thirtyDaysAgo));
+    return archiveData.length;
+  }, [analyticsHistory]);
 
   /**
    * Wipes all history and favorites.
@@ -448,6 +591,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     favorites,
     sessionTranscript,
     analyticsHistory,
+    storageStats: storageStats(),
     addMessage,
     removeMessage,
     toggleFavorite,
