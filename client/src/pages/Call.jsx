@@ -1,6 +1,6 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Download } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Download, ShieldCheck, Grid } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import DeviceSelector from "../components/DeviceSelector.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
@@ -8,6 +8,7 @@ import VirtualCamera from "../components/VirtualCamera.jsx";
 import { AACSymbolBoard } from "../components/AACSymbolBoard.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
+import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
@@ -27,14 +28,27 @@ export default function Call() {
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
   const [sessionHistory, setSessionHistory] = React.useState([]);
-
-  React.useEffect(() => {
-    persistLanguage(language);
-  }, [language]);
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
   const [isSymbolBoardOpen, setIsSymbolBoardOpen] = React.useState(false);
+  const [videoDevices, setVideoDevices] = React.useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState("");
+  const [privacyMode, setPrivacyMode] = React.useState(false);
+  const [avatarImage, setAvatarImage] = React.useState(null);
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(
+    () => getStoredValue("voiceforge:subtitlesEnabled") === "true"
+  );
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(
+    () => getStoredValue("voiceforge:subtitleFontSize", "medium")
+  );
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(
+    () => getStoredValue("voiceforge:subtitleBgOpacity", "0.6")
+  );
+
+  const handleSpeakingChange = React.useCallback((speaking) => {
+    setIsSpeaking(speaking);
+  }, []);
 
   React.useEffect(() => {
     async function loadActiveProfile() {
