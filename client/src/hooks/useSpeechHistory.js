@@ -4,7 +4,7 @@
  * Drop this into src/hooks/useSpeechHistory.js in the VoiceForge project.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -12,6 +12,14 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
+const MAX_FAVORITES = 10;
+
+function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+}
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -63,6 +71,117 @@ function readSessionStorage(key, fallback) {
   }
 }
 /**
+ * Filters out malformed history entries — anything that isn't a plain
+ * object with a string `id` — before they reach any other history logic.
+ * `readStorage` only validates that the top-level parsed value is an array;
+ * it does not validate what's inside. Corrupted localStorage (manual
+ * tampering, a browser extension, data written by some other app version)
+ * could otherwise contain entries like `null` or a bare string, and
+ * accessing `m.id` on those would throw and crash hook initialization.
+ *
+ * @param {Array<unknown>} entries
+ * @returns {Array<{id: string}>}
+ */
+function sanitizeHistoryEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(
+    (m) => m !== null && typeof m === "object" && typeof m.id === "string"
+  );
+}
+
+/**
+ * Trims a history array down to MAX_HISTORY entries, but exempts favorited
+ * (pinned) entries from eviction. Only non-favorited entries count against
+ * the cap, so pinning a message protects it indefinitely until unpinned.
+ *
+ * @param {Array<{id: string}>} entries - History entries, most-recent-first.
+ * @param {Set<string>} favoriteIds - Ids currently pinned.
+ * @param {number} maxHistory - Max number of non-favorited entries to keep.
+ * @returns {Array<{id: string}>} The trimmed entries, original order preserved.
+ */
+export function trimHistoryPreservingFavorites(entries, favoriteIds, maxHistory) {
+  const pinned = entries.filter((m) => favoriteIds.has(m.id));
+  const unpinned = entries.filter((m) => !favoriteIds.has(m.id));
+  // Favorites are exempt from the cap entirely — they must not reduce the
+  // number of unpinned entries kept. maxHistory unpinned entries are kept
+  // regardless of how many favorites exist on top of them.
+  const trimmedUnpinned = unpinned.slice(0, maxHistory);
+
+  const keptIds = new Set([
+    ...pinned.map((m) => m.id),
+    ...trimmedUnpinned.map((m) => m.id),
+  ]);
+  return entries.filter((m) => keptIds.has(m.id));
+}
+
+/**
+ * Drops favorite ids that have no matching entry in history. Orphaned ids
+ * can accumulate from prior bugs (e.g. a history entry was evicted while
+ * still favorited, before favorites were exempted from eviction) or from
+ * a history entry being deleted outright via removeMessage. Left unchecked,
+ * an orphaned id permanently occupies a slot toward MAX_FAVORITES even
+ * though it no longer corresponds to anything the user can see or unpin.
+ *
+ * @param {Iterable<string>} favoriteIds
+ * @param {Array<{id: string}>} historyEntries
+ * @returns {Set<string>}
+ */
+export function reconcileFavoritesWithHistory(favoriteIds, historyEntries) {
+  const validIds = new Set(
+    historyEntries
+      .filter((m) => m !== null && typeof m === "object" && typeof m.id === "string")
+      .map((m) => m.id)
+  );
+  return new Set([...favoriteIds].filter((id) => validIds.has(id)));
+}
+
+/**
+ * Clamps a favorites collection down to maxFavorites, keeping the most
+ * recently pinned ids. Used when loading favorites from localStorage,
+ * where a legacy or otherwise oversized set (e.g. from before this cap
+ * existed, or orphaned ids accumulated under the earlier eviction bug)
+ * could exceed the cap and silently block all new pins.
+ *
+ * Ids are persisted in Set insertion order (oldest-pinned-first), so the
+ * most recently pinned ids are the trailing entries of the input.
+ *
+ * @param {Iterable<string>} ids
+ * @param {number} maxFavorites
+ * @returns {Set<string>}
+ */
+export function clampFavorites(ids, maxFavorites) {
+  const list = [...ids];
+  const kept = maxFavorites > 0 ? list.slice(-maxFavorites) : [];
+  return new Set(kept);
+}
+
+/**
+ * Computes the next favorites Set for a pin/unpin toggle, enforcing
+ * MAX_FAVORITES on new pins. Unpinning always succeeds. Pinning is refused
+ * (the Set is returned unchanged) once the cap is reached, since favorited
+ * entries are exempt from history eviction and would otherwise let
+ * persisted `history` grow without bound.
+ *
+ * @param {Set<string>} currentFavorites
+ * @param {string} id
+ * @param {number} maxFavorites
+ * @returns {{ favorites: Set<string>, applied: boolean }} The resulting Set
+ *   and whether the toggle was applied (false only when a pin was refused).
+ */
+export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
+  const next = new Set(currentFavorites);
+  if (next.has(id)) {
+    next.delete(id);
+    return { favorites: next, applied: true };
+  }
+  if (next.size >= maxFavorites) {
+    return { favorites: currentFavorites, applied: false };
+  }
+  next.add(id);
+  return { favorites: next, applied: true };
+}
+
+/**
  * Manages speech history and pinned favorites.
  * Persists history and favorite IDs to localStorage.
  *
@@ -75,20 +194,70 @@ function readSessionStorage(key, fallback) {
  * @returns {Object} Speech history state and actions
  */
 
+/**
+ * Prunes history based on the retention policy and favorite status.
+ */
+export function pruneHistory(historyList, favoritesList, policy) {
+  if (!policy || policy === "forever" || policy === "session") {
+    return historyList;
+  }
+
+  const now = Date.now();
+  let maxAgeMs = 0;
+  if (policy === "7days") {
+    maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+  } else if (policy === "30days") {
+    maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+  } else {
+    return historyList;
+  }
+
+  const cutoff = now - maxAgeMs;
+  const favSet = new Set(favoritesList);
+
+  return historyList.filter((item) => favSet.has(item.id) || item.timestamp >= cutoff);
+}
+
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => {
-    const raw = readStorage(HISTORY_KEY, []);
-    return raw.map((item) => ({
+    let raw = readStorage(HISTORY_KEY, []);
+    const favs = readStorage(FAVS_KEY, []);
+    const policy = localStorage.getItem("vf_history_retention") || "forever";
+    const favSet = new Set(favs);
+
+    // 1. Session check: if session is new and policy is "session", clear non-pinned
+    const isNewSession = !sessionStorage.getItem("vf_session_active");
+    if (isNewSession) {
+      sessionStorage.setItem("vf_session_active", "true");
+      if (policy === "session") {
+        raw = raw.filter((item) => favSet.has(item.id));
+      }
+    }
+
+    // 2. Duration check: prune items older than 7 or 30 days
+    const pruned = pruneHistory(raw, favs, policy);
+
+    return pruned.map((item) => ({
       ...item,
       tags: Array.isArray(item.tags) ? item.tags : [],
     }));
   });
-  const [favorites, setFavorites] = useState(
-    () => new Set(readStorage(FAVS_KEY, []))
-  );
+  const [favorites, setFavorites] = useState(() => {
+    const loadedHistory = sanitizeHistoryEntries(readStorage(HISTORY_KEY, []));
+    const loadedFavoriteIds = readStorage(FAVS_KEY, []);
+    const reconciled = reconcileFavoritesWithHistory(loadedFavoriteIds, loadedHistory);
+    return clampFavorites(reconciled, MAX_FAVORITES);
+  });
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
   const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
+
+  // Mirrors `favorites` so addMessage can read the latest pinned ids
+  // without depending on `favorites` state (keeps addMessage's identity stable).
+  const favoritesRef = useRef(favorites);
+  useEffect(() => {
+    favoritesRef.current = favorites;
+  }, [favorites]);
 
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -123,6 +292,46 @@ export function useSpeechHistory() {
     }
   }, [analyticsHistory]);
 
+  // ── Retention Policy Effect ──────────────────────────────────────────────
+  useEffect(() => {
+    const handlePolicyChange = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "forever" || policy === "session") return;
+
+      setHistory((prev) => {
+        const favs = readStorage(FAVS_KEY, []);
+        return pruneHistory(prev, favs, policy);
+      });
+    };
+
+    window.addEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    return () => {
+      window.removeEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "session") {
+        const rawHistory = readStorage(HISTORY_KEY, []);
+        const favs = readStorage(FAVS_KEY, []);
+        const favSet = new Set(favs);
+        const pruned = rawHistory.filter((item) => favSet.has(item.id));
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, []);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -133,7 +342,8 @@ export function useSpeechHistory() {
  * - prevents empty messages
  * - preserves existing IDs for duplicates
  * - moves duplicate entries to top
- * - enforces MAX_HISTORY limit
+ * - enforces MAX_HISTORY limit on non-favorited entries only;
+ *   pinned/favorited messages are exempt from eviction
  *
    * @param {string} text - Message text to store
    * @param {string} lang - Language code
@@ -141,22 +351,24 @@ export function useSpeechHistory() {
 const addMessage = useCallback((text, lang = "en-US") => {
   const trimmed = text.trim();
 
-  if (!trimmed) return;
+  if (!trimmed) return null;
 
   const timestamp = Date.now();
+  const existing = history.find((m) => m.text === trimmed);
+  const msgId = existing ? existing.id : crypto.randomUUID();
 
   setSessionTranscript((prev) => [
-  ...prev,
-  {
-    text: trimmed,
-    timestamp,
-    status: "success",
-    language: lang,
-  },
-]);
+    ...prev,
+    {
+      text: trimmed,
+      timestamp,
+      status: "success",
+      language: lang,
+    },
+  ]);
 
   setAnalyticsHistory((prev) => {
-    const newEntry = { id: crypto.randomUUID(), text: trimmed, timestamp, language: lang };
+    const newEntry = { id: generateUUID(), text: trimmed, timestamp, language: lang };
     const updated = [newEntry, ...prev];
     return updated.slice(0, MAX_ANALYTICS);
   });
@@ -169,7 +381,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     // so re-spoken messages sort correctly after a page reload.
     const updatedEntry = existing
       ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
-      : { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
+      : { id: generateUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
     // Move duplicate to top instead of recreating
     const updated = [
@@ -177,9 +389,19 @@ const addMessage = useCallback((text, lang = "en-US") => {
       ...prev.filter((m) => m.id !== updatedEntry.id),
     ];
 
-    return updated.slice(0, MAX_HISTORY);
+    // Fix: pinned/favorited messages must never be evicted by the history
+    // cap. Previously this was a blind `updated.slice(0, MAX_HISTORY)`,
+    // which could silently drop a favorited entry once 25 newer messages
+    // pushed it past the cutoff — removing it from "Pinned phrases" with
+    // no warning, while its id stayed orphaned in `favorites` forever.
+    //
+    // Instead: keep every favorited entry regardless of position, and only
+    // trim the *non-favorited* entries so the list still stays bounded.
+    return trimHistoryPreservingFavorites(updated, favoritesRef.current, MAX_HISTORY);
   });
-}, []);
+
+  return msgId;
+}, [history]);
 
   /**
    * Removes a message by id and also removes it from favorites.
@@ -194,15 +416,96 @@ const addMessage = useCallback((text, lang = "en-US") => {
   }, []);
 
   /**
-   * Pins or unpins a message.
+   * Pins or unpins a message. Unpinning always succeeds. Pinning is
+   * refused once MAX_FAVORITES is reached, to keep persisted storage
+   * bounded (favorited entries are exempt from history eviction, so an
+   * unbounded number of favorites would mean an unbounded `history` size).
+   *
+   * Computes the result up front from `favoritesRef.current`, then updates
+   * both the ref (synchronously, right here) and React state. Updating the
+   * ref synchronously — rather than waiting for the `favorites` sync effect
+   * — means a second call to `toggleFavorite` made before the next render
+   * (e.g. a rapid double-tap) still sees the just-applied change instead of
+   * a stale snapshot, without relying on React's internal eager-update
+   * optimization to make a mutated-closure-variable return value reliable.
+   *
+   * @param {string} id
+   * @returns {boolean} false only when pinning was refused due to the cap;
+   *   true for every successful pin/unpin.
    */
   const toggleFavorite = useCallback((id) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    const { favorites: next, applied } = toggleFavoriteWithCap(
+      favoritesRef.current,
+      id,
+      MAX_FAVORITES
+    );
+    favoritesRef.current = next;
+    setFavorites(next);
+    return applied;
   }, []);
+
+  /**
+   * Calculates storage utilization metrics (entry counts, byte size, usage percentage).
+   */
+  const storageStats = useCallback(() => {
+    const totalEntries = history.length + analyticsHistory.length + sessionTranscript.length;
+    let bytesUsed = 0;
+    try {
+      if (typeof localStorage !== "undefined") {
+        bytesUsed = (localStorage.getItem(HISTORY_KEY) || "").length +
+                    (localStorage.getItem(ANALYTICS_KEY) || "").length +
+                    (localStorage.getItem(FAVS_KEY) || "").length;
+      }
+    } catch {
+      bytesUsed = totalEntries * 120;
+    }
+    const kbUsed = (bytesUsed / 1024).toFixed(1);
+    const maxEntries = MAX_ANALYTICS;
+    const usagePercentage = Math.min(100, Math.round((analyticsHistory.length / maxEntries) * 100));
+    const isHighCapacity = usagePercentage >= 80 || analyticsHistory.length >= 1600;
+
+    return {
+      totalEntries,
+      analyticsCount: analyticsHistory.length,
+      historyCount: history.length,
+      kbUsed,
+      usagePercentage,
+      isHighCapacity,
+    };
+  }, [history, analyticsHistory, sessionTranscript]);
+
+  /**
+   * Auto-archives history entries older than 30 days into a downloadable JSON backup,
+   * then purges unpinned archived items to free up database capacity.
+   */
+  const archiveOldHistory = useCallback(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const toArchive = analyticsHistory.filter((m) => m.timestamp < thirtyDaysAgo);
+
+    if (toArchive.length === 0 && analyticsHistory.length === 0) return 0;
+
+    const archiveData = (toArchive.length > 0 ? toArchive : analyticsHistory).map((item) => ({
+      ...item,
+      archivedAt: new Date().toISOString(),
+    }));
+
+    // Trigger JSON backup download
+    if (typeof document !== "undefined") {
+      const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VoiceForge-Archive-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Prune archived items from analytics history
+    setAnalyticsHistory((prev) => prev.filter((m) => m.timestamp >= thirtyDaysAgo));
+    return archiveData.length;
+  }, [analyticsHistory]);
 
   /**
    * Wipes all history and favorites.
@@ -260,15 +563,41 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setFavorites(cleanedFavorites);
   }, [history, favorites]);
 
+  const addTag = useCallback((id, tag) => {
+    const cleanTag = tag.trim().replace(/^#/, "");
+    if (!cleanTag) return;
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        if (currentTags.includes(cleanTag)) return msg;
+        return { ...msg, tags: [...currentTags, cleanTag] };
+      })
+    );
+  }, []);
+
+  const removeTag = useCallback((id, tagToRemove) => {
+    setHistory((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== id) return msg;
+        const currentTags = Array.isArray(msg.tags) ? msg.tags : [];
+        return { ...msg, tags: currentTags.filter((t) => t !== tagToRemove) };
+      })
+    );
+  }, []);
+
   return {
     history,
     favorites,
     sessionTranscript,
     analyticsHistory,
+    storageStats: storageStats(),
     addMessage,
     removeMessage,
     toggleFavorite,
     clearHistory,
     importBackup,
+    addTag,
+    removeTag,
   };
 }

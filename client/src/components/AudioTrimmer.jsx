@@ -1,12 +1,13 @@
 // client/src/components/AudioTrimmer.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Scissors, RotateCcw } from "lucide-react";
+import { Play, Square, Scissors, RotateCcw, CircleAlert } from "lucide-react";
 import { encodeWAV } from "../utils/wavEncoder.js";
 
 export function AudioTrimmer({ audioBlob, onTrimComplete }) {
   const [audioBuffer, setAudioBuffer] = useState(null);
   const [duration, setDuration] = useState(0);
   const [peaks, setPeaks] = useState([]);
+  const [trimError, setTrimError] = useState("");
   
   const [startRatio, setStartRatio] = useState(0.0);
   const [endRatio, setEndRatio] = useState(1.0);
@@ -27,8 +28,16 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
       setAudioBuffer(null);
       setDuration(0);
       setPeaks([]);
+      setTrimError("");
       return;
     }
+
+    if (audioBlob.size > 15 * 1024 * 1024) {
+      setTrimError("Audio file is too large to render the waveform. Please use a smaller file.");
+      return;
+    }
+
+    setTrimError("");
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     audioCtxRef.current = audioCtx;
@@ -66,6 +75,9 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
         }
       } catch (err) {
         console.error("Failed to decode reference audio:", err);
+        if (active) {
+          setTrimError("Failed to decode audio. The file might be corrupted or in an unsupported format.");
+        }
       }
     }
 
@@ -323,16 +335,23 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
       </div>
 
       <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={110}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          className="h-28 w-full cursor-ew-resize rounded-md border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 shadow-inner"
-        />
+        {trimError ? (
+          <div className="flex h-28 w-full items-center justify-center rounded-md border border-coral/40 bg-coral/10 p-4 text-center text-sm font-semibold text-coral shadow-inner">
+            <CircleAlert size={18} className="mr-2 inline-block" />
+            {trimError}
+          </div>
+        ) : (
+          <canvas
+            ref={canvasRef}
+            width={600}
+            height={110}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            className="h-28 w-full cursor-ew-resize rounded-md border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 shadow-inner"
+          />
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
@@ -340,7 +359,8 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
           <button
             type="button"
             onClick={isPlaying ? stopPreview : startPreview}
-            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-bold text-white transition ${
+            disabled={!!trimError}
+            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
               isPlaying ? "bg-neutral-600 hover:bg-neutral-700" : "bg-moss hover:bg-moss/90"
             }`}
           >
@@ -360,7 +380,8 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
           <button
             type="button"
             onClick={handleApplyTrim}
-            className="inline-flex items-center gap-1.5 rounded-md bg-coral px-4.5 py-1.5 text-xs font-bold text-white hover:bg-coral/90 transition shadow-sm"
+            disabled={!!trimError}
+            className="inline-flex items-center gap-1.5 rounded-md bg-coral px-4.5 py-1.5 text-xs font-bold text-white hover:bg-coral/90 transition shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Scissors size={12} />
             Apply Selection
