@@ -1,6 +1,23 @@
 import Meyda from "meyda";
 import { PitchShifter } from "./pitchShifter.js";
 
+let sharedAudioContext = null;
+const elementSourceMap = new WeakMap();
+
+/**
+ * Returns a shared singleton AudioContext to prevent HTMLMediaElement reconnect DOMExceptions.
+ */
+export function getSharedAudioContext() {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioContext = new AudioCtx();
+    }
+  }
+  return sharedAudioContext;
+}
+
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
  * Tracks a history of mel-spectrograms for Wav2Lip ONNX real-time inference.
@@ -24,64 +41,66 @@ export class AudioProcessor {
    * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
    */
   async initialize(audioElement) {
-    if (!this.audioContext) {
-      // Must be created after a user gesture
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioElement) return;
+
+    this.audioContext = getSharedAudioContext();
+    if (!this.audioContext) return;
     
     if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+      try {
+        await this.audioContext.resume();
+      } catch {
+        // Autoplay policy gesture requirement
+      }
+    }
+
+    if (elementSourceMap.has(audioElement)) {
+      this.source = elementSourceMap.get(audioElement);
+    } else {
+      try {
+        this.source = this.audioContext.createMediaElementSource(audioElement);
+        this.source.connect(this.audioContext.destination);
+        elementSourceMap.set(audioElement, this.source);
+        audioElement.dataset.sourceCreated = "true";
+      } catch {
+        if (elementSourceMap.has(audioElement)) {
+          this.source = elementSourceMap.get(audioElement);
+        }
+      }
     }
 
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore analyzer stop error
+      }
       this.analyzer = null;
     }
 
-    // Clean up previous source node connection to prevent memory leak
-    if (this.source) {
-      this.source.disconnect();
-      this.source = null;
-    }
-
-    // Prevent re-creating the source node if it already exists for this element.
-    // We map the node to the element's lifecycle using a direct property.
-    if (audioElement._audioSourceNode) {
-      this.source = audioElement._audioSourceNode;
+    if (this.source && Meyda && typeof Meyda.createMeydaAnalyzer === "function") {
       try {
-        this.source.connect(this.audioContext.destination);
-      } catch (e) {
-        // Safe fallback if already connected
+        this.analyzer = Meyda.createMeydaAnalyzer({
+          audioContext: this.audioContext,
+          source: this.source,
+          bufferSize: 512,
+          featureExtractors: ["melSpectrogram", "rms"],
+          callback: (features) => {
+            if (features) {
+              if (features.melSpectrogram) {
+                this.currentMelSpectrogram = features.melSpectrogram;
+              }
+              if (features.rms !== undefined) {
+                this.currentVolume = features.rms;
+              }
+            }
+          },
+        });
+        this.analyzer.start();
+      } catch {
+        // Meyda initialization fallback
       }
-    } else {
-      this.source = this.audioContext.createMediaElementSource(audioElement);
-      // Connect to destination so we can still hear it
-      this.source.connect(this.audioContext.destination);
-      audioElement._audioSourceNode = this.source;
     }
-
-    // Reset history when initialized/re-initialized
-    this.melHistory = [];
-
-    // Configure Meyda to extract the melSpectrogram with 80 bands
-    this.analyzer = Meyda.createMeydaAnalyzer({
-      audioContext: this.audioContext,
-      source: this.source,
-      bufferSize: 512, // Must be a power of 2
-      featureExtractors: ["melSpectrogram", "rms"],
-      callback: (features) => {
-        if (features) {
-          if (features.melSpectrogram) {
-            this.currentMelSpectrogram = features.melSpectrogram;
-          }
-          if (features.rms !== undefined) {
-            this.currentVolume = features.rms;
-          }
-        }
-      },
-    });
-
-    this.analyzer.start();
   }
 
   /**
@@ -146,51 +165,18 @@ export class AudioProcessor {
   }
 
   /**
-   * Cleans up audio context and analyzer.
+   * Cleans up Meyda analyzer without closing shared AudioContext.
    */
   dispose() {
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore
+      }
       this.analyzer = null;
     }
-    if (this.source) {
-      this.source.disconnect();
-      this.source = null;
-    }
-    if (this.audioContext && this.audioContext.state !== "closed") {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-    this.melHistory = [];
-  }
-
-  setBass(gain) {
-    if (this.bassFilter) {
-      this.bassFilter.gain.value = gain;
-    }
-  }
-
-  setMid(gain) {
-    if (this.midFilter) {
-      this.midFilter.gain.value = gain;
-    }
-  }
-
-  setTreble(gain) {
-    if (this.trebleFilter) {
-      this.trebleFilter.gain.value = gain;
-    }
-  }
-
-  setPitch(pitch) {
-    if (this.pitchShifter) {
-      this.pitchShifter.setPitch(pitch);
-    }
-  }
-
-  setSpeed(speed, audioElement) {
-    if (audioElement) {
-      audioElement.playbackRate = speed;
-    }
+    this.source = null;
+    this.audioContext = null;
   }
 }

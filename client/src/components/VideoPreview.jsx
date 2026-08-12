@@ -14,10 +14,10 @@ export default React.forwardRef(function VideoPreview({
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
   isCalibrating = false,
   avatarImage = null,
-  subtitlesEnabled = false,
-  subtitleText = "",
+  subtitlesEnabled = true,
   subtitleFontSize = "medium",
-  subtitleBgOpacity = "0.6",
+  subtitleBgOpacity = 0.6,
+  activeText = "",
 }, ref) {
   const videoRef = React.useRef(null);
   const animationRef = React.useRef(null);
@@ -25,7 +25,7 @@ export default React.forwardRef(function VideoPreview({
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
   const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleTextRef = React.useRef(subtitleText);
+  const subtitleTextRef = React.useRef(activeText);
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
   const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
@@ -37,6 +37,12 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
+  const activeTextRef = React.useRef(activeText);
+
+  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
+  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
+  const subtitleBgOpacityRef = React.useRef(subtitleBgOpacity);
+  const activeTextRef = React.useRef(activeText);
 
   const pipVideoRef = React.useRef(null);
   const isPiPSupported = typeof document !== "undefined" && document.pictureInPictureEnabled;
@@ -62,21 +68,10 @@ export default React.forwardRef(function VideoPreview({
   const isSegmentingRef = React.useRef(false);
   const maskCanvasRef = React.useRef(null);
 
-  React.useEffect(() => {
-    subtitlesEnabledRef.current = subtitlesEnabled;
-  }, [subtitlesEnabled]);
-
-  React.useEffect(() => {
-    subtitleTextRef.current = subtitleText;
-  }, [subtitleText]);
-
-  React.useEffect(() => {
-    subtitleFontSizeRef.current = subtitleFontSize;
-  }, [subtitleFontSize]);
-
-  React.useEffect(() => {
-    subtitleBgOpacityRef.current = Number(subtitleBgOpacity);
-  }, [subtitleBgOpacity]);
+  React.useEffect(() => { subtitlesEnabledRef.current = subtitlesEnabled; }, [subtitlesEnabled]);
+  React.useEffect(() => { subtitleFontSizeRef.current = subtitleFontSize; }, [subtitleFontSize]);
+  React.useEffect(() => { subtitleBgOpacityRef.current = subtitleBgOpacity; }, [subtitleBgOpacity]);
+  React.useEffect(() => { activeTextRef.current = activeText; }, [activeText]);
 
   React.useEffect(() => {
     async function initSegmenter() {
@@ -440,7 +435,10 @@ export default React.forwardRef(function VideoPreview({
   }, [ref, isSpeaking, theme, avatarImage]);
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section
+      data-tour="video-preview"
+      className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
