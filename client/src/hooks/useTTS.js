@@ -1,6 +1,7 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 import { getSavedProfiles, saveVoiceProfile } from "./useVoiceClone.js";
+import { getProfile } from "../utils/db.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -255,8 +256,8 @@ export default function useTTS() {
       setStatus("ready");
 
       return {
-        audioUrl: localUrl,
-        blob,
+        audioUrl: nextAudioUrl,
+        blob: null,
         engine: "chatterbox",
       };
     } catch (ttsError) {

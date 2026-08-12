@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, X, Check, Pencil, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 
 const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
@@ -18,6 +18,7 @@ const DEFAULT_QUICK_REPLIES = [
 const STORAGE_KEY = "vf_quick_replies";
 
 export function QuickReplies({ onSelect, showToast }) {
+  const tablistRef = useRef(null);
   const [replies, setReplies] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);

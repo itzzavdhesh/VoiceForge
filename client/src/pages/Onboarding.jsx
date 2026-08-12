@@ -302,12 +302,12 @@ export default function Onboarding({ onReady }) {
   async function handleClone() {
     // 1. Strict validation guards: recording and a valid name are required.
     if (!hasKey || !recording) return;
-    if (recordingDuration < 10) return;
+    if (recording.duration !== undefined && recording.duration < 10) return;
     if (nameError) return; // block on empty / whitespace / over-limit name
 
     try {
       // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(recording, voiceName.trim(), selectedColor, selectedIcon);
+      const profile = await cloneVoice(recording.blob || recording, voiceName.trim(), selectedColor, selectedIcon);
       if (profile) {
         setSuccessProfile(profile);
         setMaxUnlockedStep(2);
