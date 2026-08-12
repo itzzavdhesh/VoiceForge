@@ -1,4 +1,4 @@
-// Single source of truth for all ElevenLabs eleven_multilingual_v2 supported languages.
+// Single source of truth for all Chatterbox Multilingual TTS supported languages.
 //
 // Every component that needs language data (LanguageSelector, Call, VoiceForge,
 // Settings, useTTS) imports from here instead of hardcoding its own list.
@@ -6,71 +6,65 @@
 // Storage: one unified localStorage key ("voiceforge:language") replaces the
 // previously split "voiceforge:language" (Call) and "voiceforge:compose-language"
 // (VoiceForge Compose) keys.
+//
+// NOTE ON MARATHI ("mr"): the default public Chatterbox-Multilingual-TTS Space
+// does not natively support Marathi (it ships with 23 base languages). Marathi
+// is included here so it is selectable in the UI, but producing real speech for
+// it currently requires a compatible fine-tuned model (e.g. BosonLab/chatterbox-desi
+// on Hugging Face, MIT licensed, trained on ~72.7 hrs of Marathi speech data).
+// See issue #1110 for background and integration notes. Until a Marathi-capable
+// backend is wired in, requests for "mr" may fail or fall back to default
+// behavior depending on server configuration.
 
 export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
 
 /**
- * All 29 languages supported by ElevenLabs eleven_multilingual_v2,
+ * All languages supported by the public Chatterbox Multilingual TTS Space,
  * grouped by region for the LanguageSelector UI.
  *
  * Each entry: { code, name, nativeName, flag, region }
- *   - code:       BCP-47 / ISO 639 language code sent to the API
- *   - name:       English display name
- *   - nativeName: name in the language itself (aids non-English speakers)
- *   - flag:       emoji flag for visual identification
- *   - region:     grouping label used by LanguageSelector
  */
 export const SUPPORTED_LANGUAGES = [
-  // ── Europe ──────────────────────────────────────────────────────────────
-  { code: "en",  name: "English",    nativeName: "English",    flag: "🇬🇧", region: "Europe" },
-  { code: "fr",  name: "French",     nativeName: "Français",   flag: "🇫🇷", region: "Europe" },
-  { code: "de",  name: "German",     nativeName: "Deutsch",    flag: "🇩🇪", region: "Europe" },
-  { code: "es",  name: "Spanish",    nativeName: "Español",    flag: "🇪🇸", region: "Europe" },
-  { code: "pt",  name: "Portuguese", nativeName: "Português",  flag: "🇵🇹", region: "Europe" },
-  { code: "it",  name: "Italian",    nativeName: "Italiano",   flag: "🇮🇹", region: "Europe" },
-  { code: "nl",  name: "Dutch",      nativeName: "Nederlands", flag: "🇳🇱", region: "Europe" },
-  { code: "pl",  name: "Polish",     nativeName: "Polski",     flag: "🇵🇱", region: "Europe" },
-  { code: "sv",  name: "Swedish",    nativeName: "Svenska",    flag: "🇸🇪", region: "Europe" },
-  { code: "da",  name: "Danish",     nativeName: "Dansk",      flag: "🇩🇰", region: "Europe" },
-  { code: "fi",  name: "Finnish",    nativeName: "Suomi",      flag: "🇫🇮", region: "Europe" },
-  { code: "el",  name: "Greek",      nativeName: "Ελληνικά",   flag: "🇬🇷", region: "Europe" },
-  { code: "cs",  name: "Czech",      nativeName: "Čeština",    flag: "🇨🇿", region: "Europe" },
-  { code: "sk",  name: "Slovak",     nativeName: "Slovenčina",  flag: "🇸🇰", region: "Europe" },
-  { code: "ro",  name: "Romanian",   nativeName: "Română",     flag: "🇷🇴", region: "Europe" },
-  { code: "bg",  name: "Bulgarian",  nativeName: "Български",  flag: "🇧🇬", region: "Europe" },
-  { code: "hr",  name: "Croatian",   nativeName: "Hrvatski",   flag: "🇭🇷", region: "Europe" },
-  { code: "uk",  name: "Ukrainian",  nativeName: "Українська", flag: "🇺🇦", region: "Europe" },
-  { code: "ru",  name: "Russian",    nativeName: "Русский",    flag: "🇷🇺", region: "Europe" },
-  { code: "tr",  name: "Turkish",    nativeName: "Türkçe",     flag: "🇹🇷", region: "Europe" },
+  { code: "en", name: "English", nativeName: "English", flag: "EN", region: "Europe" },
+  { code: "fr", name: "French", nativeName: "Francais", flag: "FR", region: "Europe" },
+  { code: "de", name: "German", nativeName: "Deutsch", flag: "DE", region: "Europe" },
+  { code: "es", name: "Spanish", nativeName: "Espanol", flag: "ES", region: "Europe" },
+  { code: "pt", name: "Portuguese", nativeName: "Portugues", flag: "PT", region: "Europe" },
+  { code: "it", name: "Italian", nativeName: "Italiano", flag: "IT", region: "Europe" },
+  { code: "nl", name: "Dutch", nativeName: "Nederlands", flag: "NL", region: "Europe" },
+  { code: "pl", name: "Polish", nativeName: "Polski", flag: "PL", region: "Europe" },
+  { code: "sv", name: "Swedish", nativeName: "Svenska", flag: "SV", region: "Europe" },
+  { code: "da", name: "Danish", nativeName: "Dansk", flag: "DA", region: "Europe" },
+  { code: "fi", name: "Finnish", nativeName: "Suomi", flag: "FI", region: "Europe" },
+  { code: "el", name: "Greek", nativeName: "Greek", flag: "EL", region: "Europe" },
+  { code: "ru", name: "Russian", nativeName: "Russian", flag: "RU", region: "Europe" },
+  { code: "no", name: "Norwegian", nativeName: "Norsk", flag: "NO", region: "Europe" },
+  { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
 
-  // ── Asia & Pacific ──────────────────────────────────────────────────────
-  { code: "hi",  name: "Hindi",      nativeName: "हिन्दी",       flag: "🇮🇳", region: "Asia & Pacific" },
-  { code: "ta",  name: "Tamil",      nativeName: "தமிழ்",       flag: "🇮🇳", region: "Asia & Pacific" },
-  { code: "ja",  name: "Japanese",   nativeName: "日本語",       flag: "🇯🇵", region: "Asia & Pacific" },
-  { code: "ko",  name: "Korean",     nativeName: "한국어",       flag: "🇰🇷", region: "Asia & Pacific" },
-  { code: "zh",  name: "Chinese",    nativeName: "中文",         flag: "🇨🇳", region: "Asia & Pacific" },
-  { code: "id",  name: "Indonesian", nativeName: "Bahasa Indonesia", flag: "🇮🇩", region: "Asia & Pacific" },
-  { code: "ms",  name: "Malay",      nativeName: "Bahasa Melayu",   flag: "🇲🇾", region: "Asia & Pacific" },
-  { code: "fil", name: "Filipino",   nativeName: "Filipino",   flag: "🇵🇭", region: "Asia & Pacific" },
+  { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
+  { code: "mr", name: "Marathi", nativeName: "मराठी", flag: "MR", region: "Asia & Pacific" },
+  { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
+  { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
+  { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
+  { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "MS", region: "Asia & Pacific" },
 
-  // ── Middle East ─────────────────────────────────────────────────────────
-  { code: "ar",  name: "Arabic",     nativeName: "العربية",     flag: "🇸🇦", region: "Middle East" },
+  { code: "ar", name: "Arabic", nativeName: "Arabic", flag: "AR", region: "Middle East" },
+  { code: "he", name: "Hebrew", nativeName: "Hebrew", flag: "HE", region: "Middle East" },
+
+  { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
 ];
 
 /** Set of all valid language codes for O(1) lookups. */
 const VALID_CODES = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
 
 /**
- * Returns true when `code` is a supported ElevenLabs language code,
+ * Returns true when `code` is a supported Chatterbox language code,
  * or when it is falsy (meaning "auto-detect").
  */
 export function isValidLanguageCode(code) {
   return !code || VALID_CODES.has(code);
 }
 
-/**
- * Map from code → language object for quick lookups.
- */
 const BY_CODE = Object.fromEntries(
   SUPPORTED_LANGUAGES.map((l) => [l.code, l])
 );
@@ -89,7 +83,6 @@ export function getLanguageByCode(code) {
  */
 export function loadLanguage() {
   try {
-    // Migrate legacy compose key if it exists and the unified key is absent.
     const legacyCompose = localStorage.getItem("voiceforge:compose-language");
     const current = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (!current && legacyCompose) {
@@ -99,12 +92,10 @@ export function loadLanguage() {
       return migrated;
     }
 
-    // Handle legacy full-name values ("English", "Hindi", etc.)
-    const LEGACY_NAME_TO_CODE = {
-      English: "en", Hindi: "hi", Spanish: "es", French: "fr",
-      German: "de", Portuguese: "pt", Japanese: "ja",
-    };
-    const normalized = LEGACY_NAME_TO_CODE[current] || current;
+    const legacyNameToCode = Object.fromEntries(
+      SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code])
+    );
+    const normalized = legacyNameToCode[current] ?? current;
 
     return VALID_CODES.has(normalized) ? normalized : "en";
   } catch {
@@ -118,10 +109,44 @@ export function loadLanguage() {
  */
 export function persistLanguage(code) {
   try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, code || "en");
+    const val = code || "en";
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, val);
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("voiceforge:languageChanged", { detail: val }));
+    }
   } catch {
-    // Storage unavailable — continue without persisting.
+    // Storage unavailable - continue without persisting.
   }
+}
+
+/**
+ * Subscribes a callback to local and multi-tab storage language changes.
+ * Returns an unsubscribe function.
+ */
+export function subscribeLanguageChange(callback) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleLocalEvent(e) {
+    callback(e.detail || loadLanguage());
+  }
+
+  function handleStorageEvent(e) {
+    if (
+      e.key === LANGUAGE_STORAGE_KEY ||
+      e.key === "voiceforge:compose-language" ||
+      !e.key
+    ) {
+      callback(loadLanguage());
+    }
+  }
+
+  window.addEventListener("voiceforge:languageChanged", handleLocalEvent);
+  window.addEventListener("storage", handleStorageEvent);
+
+  return () => {
+    window.removeEventListener("voiceforge:languageChanged", handleLocalEvent);
+    window.removeEventListener("storage", handleStorageEvent);
+  };
 }
 
 /**

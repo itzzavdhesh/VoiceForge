@@ -5,15 +5,20 @@ const REPO = "itzzavdhesh/VoiceForge";
 export default function Contributors() {
   const [contributors, setContributors] = React.useState([]);
   const [status, setStatus] = React.useState("loading");
+  const [retryCount, setRetryCount] = React.useState(0);
 
   React.useEffect(() => {
     const controller = new AbortController();
     async function fetchContributors() {
+      setStatus("loading");
       try {
         const res = await fetch(
           `https://api.github.com/repos/${REPO}/contributors?per_page=100`,
           { signal: controller.signal }
         );
+        if (res.status === 403) {
+          throw new Error("rate_limited");
+        }
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         if (controller.signal.aborted) return;
@@ -21,12 +26,12 @@ export default function Contributors() {
         setStatus("success");
       } catch (err) {
         if (err.name === "AbortError") return;
-        setStatus("error");
+        setStatus(err.message === "rate_limited" ? "rate_limited" : "error");
       }
     }
     fetchContributors();
     return () => controller.abort();
-  }, []);
+  }, [retryCount]);
 
   return (
     <div className="space-y-6">
@@ -46,10 +51,32 @@ export default function Contributors() {
         </p>
       )}
 
+      {status === "rate_limited" && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p role="alert" className="text-sm text-yellow-600 dark:text-yellow-400">
+            GitHub API rate limit reached. Please wait a moment and try again.
+          </p>
+          <button
+            onClick={() => setRetryCount((c) => c + 1)}
+            className="rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {status === "error" && (
-        <p role="alert" className="text-center text-sm text-red-500">
-          Failed to load contributors. Please try again later.
-        </p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p role="alert" className="text-sm text-red-500">
+            Failed to load contributors. Please try again later.
+          </p>
+          <button
+            onClick={() => setRetryCount((c) => c + 1)}
+            className="rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {status === "success" && (

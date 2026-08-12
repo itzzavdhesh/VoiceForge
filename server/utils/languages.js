@@ -1,52 +1,53 @@
-// Server-side language code validation for ElevenLabs eleven_multilingual_v2.
-//
-// Mirrors the client-side SUPPORTED_LANGUAGES list but only stores the code set
-// since the server doesn't need display names, flags, or regions.
+// Server-side language validation for Chatterbox Multilingual TTS.
 
 /**
- * All 29 language codes supported by ElevenLabs eleven_multilingual_v2.
- * @see https://elevenlabs.io/docs/capabilities/multilingual
+ * All language codes supported by the public Chatterbox Multilingual TTS Space.
  */
 export const VALID_LANGUAGE_CODES = new Set([
-  "ar",   // Arabic
-  "bg",   // Bulgarian
-  "zh",   // Chinese (Mandarin)
-  "hr",   // Croatian
-  "cs",   // Czech
-  "da",   // Danish
-  "nl",   // Dutch
-  "en",   // English
-  "fil",  // Filipino
-  "fi",   // Finnish
-  "fr",   // French
-  "de",   // German
-  "el",   // Greek
-  "hi",   // Hindi
-  "id",   // Indonesian
-  "it",   // Italian
-  "ja",   // Japanese
-  "ko",   // Korean
-  "ms",   // Malay
-  "pl",   // Polish
-  "pt",   // Portuguese
-  "ro",   // Romanian
-  "ru",   // Russian
-  "sk",   // Slovak
-  "es",   // Spanish
-  "sv",   // Swedish
-  "ta",   // Tamil
-  "tr",   // Turkish
-  "uk",   // Ukrainian
+  "ar",
+  "da",
+  "de",
+  "el",
+  "en",
+  "es",
+  "fi",
+  "fr",
+  "he",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "ms",
+  "nl",
+  "no",
+  "pl",
+  "pt",
+  "ru",
+  "sv",
+  "sw",
+  "tr",
+  "zh",
 ]);
 
 /**
- * Returns true when `code` is either falsy (auto-detect mode, where
- * ElevenLabs infers the language from the input text) or a code
- * present in the supported set.
+ * Returns true when `code` is either falsy (auto-detect fallback) or a
+ * code present in the Chatterbox supported set.
  *
  * @param {string|undefined|null} code
  * @returns {boolean}
  */
 export function isValidLanguageCode(code) {
-  return !code || VALID_LANGUAGE_CODES.has(code);
+  if (code === undefined || code === null || code === "") return true;
+  return typeof code === "string" && VALID_LANGUAGE_CODES.has(code);
+}
+
+/**
+ * Returns the language code expected by the Chatterbox /predict endpoint.
+ * Falls back to English when the client omits a language.
+ *
+ * @param {string|undefined|null} code
+ * @returns {string}
+ */
+export function toChatterboxLanguageCode(code) {
+  return VALID_LANGUAGE_CODES.has(code) ? code : "en";
 }
