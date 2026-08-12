@@ -21,8 +21,33 @@ function getSystemTheme() {
   }
 }
 
+function getStoredHighContrast() {
+  try {
+    return localStorage.getItem("voiceforge:highContrast") === "true";
+  } catch {
+    return false;
+  }
+}
+
+function storeTheme(theme) {
+  try {
+    localStorage.setItem("voiceforge:theme", theme);
+  } catch {
+    // Theme still works for the current session when persistence is unavailable.
+  }
+}
+
+function storeHighContrast(enabled) {
+  try {
+    localStorage.setItem("voiceforge:highContrast", String(enabled));
+  } catch {
+    // Storage unavailable
+  }
+}
+
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = React.useState(() => getStoredTheme() || getSystemTheme());
+  const [theme, setTheme] = React.useState(getStoredTheme);
+  const [isHighContrast, setIsHighContrast] = React.useState(getStoredHighContrast);
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -34,19 +59,14 @@ export function ThemeProvider({ children }) {
   }, [theme]);
 
   React.useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = (e) => {
-      // Only dynamically sync with OS if user hasn't explicitly overridden the theme
-      if (!getStoredTheme()) {
-        setTheme(e.matches ? "dark" : "light");
-      }
-    };
-
-    if (mediaQuery?.addEventListener) {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
+    const root = document.documentElement;
+    if (isHighContrast) {
+      root.classList.add("high-contrast");
+    } else {
+      root.classList.remove("high-contrast");
     }
-  }, []);
+    storeHighContrast(isHighContrast);
+  }, [isHighContrast]);
 
   function toggleTheme() {
     setTheme((prev) => {
@@ -60,8 +80,12 @@ export function ThemeProvider({ children }) {
     });
   }
 
+  function toggleHighContrast() {
+    setIsHighContrast((prev) => !prev);
+  }
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isHighContrast, toggleHighContrast }}>
       {children}
     </ThemeContext.Provider>
   );
