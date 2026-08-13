@@ -112,25 +112,32 @@ textarea {
   animation: fade-in-up 0.2s ease-out;
 }
 
-/* Custom scrollbar to match VoiceForge color palette */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-page);
-}
-::-webkit-scrollbar-thumb {
-  background: #22c55e;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #16a34a;
+/* React Joyride onboarding tour */
+.react-joyride__tooltip {
+  background: var(--bg-card) !important;
+  color: var(--text-base) !important;
 }
 
-/* Firefox fallback (only when WebKit scrollbar is not supported) */
-@supports not selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: #22c55e var(--bg-page);
+.react-joyride__tooltip div,
+.react-joyride__tooltip h4,
+.react-joyride__tooltip p {
+  letter-spacing: 0;
+}
+
+.react-joyride__tooltip button {
+  touch-action: manipulation;
+}
+
+.react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(63, 95, 77, 0.18) !important;
+}
+
+.dark .react-joyride__spotlight {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22) !important;
+}
+
+@media (max-width: 640px) {
+  .react-joyride__tooltip {
+    max-width: calc(100vw - 24px) !important;
   }
 }
