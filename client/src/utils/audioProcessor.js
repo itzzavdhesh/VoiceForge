@@ -1,71 +1,132 @@
 import Meyda from "meyda";
+import { PitchShifter } from "./pitchShifter.js";
+
+let sharedAudioContext = null;
+const elementSourceMap = new WeakMap();
+
+/**
+ * Returns a shared singleton AudioContext to prevent HTMLMediaElement reconnect DOMExceptions.
+ */
+export function getSharedAudioContext() {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioContext = new AudioCtx();
+    }
+  }
+  return sharedAudioContext;
+}
 
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
- * This is a simplified wrapper for real-time inference.
+ * Tracks a history of mel-spectrograms for Wav2Lip ONNX real-time inference.
  */
 export class AudioProcessor {
   constructor() {
     this.audioContext = null;
     this.source = null;
     this.analyzer = null;
-    this.melBuffer = []; // stores last 16 frames
+    this.analyser = null; // AnalyserNode for audio visualization
+    this.currentMelSpectrogram = null;
+    this.melHistory = [];
     this.currentVolume = 0;
+    this.bassFilter = null;
+    this.midFilter = null;
+    this.trebleFilter = null;
+    this.pitchShifter = null;
   }
 
   /**
    * Initializes the audio processor with a given audio element.
-   * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
+   * @param {HTMLMediaElement|null} audioElement The <audio> or <video> element to analyze (optional).
    */
   async initialize(audioElement) {
-    if (!this.audioContext) {
-      // Must be created after a user gesture
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioElement) return;
+
+    this.audioContext = getSharedAudioContext();
+    if (!this.audioContext) return;
     
     if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+      try {
+        await this.audioContext.resume();
+      } catch {
+        // Autoplay policy gesture requirement
+      }
     }
 
-    // Prevent re-creating the source node if it already exists for this element
-    if (!audioElement.dataset.sourceCreated) {
-      this.source = this.audioContext.createMediaElementSource(audioElement);
-      // Connect to destination so we can still hear it
-      this.source.connect(this.audioContext.destination);
-      audioElement.dataset.sourceCreated = "true";
+    if (elementSourceMap.has(audioElement)) {
+      this.source = elementSourceMap.get(audioElement);
+    } else {
+      try {
+        this.source = this.audioContext.createMediaElementSource(audioElement);
+        this.source.connect(this.audioContext.destination);
+        elementSourceMap.set(audioElement, this.source);
+        audioElement.dataset.sourceCreated = "true";
+      } catch {
+        if (elementSourceMap.has(audioElement)) {
+          this.source = elementSourceMap.get(audioElement);
+        }
+      }
     }
 
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore analyzer stop error
+      }
+      this.analyzer = null;
     }
 
-    // Configure Meyda for 80 mel bands
-    Meyda.melBands = 80;
-
-    this.analyzer = Meyda.createMeydaAnalyzer({
-      audioContext: this.audioContext,
-      source: this.source,
-      bufferSize: 512, // Must be a power of 2
-      featureExtractors: ["melBands", "rms"], // Using melBands for Wav2Lip
-      callback: (features) => {
-        if (features) {
-          // Meyda returns melBands as an array/Float32Array
-          const melData = features.melBands || features.melSpectrogram;
-          if (melData) {
-            // Push a copy to avoid mutation
-            this.melBuffer.push(new Float32Array(melData));
-            if (this.melBuffer.length > 16) {
-              this.melBuffer.shift();
+    if (this.source && Meyda && typeof Meyda.createMeydaAnalyzer === "function") {
+      try {
+        this.analyzer = Meyda.createMeydaAnalyzer({
+          audioContext: this.audioContext,
+          source: this.source,
+          bufferSize: 512,
+          featureExtractors: ["melSpectrogram", "rms"],
+          callback: (features) => {
+            if (features) {
+              if (features.melSpectrogram) {
+                this.currentMelSpectrogram = features.melSpectrogram;
+                if (!this.melHistory) this.melHistory = [];
+                this.melHistory.push(features.melSpectrogram);
+                if (this.melHistory.length > 16) {
+                  this.melHistory.shift();
+                }
+              }
+              if (features.rms !== undefined) {
+                this.currentVolume = features.rms;
+              }
             }
-          }
-          if (features.rms !== undefined) {
-            this.currentVolume = features.rms;
-          }
-        }
-      },
-    });
+          },
+        });
+        this.analyzer.start();
+      } catch {
+        // Meyda initialization fallback
+      }
+    }
+  }
 
-    this.analyzer.start();
+  /**
+   * Returns real-time frequency data mapped to 5 frequency bands.
+   * @returns {Uint8Array} Array of 5 frequency levels (0-255).
+   */
+  getFrequencyData() {
+    if (!this.analyser) {
+      return new Uint8Array(5).fill(0);
+    }
+    const bufferLength = this.analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    this.analyser.getByteFrequencyData(dataArray);
+
+    const bars = new Uint8Array(5);
+    const step = Math.floor(bufferLength / 5) || 1;
+    for (let i = 0; i < 5; i++) {
+      bars[i] = dataArray[i * step] || 0;
+    }
+    return bars;
   }
 
   /**
@@ -75,25 +136,23 @@ export class AudioProcessor {
    * @returns {Float32Array|null}
    */
   getLatestFeatures() {
-    if (this.melBuffer.length < 16) {
-      return null; // Wait until we have enough frames
-    }
+    const history = this.melHistory || [];
+    const flat = new Float32Array(80 * 16);
     
-    // Wav2Lip expects shape [batch_size, 1, 80, 16]
-    // which in memory is 80 rows (mel bands), 16 columns (time frames).
-    const tensorData = new Float32Array(80 * 16);
-    
-    for (let timeStep = 0; timeStep < 16; timeStep++) {
-      const frameData = this.melBuffer[timeStep];
-      for (let band = 0; band < 80; band++) {
-        // Safe access in case Meyda returns less than 80 bands
-        const val = band < frameData.length ? frameData[band] : 0;
-        // Memory layout: [band * 16 + timeStep]
-        tensorData[band * 16 + timeStep] = val;
+    // Fill the flat array in shape [1, 1, 80, 16] where time step changes fastest.
+    // Flat index = b * 16 + t
+    const missing = 16 - history.length;
+    for (let b = 0; b < 80; b++) {
+      for (let t = 0; t < 16; t++) {
+        if (t >= missing) {
+          const frame = history[t - missing];
+          flat[b * 16 + t] = frame[b] || 0;
+        } else {
+          flat[b * 16 + t] = 0;
+        }
       }
     }
-    
-    return tensorData;
+    return flat;
   }
 
   /**
@@ -113,16 +172,18 @@ export class AudioProcessor {
   }
 
   /**
-   * Cleans up audio context and analyzer.
+   * Cleans up Meyda analyzer without closing shared AudioContext.
    */
   dispose() {
     if (this.analyzer) {
-      this.analyzer.stop();
+      try {
+        this.analyzer.stop();
+      } catch {
+        // Ignore
+      }
       this.analyzer = null;
     }
-    if (this.audioContext && this.audioContext.state !== "closed") {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+    this.source = null;
+    this.audioContext = null;
   }
 }

@@ -67,91 +67,69 @@ export class FaceProcessor {
    * @param {HTMLCanvasElement} sourceCanvas The canvas containing the full frame
    * @param {Array} landmarks The detected face landmarks
    * @param {HTMLCanvasElement} targetCanvas The canvas to draw the crop onto
-   * @returns {Object|null} { tensorData: Float32Array, box: { x, y, w, h } }
+   * @returns {Object|null} The cropped image data and original crop coordinates
    */
   cropMouthRegion(sourceCanvas, landmarks, targetCanvas) {
-    if (!landmarks || landmarks.length === 0) return null;
+    if (!landmarks || !sourceCanvas || !targetCanvas) return null;
 
-    let minX = 1, minY = 1, maxX = 0, maxY = 0;
-    for (const p of landmarks) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
+    // Mouth landmarks indices in MediaPipe FaceMesh
+    const MOUTH_LANDMARKS = [
+      0, 13, 14, 17, 37, 39, 40, 61, 78, 80, 81, 82, 83, 84, 87, 88, 91, 95, 96, 146,
+      178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 313, 314, 317, 318,
+      321, 324, 326, 375, 402, 405, 409, 415
+    ];
 
-    const sw = sourceCanvas.width;
-    const sh = sourceCanvas.height;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
 
-    let boxX = minX * sw;
-    let boxY = minY * sh;
-    let boxW = (maxX - minX) * sw;
-    let boxH = (maxY - minY) * sh;
-
-    // Expand bounding box slightly for context (Wav2Lip needs context)
-    const expand = 0.2;
-    boxX = Math.max(0, boxX - boxW * expand);
-    boxY = Math.max(0, boxY - boxH * expand);
-    boxW = Math.min(sw - boxX, boxW * (1 + 2 * expand));
-    boxH = Math.min(sh - boxY, boxH * (1 + 2 * expand));
-
-    // Force square
-    const side = Math.max(boxW, boxH);
-    boxX = boxX - (side - boxW) / 2;
-    boxY = boxY - (side - boxH) / 2;
-    
-    // Draw onto 96x96 target canvas
-    targetCanvas.width = 96;
-    targetCanvas.height = 96;
-    const ctx = targetCanvas.getContext("2d", { willReadFrequently: true });
-    
-    // Smooth scaling
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    
-    ctx.clearRect(0, 0, 96, 96);
-    ctx.drawImage(sourceCanvas, boxX, boxY, side, side, 0, 0, 96, 96);
-
-    const imgData = ctx.getImageData(0, 0, 96, 96);
-    const data = imgData.data;
-
-    // Create [1, 6, 96, 96] tensor. 
-    // Float32Array size = 6 * 96 * 96 = 55296
-    const tensorData = new Float32Array(55296);
-
-    for (let y = 0; y < 96; y++) {
-      for (let x = 0; x < 96; x++) {
-        const pixelIdx = (y * 96 + x) * 4;
-        const r = data[pixelIdx] / 255.0;
-        const g = data[pixelIdx + 1] / 255.0;
-        const b = data[pixelIdx + 2] / 255.0;
-
-        // original face (channels 0, 1, 2)
-        // planar layout: c * H * W + y * W + x
-        const baseIdx0 = 0 * 96 * 96 + y * 96 + x;
-        const baseIdx1 = 1 * 96 * 96 + y * 96 + x;
-        const baseIdx2 = 2 * 96 * 96 + y * 96 + x;
-        tensorData[baseIdx0] = r;
-        tensorData[baseIdx1] = g;
-        tensorData[baseIdx2] = b;
-
-        // masked face (channels 3, 4, 5)
-        const maskedR = y >= 48 ? 0 : r;
-        const maskedG = y >= 48 ? 0 : g;
-        const maskedB = y >= 48 ? 0 : b;
-
-        const baseIdx3 = 3 * 96 * 96 + y * 96 + x;
-        const baseIdx4 = 4 * 96 * 96 + y * 96 + x;
-        const baseIdx5 = 5 * 96 * 96 + y * 96 + x;
-        tensorData[baseIdx3] = maskedR;
-        tensorData[baseIdx4] = maskedG;
-        tensorData[baseIdx5] = maskedB;
+    for (const idx of MOUTH_LANDMARKS) {
+      const lm = landmarks[idx];
+      if (lm) {
+        minX = Math.min(minX, lm.x);
+        maxX = Math.max(maxX, lm.x);
+        minY = Math.min(minY, lm.y);
+        maxY = Math.max(maxY, lm.y);
       }
     }
 
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const mouthWidth = maxX - minX;
+    const mouthHeight = maxY - minY;
+
+    // We want a square crop centered around the mouth
+    const cropSize = Math.max(mouthWidth, mouthHeight) * 1.8;
+
+    const srcW = sourceCanvas.width;
+    const srcH = sourceCanvas.height;
+
+    let w = Math.floor(cropSize * srcW);
+    let h = Math.floor(cropSize * srcH);
+    let x = Math.floor((centerX - cropSize / 2) * srcW);
+    let y = Math.floor((centerY - cropSize / 2) * srcH);
+
+    // Clamp coordinates to stay within canvas boundaries
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x + w > srcW) w = srcW - x;
+    if (y + h > srcH) h = srcH - y;
+
+    const ctx = targetCanvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+    ctx.drawImage(
+      sourceCanvas,
+      x, y, w, h,
+      0, 0, targetCanvas.width, targetCanvas.height
+    );
+
+    const imageData = ctx.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
     return {
-      tensorData,
-      box: { x: boxX, y: boxY, w: side, h: side }
+      imageData,
+      coords: { x, y, w, h }
     };
   }
   /**
