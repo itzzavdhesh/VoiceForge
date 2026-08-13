@@ -55,7 +55,7 @@ export default function PrivacyPolicy({ onBackHome }) {
         <h2 className="text-2xl font-semibold mb-3">Audio & Voice Data</h2>
         <p className="text-muted-foreground leading-relaxed">
           Voice samples you record may be sent to third-party speech services
-          (for example, ElevenLabs) only when you explicitly choose to clone a
+          (Hugging Face / Chatterbox Multilingual TTS) only when you explicitly choose to clone a
           voice. Where possible, VoiceForge uses local-first processing and
           stores generated profiles in your browser's storage unless you
           explicitly export or upload them.

@@ -4,7 +4,7 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="w-full mx-auto max-w-7xl px-3 pb-6 pt-2 sm:px-4">
+    <footer className="w-full mx-auto max-w-7xl px-3 pb-6 pt-2 sm:px-4" aria-label="Site footer">
       {/* The Styled Black Box */}
       <div className="w-full bg-white text-ink border border-ink/20 rounded-xl px-5 py-6 flex flex-col gap-6 shadow-md dark:bg-surface dark:text-white dark:border-border md:px-8 md:py-8 md:gap-8">
 
@@ -82,12 +82,13 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
             <h3 className="text-sm font-semibold text-ink dark:text-white tracking-widest uppercase">
               Quick Links
             </h3>
-            <nav className="flex flex-col gap-2 text-sm text-ink/70 dark:text-neutral-400">
+            <nav className="flex flex-col gap-2 text-sm text-ink/70 dark:text-neutral-400" aria-label="Quick links">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => onNavigate?.(tab.id)}
-                  className="text-left capitalize hover:text-ink dark:hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+                  aria-label={`Go to ${tab.label}`}
+                  className="text-left capitalize text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
                 >
                   {tab.label}
                 </button>
@@ -105,7 +106,7 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
                 href="https://github.com/itzzavdhesh/VoiceForge/blob/main/CONTRIBUTING.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-ink dark:hover:text-white transition-colors duration-150"
+                className="text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150"
               >
                 Contributing Guide
               </a>
@@ -113,25 +114,25 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
                 href="https://github.com/itzzavdhesh/VoiceForge/issues"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-ink dark:hover:text-white transition-colors duration-150"
+                className="text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150"
               >
                 Report a Bug
               </a>
               {/* /privacy and /terms routes to be implemented in a follow-up */}
               <button
                 onClick={() => onNavigate?.("privacy-policy")}
-                className="text-left hover:text-ink dark:hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+                className="text-left text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
               >
                 Privacy Policy
               </button>
-              <a href="#" className="hover:text-ink dark:hover:text-white transition-colors duration-150">
+              <span className="text-ink/50 dark:text-neutral-400 cursor-default" aria-disabled="true">
                 Terms of Service
-              </a>
+              </span>
               {onOpenShortcuts && (
                 <button
                   type="button"
                   onClick={onOpenShortcuts}
-                  className="text-left hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+                  className="text-left hover:text-ink dark:hover:text-white text-ink/70 dark:text-neutral-400 transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
                 >
                   Keyboard Shortcuts
                 </button>
@@ -142,7 +143,7 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
         </div>
 
         {/* Divider */}
-        <div className="w-full h-px bg-ink/10 dark:bg-border/40" />
+        <div className="w-full h-px bg-ink/10 dark:bg-border/40" aria-hidden="true" />
 
         {/* Bottom Bar */}
         <div className="w-full flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-ink/70 dark:text-neutral-400 font-medium tracking-wide">
