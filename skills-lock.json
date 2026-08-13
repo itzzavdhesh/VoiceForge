@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "express-rest-api": {
+      "source": "pluginagentmarketplace/custom-plugin-nodejs",
+      "sourceType": "github",
+      "skillPath": "skills/express-rest-api/SKILL.md",
+      "computedHash": "a8c4f3a426aa036af7d26b0d8ca22c57d1ce27ed76d19a6d40c48c4b4a5c5b3c"
+    },
+    "playwright-best-practices": {
+      "source": "currents-dev/playwright-best-practices-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "6db654e753257e642d6507d59b4fc633a2382e93429748ba0fb6817c23ef5216"
+    },
+    "playwright-generate-test": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-generate-test/SKILL.md",
+      "computedHash": "8f963da3e25f705ff39755b8b990f20da0c0320cb86ac83fcc4d2d4eca91f6e4"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/composition-patterns/SKILL.md",
+      "computedHash": "575757e3e25761c8c562d6e395d29f0b76c98b1273c0bd72d88e6ab1bc9c7d42"
+    },
+    "wcag-audit-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/accessibility-compliance/skills/wcag-audit-patterns/SKILL.md",
+      "computedHash": "931332c7fc4dadbb32848b8f497efa793e120a6e8ff7524c1b90d18cac4f1d65"
+    }
+  }
+}
