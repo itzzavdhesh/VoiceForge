@@ -1,8 +1,18 @@
 // Implements Chatterbox Multilingual TTS voice cloning and speech proxy handlers.
 // Uses the Hugging Face Gradio client to call ResembleAI/Chatterbox-Multilingual-TTS.
 import crypto from "crypto";
+import { env } from "../config/env.js";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
+import { logger } from "../utils/logger.js";
+import { z } from "zod";
+
+const voiceSettingsSchema = z.object({
+  stability: z.number().finite().min(0).max(1).optional(),
+  style: z.number().finite().min(0).max(2).optional(),
+  temperature: z.number().finite().min(0.05).max(5).optional(),
+  seed: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+}).strict();
 
 // ---------------------------------------------------------------------------
 // In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
@@ -10,45 +20,11 @@ import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/language
 // ---------------------------------------------------------------------------
 export const voiceStore = new Map();
 
-function parseBoundedNumber(rawValue, fallback, min) {
-  const numeric = Number(rawValue);
-  return Number.isFinite(numeric) ? Math.max(min, numeric) : fallback;
-}
-
-const MAX_STORED_VOICES = parseBoundedNumber(process.env.VOICE_STORE_MAX, 20, 1);
-const VOICE_STORE_TTL_MS = parseBoundedNumber(
-  process.env.VOICE_STORE_TTL_MS,
-  2 * 60 * 60 * 1000,
-  60_000
-);
-
-const PENDING_STREAMS_MAX = parseBoundedNumber(
-  process.env.PENDING_STREAMS_MAX,
-  1000,
-  1
-);
-
-const PENDING_STREAM_TTL_MS = parseBoundedNumber(
-  process.env.PENDING_STREAM_TTL_MS,
-  60_000,
-  1
-);
-
-// Fix: bound the size of reference-audio uploads so a single (or repeated)
-// request cannot exhaust process memory, since uploaded buffers are held
-// in-memory in `voiceStore`. Also restrict to audio MIME types since the
-// buffer is forwarded to the Chatterbox space as a reference recording.
-//
-// This must stay in sync with the multer file-size limit configured on the
-// /api/voice/clone route (12 MB) - otherwise files between the two limits
-// pass multer but get rejected here with a different status/message, which
-// is confusing for callers. If you change the multer limit, change this
-// default too (or vice versa).
-const MAX_VOICE_UPLOAD_BYTES = parseBoundedNumber(
-  process.env.MAX_VOICE_UPLOAD_BYTES,
-  12 * 1024 * 1024, // 12 MB - matches the multer limit on the clone route
-  1
-);
+const getMaxStoredVoices = () => env.VOICE_STORE_MAX;
+const getVoiceStoreTtlMs = () => env.VOICE_STORE_TTL_MS;
+const getPendingStreamsMax = () => env.PENDING_STREAMS_MAX;
+const getPendingStreamTtlMs = () => env.PENDING_STREAM_TTL_MS;
+const getMaxVoiceUploadBytes = () => env.MAX_VOICE_UPLOAD_BYTES;
 const ALLOWED_AUDIO_MIME_PREFIX = "audio/";
 
 const MOCK_AUDIO_MP3 = Buffer.from(
@@ -61,8 +37,8 @@ const MOCK_AUDIO_MP3 = Buffer.from(
 );
 
 const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
-  console.warn(
-    "[VoiceForge] STREAM_SECRET not set - using ephemeral key. " +
+  logger.warn(
+    "STREAM_SECRET not set - using ephemeral key. " +
     "All speech tokens will be invalidated on server restart. " +
     "Set STREAM_SECRET in .env for stability."
   );
@@ -189,22 +165,61 @@ async function generateClonedVoice(
   const temperature = clampNumber(normalizedVoiceSettings.temperature, 0.05, 5, 0.8);
   const seed = Number.isInteger(normalizedVoiceSettings.seed) ? normalizedVoiceSettings.seed : 0;
 
-  const result = await withTimeout(
-    app.predict("/generate_tts_audio", [
-      targetText,       // Text string to synthesize (max 300 chars)
-      languageCode,     // Language code string (e.g. "en", "hi")
-      referenceBlob,    // Reference audio Blob
-      exaggeration,     // Exaggeration intensity float (Default: 0.5)
-      temperature,      // Generation temperature float (Default: 0.8)
-      seed,             // Seed integer (0 = randomised)
-      cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
-    ]),
-    30000,
-    "Chatterbox predict",
-    abortSignal
-  );
+  const inputs = [
+    targetText,       // Text string to synthesize (max 300 chars)
+    languageCode,     // Language code string (e.g. "en", "hi")
+    referenceBlob,    // Reference audio Blob
+    exaggeration,     // Exaggeration intensity float (Default: 0.5)
+    temperature,      // Generation temperature float (Default: 0.8)
+    seed,             // Seed integer (0 = randomised)
+    cfgWeight         // CFG weight / Pace factor float (Default: 0.5)
+  ];
 
-  const audioUrl = result.data[0].url;
+  const job = app.submit("/generate_tts_audio", inputs);
+
+  let timeoutId;
+  const promise = new Promise((resolve, reject) => {
+    job.on("data", (event) => resolve(event));
+    job.on("error", (err) => reject(err));
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try {
+        job.cancel();
+      } catch (e) {
+        console.error("[VoiceForge] Error cancelling job on timeout:", e);
+      }
+      reject(new Error("Chatterbox predict timed out after 30000ms"));
+    }, 30000);
+  });
+
+  const abortPromise = new Promise((_, reject) => {
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        try {
+          job.cancel();
+        } catch (e) {}
+        reject(new Error("Request aborted by client"));
+      } else {
+        abortSignal.addEventListener("abort", () => {
+          try {
+            job.cancel();
+          } catch (e) {}
+          reject(new Error("Request aborted by client"));
+        });
+      }
+    }
+  });
+
+  let result;
+  try {
+    result = await Promise.race([promise, timeoutPromise, abortPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const audioUrl = result?.data?.[0]?.url;
   if (!audioUrl) {
     throw new Error("Chatterbox returned no audio URL.");
   }
@@ -231,7 +246,7 @@ function pruneVoiceStore(now = Date.now()) {
     }
   }
 
-  while (voiceStore.size >= MAX_STORED_VOICES) {
+  while (voiceStore.size >= getMaxStoredVoices()) {
     const oldestVoiceId = voiceStore.keys().next().value;
     if (!oldestVoiceId) break;
     voiceStore.delete(oldestVoiceId);
@@ -268,15 +283,15 @@ export async function cloneVoice(request, response, next) {
       response.status(400).json({ error: "Reference audio must be an audio file." });
       return;
     }
-    if (audioFile.buffer.length > MAX_VOICE_UPLOAD_BYTES) {
+    if (audioFile.buffer.length > getMaxVoiceUploadBytes()) {
       response.status(413).json({
-        error: `Reference audio exceeds maximum allowed size of ${MAX_VOICE_UPLOAD_BYTES} bytes.`
+        error: `Reference audio exceeds maximum allowed size of ${getMaxVoiceUploadBytes()} bytes.`
       });
       return;
     }
 
     if (getIsMock()) {
-      console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
+      logger.warn("MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
         voice_id: request.body.voice_id || "mock-voice-id-00000000",
         name: request.body.name || "VoiceForge Voice (mock)"
@@ -302,7 +317,7 @@ export async function cloneVoice(request, response, next) {
       audioBuffer: audioFile.buffer,
       mimeType: audioFile.mimetype,
       ownerTokenHash,
-      expiresAt: Date.now() + VOICE_STORE_TTL_MS
+      expiresAt: Date.now() + getVoiceStoreTtlMs()
     });
 
     response.json({
@@ -354,7 +369,7 @@ export async function speak(request, response, next) {
       voice_settings
     } = request.body;
 
-    if (pendingStreams.size >= PENDING_STREAMS_MAX) {
+    if (pendingStreams.size >= getPendingStreamsMax()) {
       response.status(503).json({
         error:
           "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
@@ -424,35 +439,20 @@ export async function speak(request, response, next) {
       temperature: 0.8
     };
 
-    
-    const sanitizedSettings = {};
-if (voice_settings !== undefined && voice_settings !== null) {
-  if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
-    response.status(400).json({ error: "voice_settings must be a plain object." });
-    return;
-  }
-  if (voice_settings.stability !== undefined) {
-    if (typeof voice_settings.stability !== "number" || !Number.isFinite(voice_settings.stability) || voice_settings.stability < 0 || voice_settings.stability > 1) {
-      response.status(400).json({ error: "stability must be a finite number between 0 and 1." });
-      return;
+    let sanitizedSettings = {};
+    if (voice_settings !== undefined && voice_settings !== null) {
+      if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
+        response.status(400).json({ error: "voice_settings must be a plain object." });
+        return;
+      }
+      const parsed = voiceSettingsSchema.safeParse(voice_settings);
+      if (!parsed.success) {
+        const errorMsg = parsed.error.errors.map((e) => `${e.path.join('.') || 'voice_settings'}: ${e.message}`).join(", ");
+        response.status(400).json({ error: `Invalid voice_settings - ${errorMsg}` });
+        return;
+      }
+      sanitizedSettings = parsed.data;
     }
-    sanitizedSettings.stability = voice_settings.stability;
-  }
-  if (voice_settings.style !== undefined) {
-    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 1) {
-      response.status(400).json({ error: "style must be a finite number between 0 and 1." });
-      return;
-    }
-    sanitizedSettings.style = voice_settings.style;
-  }
-  if (voice_settings.temperature !== undefined) {
-    if (typeof voice_settings.temperature !== "number" || !Number.isFinite(voice_settings.temperature) || voice_settings.temperature < 0.05 || voice_settings.temperature > 5) {
-      response.status(400).json({ error: "temperature must be a finite number between 0.05 and 5." });
-      return;
-    }
-    sanitizedSettings.temperature = voice_settings.temperature;
-  }
-}
     const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
 
     // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
@@ -462,14 +462,14 @@ if (voice_settings !== undefined && voice_settings !== null) {
 
     const timeout = setTimeout(() => {
       deletePendingStream(speechId);
-    }, PENDING_STREAM_TTL_MS);
+    }, getPendingStreamTtlMs());
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
     
     pendingStreams.set(speechId, { text: trimmedText, voiceId: trimmedVoiceId, mergedSettings, timeout });
 
     if (getIsMock()) {
-      console.warn(`[VoiceForge] MOCK_CHATTERBOX: speak enqueued mock stream for speechId=${speechId}`);
+      logger.warn({ speechId }, "MOCK_CHATTERBOX: speak enqueued mock stream");
     }
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
@@ -531,7 +531,7 @@ export async function streamSpeech(request, response, next) {
     }
 
     if (getIsMock()) {
-      console.warn("[VoiceForge] MOCK_CHATTERBOX: streaming mock audio");
+      logger.warn({ speechId }, "MOCK_CHATTERBOX: streaming mock audio");
       deletePendingStream(speechId);
       response.setHeader("Content-Type", "audio/mpeg");
       response.setHeader("Content-Length", String(MOCK_AUDIO_MP3.length));
@@ -552,7 +552,7 @@ export async function streamSpeech(request, response, next) {
     // Set up abortion for client disconnect
     const generateController = new AbortController();
     const onClose = () => {
-      console.log("[VoiceForge] Request aborted by client");
+      logger.info({ speechId }, "Request aborted by client");
       if (speechId) deletePendingStream(speechId);
       generateController.abort();
     };
@@ -571,7 +571,7 @@ export async function streamSpeech(request, response, next) {
       );
     } catch (error) {
       if (error.message === "Request aborted by client") {
-        console.log("[VoiceForge] Inference canceled. Cleanup completed.");
+        logger.info({ speechId }, "Inference canceled. Cleanup completed.");
         return; // Stop processing, request is already closed
       }
       if (error.message.includes("timed out")) {
@@ -611,7 +611,7 @@ export async function streamSpeech(request, response, next) {
     const reader = upstream.body.getReader();
 
     request.on("close", () => {
-      reader.cancel().catch((err) => console.error("Error cancelling Chatterbox reader:", err));
+      reader.cancel().catch((err) => logger.error({ err, speechId }, "Error cancelling Chatterbox reader"));
     });
 
     while (true) {

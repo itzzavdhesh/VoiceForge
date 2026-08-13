@@ -1,6 +1,7 @@
 // Provides a small client-side API for uploading a recording and saving cloned voice profiles.
 import React from "react";
 import { getAllProfiles, saveProfile, deleteProfile, clearStorage } from "../utils/db.js";
+import { authFetch } from "../utils/auth.js";
 
 // Fix (Issue 2): must match the server-side Multer limit in server/middleware/upload.js.
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
@@ -78,14 +79,10 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
     id: profile.voice_id,
     voice_id: profile.voice_id,
     name: profile.name || `Voice ${profiles.length + 1}`,
-    // Fix (Broken Voice Synthesis): persist the owner_token returned by
-    // POST /api/voice/clone alongside the profile. The server now requires
-    // this token on /api/voice/speak to prove ownership of voice_id, so it
-    // must be retrievable later from the saved profile, not just held in
-    // memory during the clone flow.
-    ownerToken: profile.ownerToken || profile.owner_token || null,
-    createdAt: new Date().toISOString(),
-    audioBlob // Store the binary reference audio Blob
+    colorTag: profile.colorTag || colorTag || "emerald",
+    avatarIcon: profile.avatarIcon || avatarIcon || "user",
+    createdAt: profile.createdAt || new Date().toISOString(),
+    audioBlob: audioBlob || profile.audioBlob || null // Store the binary reference audio Blob
   };
   await saveProfile(nextProfile);
 
@@ -115,6 +112,13 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
 
 export async function deleteVoiceProfile(voiceId) {
   await deleteProfile(voiceId);
+  try {
+    await authFetch(`/api/voices/${voiceId}`, {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete voice profile from server:", err);
+  }
   const nextProfiles = await getSavedProfiles();
   if (localStorage.getItem(ACTIVE_KEY) === voiceId) {
     localStorage.setItem(ACTIVE_KEY, nextProfiles[0]?.voice_id || "");
@@ -125,6 +129,13 @@ export async function deleteVoiceProfile(voiceId) {
 
 export async function clearAllVoiceProfiles() {
   await clearStorage();
+  try {
+    await authFetch("/api/voices", {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete all voice profiles from server:", err);
+  }
   localStorage.setItem(ACTIVE_KEY, "");
   window.dispatchEvent(new CustomEvent("voiceforge:profileChanged"));
   return [];
@@ -134,6 +145,24 @@ export async function getActiveVoiceProfile() {
   const profiles = await getSavedProfiles();
   const activeVoiceId = localStorage.getItem(ACTIVE_KEY);
   return profiles.find((profile) => profile.voice_id === activeVoiceId) || profiles[0] || null;
+}
+
+export function subscribeProfileChanges(callback) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleStorage(e) {
+    if (e.key === ACTIVE_KEY || !e.key) {
+      callback();
+    }
+  }
+
+  window.addEventListener("voiceforge:profileChanged", callback);
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    window.removeEventListener("voiceforge:profileChanged", callback);
+    window.removeEventListener("storage", handleStorage);
+  };
 }
 
 export default function useVoiceClone() {
@@ -171,7 +200,7 @@ export default function useVoiceClone() {
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
 
-      const response = await fetch("/api/voice/clone", {
+      const response = await authFetch("/api/voice/clone", {
         method: "POST",
         body: formData
       });
@@ -192,8 +221,9 @@ export default function useVoiceClone() {
       // (see ownerToken field above) instead of being silently dropped.
       const profile = await saveVoiceProfile({
         voice_id: payload.voice_id,
-        owner_token: payload.owner_token,
-        name: payload.name || name
+        name: payload.name || name,
+        colorTag,
+        avatarIcon
       }, audioBlob);
 
       setStatus("success");
