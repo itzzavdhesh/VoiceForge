@@ -3,7 +3,10 @@ import { Radio, RadioTower, Square } from "lucide-react";
 
 export default function VirtualCamera({ isLive, status, onStart, onStop }) {
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+    <section
+      data-tour="virtual-camera"
+      className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span

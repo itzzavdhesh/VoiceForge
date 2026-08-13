@@ -1,6 +1,7 @@
 // Provides a small client-side API for uploading a recording and saving cloned voice profiles.
 import React from "react";
 import { getAllProfiles, saveProfile, deleteProfile, clearStorage } from "../utils/db.js";
+import { authFetch } from "../utils/auth.js";
 
 // Fix (Issue 2): must match the server-side Multer limit in server/middleware/upload.js.
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
@@ -11,22 +12,99 @@ export function getSavedProfiles() {
   return getAllProfiles();
 }
 
+export async function syncVoices() {
+  try {
+    const res = await fetch("/api/voices");
+    if (!res.ok) return;
+    const remoteVoices = await res.json();
+
+    const localProfiles = await getAllProfiles();
+    const localIds = new Set(localProfiles.map(p => p.voice_id));
+
+    for (const remote of remoteVoices) {
+      if (!localIds.has(remote.voice_id)) {
+        const detailRes = await fetch(`/api/voices/${remote.voice_id}`);
+        if (detailRes.ok) {
+          const detail = await detailRes.json();
+          let audioBlob = null;
+          if (detail.audio_base64) {
+            const binary = atob(detail.audio_base64);
+            const array = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              array[i] = binary.charCodeAt(i);
+            }
+            audioBlob = new Blob([array], { type: "audio/webm" });
+          }
+          const profile = {
+            id: detail.voice_id,
+            voice_id: detail.voice_id,
+            name: detail.name,
+            ownerToken: detail.owner_token,
+            createdAt: detail.created_at,
+            audioBlob
+          };
+          await saveProfile(profile);
+        }
+      }
+    }
+
+    const remoteIds = new Set(remoteVoices.map(r => r.voice_id));
+    for (const local of localProfiles) {
+      if (!remoteIds.has(local.voice_id)) {
+        const formData = new FormData();
+        formData.append("voice_id", local.voice_id);
+        formData.append("name", local.name);
+        if (local.ownerToken) {
+          formData.append("owner_token", local.ownerToken);
+        }
+        if (local.audioBlob) {
+          formData.append("audio", local.audioBlob, "voiceforge-reference.webm");
+        }
+        await fetch("/api/voices", {
+          method: "POST",
+          body: formData
+        });
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent("voiceforge:profileChanged"));
+  } catch (error) {
+    console.error("Failed to sync voices:", error);
+  }
+}
+
 export async function saveVoiceProfile(profile, audioBlob = null) {
   const profiles = await getSavedProfiles();
   const nextProfile = {
     id: profile.voice_id,
     voice_id: profile.voice_id,
     name: profile.name || `Voice ${profiles.length + 1}`,
-    // Fix (Broken Voice Synthesis): persist the owner_token returned by
-    // POST /api/voice/clone alongside the profile. The server now requires
-    // this token on /api/voice/speak to prove ownership of voice_id, so it
-    // must be retrievable later from the saved profile, not just held in
-    // memory during the clone flow.
-    ownerToken: profile.ownerToken || profile.owner_token || null,
-    createdAt: new Date().toISOString(),
-    audioBlob // Store the binary reference audio Blob
+    colorTag: profile.colorTag || colorTag || "emerald",
+    avatarIcon: profile.avatarIcon || avatarIcon || "user",
+    createdAt: profile.createdAt || new Date().toISOString(),
+    audioBlob: audioBlob || profile.audioBlob || null // Store the binary reference audio Blob
   };
   await saveProfile(nextProfile);
+
+  // Sync to database
+  try {
+    const formData = new FormData();
+    formData.append("voice_id", nextProfile.voice_id);
+    formData.append("name", nextProfile.name);
+    if (nextProfile.ownerToken) {
+      formData.append("owner_token", nextProfile.ownerToken);
+    }
+    if (audioBlob) {
+      formData.append("audio", audioBlob, "voiceforge-reference.webm");
+    }
+    await fetch("/api/voices", {
+      method: "POST",
+      body: formData
+    });
+  } catch (err) {
+    console.error("Failed to sync voice profile to database:", err);
+  }
+
   localStorage.setItem(ACTIVE_KEY, nextProfile.voice_id);
   window.dispatchEvent(new CustomEvent("voiceforge:profileChanged"));
   return nextProfile;
@@ -34,6 +112,13 @@ export async function saveVoiceProfile(profile, audioBlob = null) {
 
 export async function deleteVoiceProfile(voiceId) {
   await deleteProfile(voiceId);
+  try {
+    await authFetch(`/api/voices/${voiceId}`, {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete voice profile from server:", err);
+  }
   const nextProfiles = await getSavedProfiles();
   if (localStorage.getItem(ACTIVE_KEY) === voiceId) {
     localStorage.setItem(ACTIVE_KEY, nextProfiles[0]?.voice_id || "");
@@ -44,6 +129,13 @@ export async function deleteVoiceProfile(voiceId) {
 
 export async function clearAllVoiceProfiles() {
   await clearStorage();
+  try {
+    await authFetch("/api/voices", {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("Failed to delete all voice profiles from server:", err);
+  }
   localStorage.setItem(ACTIVE_KEY, "");
   window.dispatchEvent(new CustomEvent("voiceforge:profileChanged"));
   return [];
@@ -77,6 +169,10 @@ export default function useVoiceClone() {
   const [status, setStatus] = React.useState("idle");
   const [error, setError] = React.useState("");
 
+  React.useEffect(() => {
+    syncVoices();
+  }, []);
+
   async function cloneVoice(audioBlob, name = "VoiceForge profile") {
     setStatus("cloning");
     setError("");
@@ -104,7 +200,7 @@ export default function useVoiceClone() {
       formData.append("audio", audioBlob, "voiceforge-reference.webm");
       formData.append("name", name);
 
-      const response = await fetch("/api/voice/clone", {
+      const response = await authFetch("/api/voice/clone", {
         method: "POST",
         body: formData
       });
@@ -125,8 +221,9 @@ export default function useVoiceClone() {
       // (see ownerToken field above) instead of being silently dropped.
       const profile = await saveVoiceProfile({
         voice_id: payload.voice_id,
-        owner_token: payload.owner_token,
-        name: payload.name || name
+        name: payload.name || name,
+        colorTag,
+        avatarIcon
       }, audioBlob);
 
       setStatus("success");
