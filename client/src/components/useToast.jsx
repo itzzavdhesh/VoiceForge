@@ -10,6 +10,7 @@ export function useToast(duration = 2200) {
   useEffect(() => {
     return () => {
       Object.values(timers.current).forEach(clearTimeout);
+      timers.current = {};
     };
   }, []);
 
@@ -18,8 +19,14 @@ export function useToast(duration = 2200) {
     setToasts((previous) => [...previous, { id, message, type }]);
 
     timers.current[id] = setTimeout(() => {
-      setToasts((previous) => previous.filter((toast) => toast.id !== id));
       delete timers.current[id];
+      setToasts((previous) => {
+        const nextToasts = previous.filter((toast) => toast.id !== id);
+        if (nextToasts.length === 0) {
+          timers.current = {};
+        }
+        return nextToasts;
+      });
     }, duration);
   }, [duration]);
 

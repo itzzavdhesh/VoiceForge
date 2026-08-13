@@ -1,0 +1,24 @@
+# Node dependencies & logs
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs & scratch
+dist
+client/dist
+.system_generated
+largefile.bin
+
+# Git & environment
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+
+# Test outputs & coverage
+coverage
+tests-results
+playwright-report
+blob-report
