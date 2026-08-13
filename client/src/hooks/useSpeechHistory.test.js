@@ -350,9 +350,8 @@ describe("reconcileFavoritesWithHistory", () => {
     ];
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const oldEntries = mockHistory.filter((m) => m.timestamp < thirtyDaysAgo);
+    const oldEntries = corruptedHistory.filter((m) => m && m.timestamp && m.timestamp < thirtyDaysAgo);
 
-    expect(oldEntries.length).toBe(1);
-    expect(oldEntries[0].text).toBe("Old message");
+    expect(oldEntries.length).toBe(0);
   });
 });

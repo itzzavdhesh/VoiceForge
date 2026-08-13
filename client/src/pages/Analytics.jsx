@@ -210,12 +210,6 @@ export default function Analytics() {
     return { data, maxCount };
   }, [filteredHistory, dateRange]);
 
-  const escapeCSVCell = (value) => {
-    if (value === null || value === undefined) return '""';
-    const str = String(value);
-    return `"${str.replace(/"/g, '""')}"`;
-  };
-
   const exportCSV = () => {
     if (!filteredHistory.length) return;
     
@@ -227,7 +221,7 @@ export default function Analytics() {
       `"${msg.text.replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map(e => e.join(","))].join("\n");
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -466,6 +460,29 @@ export default function Analytics() {
         ) : (
           <div className="h-48 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
             No language data available.
+          </div>
+        )}
+      </div>
+
+      {/* Vocabulary Diversity Word Cloud */}
+      <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-6">Vocabulary Diversity (Word Cloud)</h3>
+        {wordCloudData.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-4 py-8 px-4 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl min-h-[160px]">
+            {wordCloudData.map((word, idx) => (
+              <span
+                key={word.text}
+                title={`Spoken ${word.value} time${word.value !== 1 ? "s" : ""}`}
+                className={`${getWordColorClass(idx)} hover:scale-110 hover:opacity-80 transition-all duration-150 cursor-help whitespace-nowrap inline-block`}
+                style={{ fontSize: getWordFontSize(word.value) }}
+              >
+                {word.text}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="h-40 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+            No vocabulary data available for this period.
           </div>
         )}
       </div>

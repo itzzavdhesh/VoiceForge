@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, X, Check, Pencil, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DEFAULT_CATEGORIES = ["General", "Social", "Needs", "Urgent"];
@@ -19,20 +19,7 @@ const DEFAULT_QUICK_REPLIES = [
 const STORAGE_KEY = "vf_quick_replies";
 
 export function QuickReplies({ onSelect, showToast }) {
-  const [categories, setCategories] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CATEGORIES_KEY);
-      if (saved === null) return DEFAULT_CATEGORIES;
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string")) {
-        return parsed;
-      }
-      return DEFAULT_CATEGORIES;
-    } catch {
-      return DEFAULT_CATEGORIES;
-    }
-  });
-
+  const tablistRef = useRef(null);
   const [replies, setReplies] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -227,6 +214,25 @@ export function QuickReplies({ onSelect, showToast }) {
     setEditingReplyData({ phrase: reply.phrase, category: reply.category || "General" });
   };
 
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (draggedItem === null) return;
+    const oldIndex = replies.findIndex((r) => r.id === draggedItem);
+    const newIndex = replies.findIndex((r) => r.id === targetId);
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newReplies = [...replies];
+      const [removed] = newReplies.splice(oldIndex, 1);
+      newReplies.splice(newIndex, 0, removed);
+      setReplies(newReplies);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
   const handleEditSave = (e) => {
     e.preventDefault();
     if (!editingReplyId || !editingReplyData) return;
@@ -266,8 +272,7 @@ export function QuickReplies({ onSelect, showToast }) {
     if (selectedCategoryTab === "All") return true;
     return reply.category === selectedCategoryTab;
   });
-
-  const allCats = ["All", ...CATEGORIES];
+  const allCats = ["All", ...categories];
 
   const handleTabKeyDown = (e) => {
     const currentIndex = allCats.indexOf(selectedCategoryTab);
