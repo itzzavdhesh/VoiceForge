@@ -125,6 +125,7 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
               >
                 Privacy Policy
               </button>
+              <a href="#" className="text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150">
               <span className="text-ink/50 dark:text-neutral-400 cursor-default" aria-disabled="true">
                 Terms of Service
               </span>
@@ -132,7 +133,7 @@ const Footer = ({ onNavigate, tabs, onOpenShortcuts }) => {
                 <button
                   type="button"
                   onClick={onOpenShortcuts}
-                  className="text-left hover:text-ink dark:hover:text-white text-ink/70 dark:text-neutral-400 transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+                  className="text-left text-ink/70 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
                 >
                   Keyboard Shortcuts
                 </button>

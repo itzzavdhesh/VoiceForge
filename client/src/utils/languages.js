@@ -18,12 +18,6 @@
 
 export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
 
-/**
- * All languages supported by the public Chatterbox Multilingual TTS Space,
- * grouped by region for the LanguageSelector UI.
- *
- * Each entry: { code, name, nativeName, flag, region }
- */
 export const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English", nativeName: "English", flag: "EN", region: "Europe" },
   { code: "fr", name: "French", nativeName: "Francais", flag: "FR", region: "Europe" },
@@ -54,59 +48,31 @@ export const SUPPORTED_LANGUAGES = [
   { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
 ];
 
-/** Set of all valid language codes for O(1) lookups. */
 const VALID_CODES = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
 
-/**
- * Returns true when `code` is a supported Chatterbox language code,
- * or when it is falsy (meaning "auto-detect").
- */
-export function isValidLanguageCode(code) {
-  return !code || VALID_CODES.has(code);
-}
+export function isValidLanguageCode(code) { return code === "" || VALID_CODES.has(code); }
 
-const BY_CODE = Object.fromEntries(
-  SUPPORTED_LANGUAGES.map((l) => [l.code, l])
-);
+const BY_CODE = Object.fromEntries(SUPPORTED_LANGUAGES.map((l) => [l.code, l]));
+export function getLanguageByCode(code) { return BY_CODE[code]; }
 
-/** Returns the language object for a given code, or undefined. */
-export function getLanguageByCode(code) {
-  return BY_CODE[code];
-}
-
-/**
- * Reads the saved language code from localStorage.
- * Falls back to "en" if the stored value is missing, empty, or invalid.
- *
- * Also performs a one-time migration from the legacy "voiceforge:compose-language"
- * key used by the Compose page.
- */
 export function loadLanguage() {
   try {
     const legacyCompose = localStorage.getItem("voiceforge:compose-language");
     const current = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (!current && legacyCompose) {
-      const migrated = VALID_CODES.has(legacyCompose) ? legacyCompose : "en";
+    if (current === null && legacyCompose !== null) {
+      const migrated = legacyCompose === "" || VALID_CODES.has(legacyCompose) ? legacyCompose : "en";
       localStorage.setItem(LANGUAGE_STORAGE_KEY, migrated);
       localStorage.removeItem("voiceforge:compose-language");
       return migrated;
     }
-
-    const legacyNameToCode = Object.fromEntries(
+    const nameToCode = Object.fromEntries(
       SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code])
     );
-    const normalized = legacyNameToCode[current] ?? current;
-
-    return VALID_CODES.has(normalized) ? normalized : "en";
-  } catch {
-    return "en";
-  }
+    const normalized = nameToCode[current] ?? current;
+    return (current !== null && (normalized === "" || VALID_CODES.has(normalized))) ? normalized : "en";
+  } catch { return "en"; }
 }
 
-/**
- * Persists the selected language code to localStorage.
- * Silently ignores storage errors (private browsing, quota, etc.).
- */
 export function persistLanguage(code) {
   try {
     const val = code || "en";

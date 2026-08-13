@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, formattedValue, min = 0, max = 1, step = 0.01, onChange }) {
+function SliderRow({ id, label, description, value, formattedValue, onChange, min = 0, max = 1, step = 0.01 }) {
   return (
     <div className="space-y-1">
       <label
@@ -88,6 +88,14 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
     []
   );
 
+  const toggleSpeakerBoost = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, use_speaker_boost: !prev.use_speaker_boost };
+      persistVoiceSettings(next);
+      return next;
+    });
+  }, []);
+
   const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
 
   return (
@@ -161,6 +169,26 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Higher → more stylised delivery from the reference audio."
             value={settings.style}
             onChange={updateSetting("style")}
+          />
+          <SliderRow
+            id="vqs-speed"
+            label="Playback Speed"
+            description="Lower → slower delivery. Higher → faster delivery."
+            value={settings.speed ?? 1.0}
+            min={0.5}
+            max={2.0}
+            step={0.1}
+            onChange={updateSetting("speed")}
+          />
+          <SliderRow
+            id="vqs-pitch"
+            label="Simulated Pitch Shift"
+            description="Adjust the synthesized voice pitch tones."
+            value={settings.pitch ?? 0.5}
+            min={0.0}
+            max={1.0}
+            step={0.05}
+            onChange={updateSetting("pitch")}
           />
           <SliderRow
             id="vqs-pitch"

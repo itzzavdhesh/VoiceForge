@@ -15,7 +15,11 @@ export const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
  */
 export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
+  similarity_boost: 0.8,
   style: 0.5,
+  use_speaker_boost: true,
+  speed: 1.0,
+  pitch: 0.5,
   temperature: 0.8,
   pitchShift: 0, // Transposition in semitones [-12, +12]
   toneEq: 0.5, // DSP tone clarity multiplier [0, 1]
@@ -115,6 +119,8 @@ export function loadVoiceSettings() {
       const coerced = parsed[key] == null ? NaN : Number(parsed[key]);
       if (Number.isNaN(coerced)) {
         result[key] = defaultVal;
+      } else if (key === "speed") {
+        result[key] = Math.min(2.0, Math.max(0.5, coerced));
       } else if (["stability", "style", "temperature"].includes(key)) {
         // Slider range: clamp to [0, 1].
         result[key] = Math.min(1, Math.max(0, coerced));
@@ -127,6 +133,9 @@ export function loadVoiceSettings() {
       } else if (key === "dspSpeed") {
         // Clamp to [0.5, 2.0]
         result[key] = Math.min(2.0, Math.max(0.5, coerced));
+      } else if (defaultVal >= 0 && defaultVal <= 1) {
+        // Slider range: clamp to [0, 1].
+        result[key] = Math.min(1, Math.max(0, coerced));
       } else {
         // Non-slider numeric: accept coerced value as-is.
         result[key] = coerced;

@@ -4,7 +4,8 @@
  * Drop this into src/hooks/useSpeechHistory.js in the VoiceForge project.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { authFetch } from "../utils/auth.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -12,7 +13,6 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
-const MAX_FAVORITES = 10;
 
 function generateUUID() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -252,13 +252,6 @@ export function useSpeechHistory() {
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
   const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
 
-  // Mirrors `favorites` so addMessage can read the latest pinned ids
-  // without depending on `favorites` state (keeps addMessage's identity stable).
-  const favoritesRef = useRef(favorites);
-  useEffect(() => {
-    favoritesRef.current = favorites;
-  }, [favorites]);
-
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
     try {
@@ -292,44 +285,43 @@ export function useSpeechHistory() {
     }
   }, [analyticsHistory]);
 
-  // ── Retention Policy Effect ──────────────────────────────────────────────
   useEffect(() => {
-    const handlePolicyChange = () => {
-      const policy = localStorage.getItem("vf_history_retention") || "forever";
-      if (policy === "forever" || policy === "session") return;
+    async function syncSpeechHistory() {
+      try {
+        const res = await fetch("/api/speech-history");
+        if (res.ok) {
+          const remoteHistory = await res.json();
+          setHistory((prev) => {
+            const mergedMap = new Map();
+            prev.forEach(item => mergedMap.set(item.id, item));
+            remoteHistory.forEach(remote => {
+              const localMatch = prev.find(p => p.id === remote.id || p.text === remote.text);
+              const mergedItem = {
+                id: remote.id,
+                text: remote.text,
+                timestamp: remote.timestamp,
+                language: remote.language_code || "en-US",
+                tags: localMatch ? (localMatch.tags || []) : []
+              };
+              if (remote.is_favorite) {
+                setFavorites(prevFavs => {
+                  const next = new Set(prevFavs);
+                  next.add(remote.id);
+                  return next;
+                });
+              }
+              mergedMap.set(remote.id, mergedItem);
+            });
 
-      setHistory((prev) => {
-        const favs = readStorage(FAVS_KEY, []);
-        return pruneHistory(prev, favs, policy);
-      });
-    };
-
-    window.addEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
-    return () => {
-      window.removeEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleUnload = () => {
-      const policy = localStorage.getItem("vf_history_retention") || "forever";
-      if (policy === "session") {
-        const rawHistory = readStorage(HISTORY_KEY, []);
-        const favs = readStorage(FAVS_KEY, []);
-        const favSet = new Set(favs);
-        const pruned = rawHistory.filter((item) => favSet.has(item.id));
-        try {
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
-        } catch {
-          // ignore
+            const sorted = Array.from(mergedMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+            return sorted.slice(0, MAX_HISTORY);
+          });
         }
+      } catch (err) {
+        console.error("Failed to sync speech history:", err);
       }
-    };
-
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
+    }
+    syncSpeechHistory();
   }, []);
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -383,6 +375,32 @@ const addMessage = useCallback((text, lang = "en-US") => {
       ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
       : { id: generateUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
 
+    // Sync to backend database
+    authFetch("/api/speech-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updatedEntry.id,
+        text: updatedEntry.text,
+        language_code: lang,
+        timestamp: updatedEntry.timestamp,
+        is_favorite: favorites.has(updatedEntry.id) ? 1 : 0
+      })
+    }).catch(err => console.error("Failed to save speech log:", err));
+
+    // Sync to backend database
+    fetch("/api/speech-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updatedEntry.id,
+        text: updatedEntry.text,
+        language_code: lang,
+        timestamp: updatedEntry.timestamp,
+        is_favorite: favorites.has(updatedEntry.id) ? 1 : 0
+      })
+    }).catch(err => console.error("Failed to save speech log:", err));
+
     // Move duplicate to top instead of recreating
     const updated = [
       updatedEntry,
@@ -399,9 +417,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     // trim the *non-favorited* entries so the list still stays bounded.
     return trimHistoryPreservingFavorites(updated, favoritesRef.current, MAX_HISTORY);
   });
-
-  return msgId;
-}, [history]);
+}, [favorites]);
 
   /**
    * Removes a message by id and also removes it from favorites.
@@ -412,7 +428,10 @@ const addMessage = useCallback((text, lang = "en-US") => {
       const next = new Set(prev);
       next.delete(id);
       return next;
-      });
+    });
+    fetch(`/api/speech-history/${id}`, {
+      method: "DELETE"
+    }).catch(err => console.error("Failed to delete speech log:", err));
   }, []);
 
   /**
@@ -434,78 +453,29 @@ const addMessage = useCallback((text, lang = "en-US") => {
    *   true for every successful pin/unpin.
    */
   const toggleFavorite = useCallback((id) => {
-    const { favorites: next, applied } = toggleFavoriteWithCap(
-      favoritesRef.current,
-      id,
-      MAX_FAVORITES
-    );
-    favoritesRef.current = next;
-    setFavorites(next);
-    return applied;
-  }, []);
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      const isFav = next.has(id);
+      isFav ? next.delete(id) : next.add(id);
 
-  /**
-   * Calculates storage utilization metrics (entry counts, byte size, usage percentage).
-   */
-  const storageStats = useCallback(() => {
-    const totalEntries = history.length + analyticsHistory.length + sessionTranscript.length;
-    let bytesUsed = 0;
-    try {
-      if (typeof localStorage !== "undefined") {
-        bytesUsed = (localStorage.getItem(HISTORY_KEY) || "").length +
-                    (localStorage.getItem(ANALYTICS_KEY) || "").length +
-                    (localStorage.getItem(FAVS_KEY) || "").length;
+      const msg = history.find(m => m.id === id);
+      if (msg) {
+        fetch("/api/speech-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: msg.id,
+            text: msg.text,
+            language_code: msg.language || "en-US",
+            timestamp: msg.timestamp,
+            is_favorite: !isFav ? 1 : 0
+          })
+        }).catch(err => console.error("Failed to toggle favorite:", err));
       }
-    } catch {
-      bytesUsed = totalEntries * 120;
-    }
-    const kbUsed = (bytesUsed / 1024).toFixed(1);
-    const maxEntries = MAX_ANALYTICS;
-    const usagePercentage = Math.min(100, Math.round((analyticsHistory.length / maxEntries) * 100));
-    const isHighCapacity = usagePercentage >= 80 || analyticsHistory.length >= 1600;
 
-    return {
-      totalEntries,
-      analyticsCount: analyticsHistory.length,
-      historyCount: history.length,
-      kbUsed,
-      usagePercentage,
-      isHighCapacity,
-    };
-  }, [history, analyticsHistory, sessionTranscript]);
-
-  /**
-   * Auto-archives history entries older than 30 days into a downloadable JSON backup,
-   * then purges unpinned archived items to free up database capacity.
-   */
-  const archiveOldHistory = useCallback(() => {
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const toArchive = analyticsHistory.filter((m) => m.timestamp < thirtyDaysAgo);
-
-    if (toArchive.length === 0 && analyticsHistory.length === 0) return 0;
-
-    const archiveData = (toArchive.length > 0 ? toArchive : analyticsHistory).map((item) => ({
-      ...item,
-      archivedAt: new Date().toISOString(),
-    }));
-
-    // Trigger JSON backup download
-    if (typeof document !== "undefined") {
-      const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `VoiceForge-Archive-${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    // Prune archived items from analytics history
-    setAnalyticsHistory((prev) => prev.filter((m) => m.timestamp >= thirtyDaysAgo));
-    return archiveData.length;
-  }, [analyticsHistory]);
+      return next;
+    });
+  }, [history]);
 
   /**
    * Wipes all history and favorites.
@@ -596,8 +566,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
     importBackup,
-    addTag,
-    removeTag,
   };
 }

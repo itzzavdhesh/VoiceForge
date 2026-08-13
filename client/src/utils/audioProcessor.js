@@ -29,6 +29,7 @@ export class AudioProcessor {
     this.analyzer = null;
     this.analyser = null; // AnalyserNode for audio visualization
     this.currentMelSpectrogram = null;
+    this.melHistory = [];
     this.currentVolume = 0;
     this.bassFilter = null;
     this.midFilter = null;
@@ -38,7 +39,7 @@ export class AudioProcessor {
 
   /**
    * Initializes the audio processor with a given audio element.
-   * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
+   * @param {HTMLMediaElement|null} audioElement The <audio> or <video> element to analyze (optional).
    */
   async initialize(audioElement) {
     if (!audioElement) return;
@@ -89,6 +90,11 @@ export class AudioProcessor {
             if (features) {
               if (features.melSpectrogram) {
                 this.currentMelSpectrogram = features.melSpectrogram;
+                if (!this.melHistory) this.melHistory = [];
+                this.melHistory.push(features.melSpectrogram);
+                if (this.melHistory.length > 16) {
+                  this.melHistory.shift();
+                }
               }
               if (features.rms !== undefined) {
                 this.currentVolume = features.rms;

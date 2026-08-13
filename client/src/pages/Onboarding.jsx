@@ -1,4 +1,11 @@
 import React from "react";
+import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw, Upload } from "lucide-react";
+import VoiceRecorder from "../components/VoiceRecorder.jsx";
+import useVoiceClone from "../hooks/useVoiceClone.js";
+import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+
 import {
   CheckCircle2,
   Loader2,
@@ -324,26 +331,18 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
       const nextIndex = index + direction;
 
   React.useEffect(() => {
-    localStorage.setItem(
-      "voiceforge:maxUnlockedStep",
-      maxUnlockedStep.toString()
-    );
+    localStorage.setItem("voiceforge:maxUnlockedStep", maxUnlockedStep.toString());
   }, [maxUnlockedStep]);
 
   async function handleClone() {
     // 1. Strict validation guards: recording and a valid name are required.
     if (!hasKey || !recording) return;
-    if (recordingDuration < 10) return;
+    if (recording.duration !== undefined && recording.duration < 10) return;
     if (nameError) return; // block on empty / whitespace / over-limit name
 
     try {
       // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(
-        recording,
-        voiceName.trim(),
-        selectedColor,
-        selectedIcon
-      );
+      const profile = await cloneVoice(recording.blob || recording, voiceName.trim(), selectedColor, selectedIcon);
       if (profile) {
         setSuccessProfile(profile);
         setMaxUnlockedStep(2);
@@ -449,6 +448,27 @@ export default function OnboardingTour({ activeTab, onSelectTab }) {
             onRecordingReady={handleRecordingReady}
             disabled={isCloning}
           />
+
+          <div className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-ink dark:text-neutral-100">Import Voice Profile Backup</h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">Restore a previously saved voice clone profile (.vfp file) instantly.</p>
+            </div>
+            <label
+              htmlFor="onboarding-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black shrink-0"
+            >
+              <Upload size={14} />
+              Import .vfp File
+              <input
+                id="onboarding-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
+          </div>
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <label

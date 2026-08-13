@@ -13,7 +13,6 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
-  const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
 
   const fileInputRef = React.useRef(null);
@@ -329,6 +328,36 @@ if (isInteractive) return;
     } finally {
       setIsExtracting(false);
       event.target.value = "";
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl("");
+    setRecorderError("");
+    onRecordingReady(null);
+    setDuration(0);
+    durationRef.current = 0;
+    
+    setIsExtracting(true);
+    
+    try {
+      const { blob, duration } = await extractAudioFromFile(file);
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setDuration(duration);
+      durationRef.current = duration;
+      onRecordingReady(blob, duration);
+    } catch (err) {
+      setRecorderError(err.message || String(err));
+    } finally {
+      setIsExtracting(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 

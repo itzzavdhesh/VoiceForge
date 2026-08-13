@@ -2,6 +2,9 @@
 
 const DB_NAME = "voiceforge_db";
 const STORE_NAME = "profiles";
+const TRANSCRIPT_STORE = "transcripts";
+const SESSION_STORE = "sessions";
+const COLLECTION_STORE = "collections";
 const AUDIO_STORE_NAME = "audio_cache";
 const DB_VERSION = 2;
 
@@ -37,6 +40,15 @@ function getDB() {
         const db = event.target.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME, { keyPath: "voice_id" });
+        }
+        if (!db.objectStoreNames.contains(TRANSCRIPT_STORE)) {
+          db.createObjectStore(TRANSCRIPT_STORE, { keyPath: "id", autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains(SESSION_STORE)) {
+          db.createObjectStore(SESSION_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(COLLECTION_STORE)) {
+          db.createObjectStore(COLLECTION_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(AUDIO_STORE_NAME)) {
           db.createObjectStore(AUDIO_STORE_NAME, { keyPath: "id" });
@@ -178,4 +190,127 @@ export async function getAudioBlob(id) {
     request.onsuccess = () => resolve(request.result?.blob || null);
     request.onerror = (event) => reject(new Error("Failed to get audio blob: " + event.target.error?.message));
   });
+}
+
+// --- TRANSCRIPT CRUD ---
+export async function getAllTranscripts() {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(TRANSCRIPT_STORE, "readonly");
+    const store = transaction.objectStore(TRANSCRIPT_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = (event) => reject(new Error("Failed to load transcripts: " + event.target.error?.message));
+  });
+}
+
+export async function saveTranscript(transcript) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(TRANSCRIPT_STORE, "readwrite");
+    const store = transaction.objectStore(TRANSCRIPT_STORE);
+    const request = store.put({
+      ...transcript,
+      timestamp: transcript.timestamp || Date.now()
+    });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = (event) => reject(new Error("Failed to save transcript: " + event.target.error?.message));
+  });
+}
+
+export async function deleteTranscript(id) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(TRANSCRIPT_STORE, "readwrite");
+    const store = transaction.objectStore(TRANSCRIPT_STORE);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve(true);
+    request.onerror = (event) => reject(new Error("Failed to delete transcript: " + event.target.error?.message));
+  });
+}
+
+// --- SESSION CRUD ---
+export async function getAllSessions() {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SESSION_STORE, "readonly");
+    const store = transaction.objectStore(SESSION_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = (event) => reject(new Error("Failed to load sessions: " + event.target.error?.message));
+  });
+}
+
+export async function saveSession(session) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SESSION_STORE, "readwrite");
+    const store = transaction.objectStore(SESSION_STORE);
+    const request = store.put(session);
+    request.onsuccess = () => resolve(session);
+    request.onerror = (event) => reject(new Error("Failed to save session: " + event.target.error?.message));
+  });
+}
+
+export async function deleteSession(id) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SESSION_STORE, "readwrite");
+    const store = transaction.objectStore(SESSION_STORE);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve(true);
+    request.onerror = (event) => reject(new Error("Failed to delete session: " + event.target.error?.message));
+  });
+}
+
+// --- COLLECTIONS CRUD ---
+export async function getAllCollections() {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(COLLECTION_STORE, "readonly");
+    const store = transaction.objectStore(COLLECTION_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = (event) => reject(new Error("Failed to load collections: " + event.target.error?.message));
+  });
+}
+
+export async function saveCollection(collection) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(COLLECTION_STORE, "readwrite");
+    const store = transaction.objectStore(COLLECTION_STORE);
+    const request = store.put(collection);
+    request.onsuccess = () => resolve(collection);
+    request.onerror = (event) => reject(new Error("Failed to save collection: " + event.target.error?.message));
+  });
+}
+
+export async function deleteCollection(id) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(COLLECTION_STORE, "readwrite");
+    const store = transaction.objectStore(COLLECTION_STORE);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve(true);
+    request.onerror = (event) => reject(new Error("Failed to delete collection: " + event.target.error?.message));
+  });
+}
+
+// DB Recovery function (Phase 23)
+export async function dbRecovery() {
+  try {
+    const db = await getDB();
+    db.close();
+    return new Promise((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase(DB_NAME);
+      request.onsuccess = () => {
+        dbPromise = null;
+        resolve(true);
+      };
+      request.onerror = () => reject(false);
+    });
+  } catch {
+    return false;
+  }
 }
