@@ -1,5 +1,5 @@
-﻿import React, { useMemo, useState, useDeferredValue } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download } from "lucide-react";
+import React, { useMemo, useState, useRef } from "react";
+import { ChevronLeft, ChevronRight, Inbox, Pin, Search, Trash2, Download, X, ArrowUpDown, Filter, RotateCcw, HardDrive, Archive } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import useDebounce from "../hooks/useDebounce";
 
@@ -13,11 +13,192 @@ export function SpeechHistory({
   onDelete,
   onClearHistory,
   onCopy,
+  onImportBackup,
+  onAddTag = () => {},
+  onRemoveTag = () => {},
+  onAddToQuickReplies = () => {},
+  showToast,
+  onAddTag,
+  onRemoveTag,
+  onAddToQuickReplies,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((m) => {
+      if (m.tags && Array.isArray(m.tags)) {
+        m.tags.forEach((t) => tagsSet.add(t));
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  const [selectedTag, setSelectedTag] = useState("All Tags");
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  const analyticsData = useMemo(() => {
+    const dataSource = sessionTranscript.length > 0 ? sessionTranscript : history;
+    const totalSentences = dataSource.length;
+    const totalWords = dataSource.reduce((acc, m) => {
+      const words = m.text.trim().split(/\s+/).filter(Boolean).length;
+      return acc + words;
+    }, 0);
+    
+    const counts = {};
+    dataSource.forEach((m) => {
+      counts[m.text] = (counts[m.text] || 0) + 1;
+    });
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+
+    return { totalSentences, totalWords, top };
+  }, [history, sessionTranscript]);
+
+  const fileInputRef = React.useRef(null);
+
+  const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const analyticsData = useMemo(() => {
+    const totalSentences = history.length;
+    const totalWords = history.reduce((acc, item) => acc + (item.text ? item.text.trim().split(/\s+/).length : 0), 0);
+    const phraseCounts = {};
+    history.forEach((item) => {
+      if (!item.text) return;
+      const t = item.text.trim();
+      phraseCounts[t] = (phraseCounts[t] || 0) + 1;
+    });
+    const top = Object.entries(phraseCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([text, count]) => ({ text, count }));
+    return { totalSentences, totalWords, top };
+  }, [history]);
+
+  const allUniqueTags = useMemo(() => {
+    const tagsSet = new Set();
+    history.forEach((item) => {
+      if (Array.isArray(item.tags)) {
+        item.tags.forEach((t) => tagsSet.add(t));
+      }
+    });
+    return Array.from(tagsSet);
+  }, [history]);
+
+  function handleExportCsv() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const headers = ["Timestamp", "Text", "Status"];
+    const rows = sessionTranscript.map((item) => [
+      escapeCSVCell(new Date(item.timestamp).toISOString()),
+      escapeCSVCell(item.text),
+      escapeCSVCell(item.status ?? "unknown"),
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Transcript-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const handleExport = () => {
+    try {
+      const backupData = {
+        history,
+        favorites: Array.from(favorites),
+      };
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "voiceforge-speech-history-backup.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast?.("Backup exported successfully", "success");
+    } catch (error) {
+      showToast?.("Failed to export history", "error");
+    }
+  };
+
+  const validateBackupSchema = (data) => {
+    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data.history)) return false;
+
+    for (const message of data.history) {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        typeof message.text !== "string" ||
+        typeof message.timestamp !== "number"
+      ) {
+        return false;
+      }
+      if (message.tags !== undefined) {
+        if (!Array.isArray(message.tags)) return false;
+        message.tags = message.tags.filter((t) => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
+      }
+    }
+
+    if (data.favorites !== undefined) {
+      if (!Array.isArray(data.favorites)) return false;
+      for (const favId of data.favorites) {
+        if (typeof favId !== "string") {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (validateBackupSchema(data)) {
+          onImportBackup?.(data.history, data.favorites || []);
+          showToast?.("Backup imported successfully", "success");
+        } else {
+          showToast?.("Error: Invalid backup schema", "error");
+        }
+      } catch (error) {
+        showToast?.("Error: Invalid JSON structure", "error");
+      }
+      event.target.value = "";
+    };
+    reader.onerror = () => {
+      showToast?.("Error reading backup file", "error");
+      event.target.value = "";
+    };
+    reader.readAsText(file);
+  };
 
   const visible = useMemo(() => {
     let messages = tab === "pinned" ? history.filter((message) => favorites.has(message.id)) : history;

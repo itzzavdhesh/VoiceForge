@@ -1,9 +1,10 @@
 // Coordinates top-level navigation, saved voice state, and page rendering for VoiceForge.
-import React from "react";
-import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2, FolderOpen, Heart } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu, X, Users, Info, BarChart2, LogOut } from "lucide-react";
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
+import VoiceForge from "./components/VoiceForge";
 import Analytics from "./pages/Analytics.jsx";
 import VoiceForge from "./components/VoiceForge.jsx";
 import { useTheme } from "./components/ThemeContext.jsx";
@@ -12,12 +13,18 @@ import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
 import ScrollToBottomButton from "./components/ScrollToBottomButton.jsx";
 import ScrollToTopButton from "./components/ScrollToTopButton.jsx";
 import Contributors from "./pages/Contributors.jsx";
-import About from "./pages/About.jsx";
-import PrivacyPolicy from "./pages/PrivacyPolicy.jsx";
-import Library from "./pages/Library.jsx";
-import Healthcare from "./pages/Healthcare.jsx";
+import About from "./pages/About";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import { isAuthenticated, logout } from "./utils/auth.js";
+import AuthView from "./components/AuthView.jsx";
+import { clearStorage } from "./utils/db.js";
 
 const tabs = [
+  { id: "onboarding", label: "Onboarding", icon: Mic2 },
+  { id: "call", label: "Call", icon: Camera },
+  { id: "compose", label: "Compose", icon: MessageSquare },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
+  { id: "contributors", label: "Contributors", icon: Users },
   { id: "onboarding",   label: "Onboarding",   icon: Mic2 },
   { id: "call",         label: "Call",          icon: Camera },
   { id: "compose",      label: "Compose",       icon: MessageSquare },
@@ -27,25 +34,17 @@ const tabs = [
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
+  { id: "speaking-history", label: "History", icon: MessageSquare,},
+  { id: "voice-quality", label: "Quality", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
 const DEFAULT_TAB = "onboarding";
 const tabIds = new Set(tabs.map((tab) => tab.id));
 
-// We intentionally use sessionStorage (not localStorage) here so that the
-// active tab is only remembered for the lifetime of the current browser tab.
-// This keeps in-session navigation (e.g. refreshing while on Compose) smooth,
-// while making it much more likely that a fresh visit (a new tab/window
-// opened independently, or reopening after the browser was fully closed)
-// lands back on Onboarding. Note: this isn't an absolute guarantee in every
-// browser/scenario (e.g. sessionStorage is inherited when a tab is opened
-// via window.open from an existing VoiceForge tab, and some browsers'
-// session-restore features can preserve it across restarts), but it's a
-// meaningful improvement over localStorage, which persisted indefinitely.
 function getSavedTab() {
   try {
-    const saved = sessionStorage.getItem("voiceforge:activeTab");
+    const saved = localStorage.getItem("voiceforge:activeTab");
     return tabIds.has(saved) ? saved : DEFAULT_TAB;
   } catch {
     return DEFAULT_TAB;
@@ -54,37 +53,47 @@ function getSavedTab() {
 
 function saveActiveTab(tab) {
   try {
-    sessionStorage.setItem("voiceforge:activeTab", tab);
+    localStorage.setItem("voiceforge:activeTab", tab);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = React.useState(getSavedTab);
+  const [activeTab, setActiveTab] = useState(getSavedTab);
   const { theme, toggleTheme } = useTheme();
-  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  const [webcamNavEnabled, setWebcamNavEnabled] = React.useState(
-    () => loadAccessibilitySettings().webcamNavigationEnabled
-  );
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(isAuthenticated);
 
-  React.useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === "voiceforge:accessibilitySettings") {
-        setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
-      }
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setIsLoggedIn(false);
     };
-    window.addEventListener("storage", handleStorageChange);
-    // Custom event for same-window updates since storage event doesn't fire in the same window
-    const handleCustomChange = () => {
-      setWebcamNavEnabled(loadAccessibilitySettings().webcamNavigationEnabled);
-    };
-    window.addEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+    window.addEventListener("voiceforge:unauthorized", handleUnauthorized);
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener(ACCESSIBILITY_SETTINGS_CHANGED_EVENT, handleCustomChange);
+      window.removeEventListener("voiceforge:unauthorized", handleUnauthorized);
     };
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await clearStorage();
+    } catch (e) {
+      console.error("Failed to clear local IndexedDB on logout:", e);
+    }
+    const keysToClear = [
+      "vf_history",
+      "vf_favorites",
+      "vf_transcript",
+      "vf_analytics_history",
+      "voiceforge:activeVoiceId",
+      "voiceforge:useClonedVoice",
+      "voiceforge:onboardingStep",
+      "voiceforge:maxUnlockedStep"
+    ];
+    keysToClear.forEach(key => localStorage.removeItem(key));
+    logout();
+  };
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
@@ -105,10 +114,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcutsOpen]);
 
+  function scrollToTop() {
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  }
   function selectTab(tab) {
     if (!tabIds.has(tab)) return;
+
     saveActiveTab(tab);
     setActiveTab(tab);
+    scrollToTop();
   }
 
   // Arrow key navigation for desktop nav tabs (WAI-ARIA Tabs pattern)
@@ -142,11 +159,15 @@ export default function App() {
   // Support navigation to non-tab routes such as the privacy policy.
   function navigateTo(route) {
     if (route === "privacy-policy") {
+      scrollToTop();
       setActiveTab("privacy-policy");
       return;
     }
+
     selectTab(route);
   }
+
+  // Support navigation to non-tab routes such as the privacy policy.
 
   // On initial load, honor direct links to /privacy-policy
   React.useEffect(() => {
@@ -159,7 +180,52 @@ export default function App() {
     }
   }, []);
 
+  // On initial load, detect and import compressed deep-link payload if present
+  React.useEffect(() => {
+    async function checkDeepLinkPayload() {
+      try {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const payload = params.get("import_payload") || params.get("payload");
+        if (!payload) return;
+
+        await importSetupPayload(payload);
+        showToast("Setup and voice profiles imported successfully!", "success");
+
+        // Clean up URL without triggering a page reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+        selectTab("settings");
+      } catch (err) {
+        showToast("Failed to import setup from link: " + (err.message || String(err)), "error");
+      }
+    }
+    checkDeepLinkPayload();
+  }, []);
+
   return (
+    <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+
+      {/* Global Header */}
+      <header className="sticky top-0 z-50 border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          {/* Logo + Title */}
+          <div
+            className="flex items-center gap-3 min-w-0 cursor-pointer"
+            onClick={() => selectTab("onboarding")}
+            role="button"
+            tabIndex={0}
+            aria-label="Go to home"
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectTab("onboarding")}
+          >
+            <img
+              src="/models/logo5.png"
+              alt="VoiceForge Logo"
+              className="h-10 w-10 flex-shrink-0 object-contain sm:h-12 sm:w-12"
+            />
+            <div className="min-w-0">
+              <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-moss dark:text-glow sm:block">
+                Open source assistive video
     <div className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
@@ -194,37 +260,36 @@ export default function App() {
 
           {/* Desktop nav + theme toggle */}
           <div className="hidden items-center gap-2 sm:flex">
-            <nav
-              ref={desktopNavRef}
-              className="flex gap-2"
-              role="tablist"
-              aria-label="VoiceForge pages"
-              onKeyDown={handleNavKeyDown}
-            >
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const selected = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    aria-controls={`tabpanel-${tab.id}`}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => selectTab(tab.id)}
-                    className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
-                      selected
-                        ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
-                        : "border-ink/15 bg-white text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
-                    }`}
-                  >
-                    <Icon aria-hidden="true" size={17} />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+            {isLoggedIn && (
+              <nav className="flex gap-2" aria-label="VoiceForge pages">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const selected = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => selectTab(tab.id)}
+                      className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
+                        selected
+                          ? "border-ink bg-black text-white dark:border-glow dark:bg-glow dark:text-black"
+                          : "border-ink/15 bg-white text-ink hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow dark:hover:text-glow"
+                      }`}
+                    >
+                      <Icon aria-hidden="true" size={17} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-400"
+                >
+                  Log Out
+                </button>
+              </nav>
+            )}
             <button
               type="button"
               onClick={toggleTheme}
@@ -242,68 +307,78 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main id="main-content" className="flex-grow" role="main">
-        {activeTab === "compose" && (
-          <div id="tabpanel-compose" role="tabpanel" aria-label="Compose panel">
-            <VoiceForge />
-          </div>
-        )}
+      <main className="flex-grow">
+        {!isLoggedIn ? (
+          <AuthView onAuthSuccess={() => setIsLoggedIn(true)} />
+        ) : (
+          <>
+            {activeTab === "compose" && <VoiceForge />}
 
-        {activeTab !== "compose" && (
-          <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-label={`${activeTab} panel`} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
-            {activeTab === "call"       && <Call />}
-            {activeTab === "settings"   && <Settings />}
-            {activeTab === "analytics"  && <Analytics />}
-            {activeTab === "voice-profiles" && <VoiceProfiles />}
-            {activeTab === "contributors" && <Contributors />}
-            {activeTab === "about" && <About onNavigate={selectTab} />}
-            {activeTab === "analytics" && <Analytics />}
-            {activeTab === "library" && <Library />}
-            {activeTab === "healthcare" && <Healthcare />}
-            {activeTab === "privacy-policy" && (<PrivacyPolicy
-              onBackHome={() => selectTab("onboarding")}
-             />
+            {activeTab !== "compose" && (
+              <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                {activeTab === "onboarding" && <Onboarding onReady={() => selectTab("call")} />}
+                {activeTab === "call"       && <Call />}
+                {activeTab === "settings"   && <Settings />}
+                {activeTab === "analytics"  && <Analytics />}
+                {activeTab === "contributors" && <Contributors />}
+                {activeTab === "about" && <About onNavigate={selectTab} />}
+                {activeTab === "privacy-policy" && (
+                  <PrivacyPolicy onBackHome={() => selectTab("onboarding")} />
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-ink/10 bg-white pb-safe sm:hidden dark:border-border dark:bg-surface"
-        aria-label="VoiceForge mobile navigation"
-      >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = activeTab === tab.id;
-          return (
+      {isLoggedIn && (
+        <>
+          {/* Mobile Bottom Navigation Bar */}
+          <nav
+            className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-ink/10 bg-white pb-safe sm:hidden dark:border-border dark:bg-surface"
+            aria-label="VoiceForge mobile navigation"
+          >
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const selected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => selectTab(tab.id)}
+                  aria-current={selected ? "page" : undefined}
+                  className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
+                    selected
+                      ? "text-moss dark:text-glow"
+                      : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
+                  }`}
+                >
+                  <Icon size={22} aria-hidden="true" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
             <button
-              key={tab.id}
               type="button"
-              onClick={() => selectTab(tab.id)}
-              aria-current={selected ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss dark:focus-visible:ring-glow ${
-                selected
-                  ? "text-moss dark:text-glow"
-                  : "text-ink/50 hover:text-ink dark:text-neutral-500 dark:hover:text-neutral-200"
-              }`}
+              onClick={handleLogout}
+              className="flex flex-col items-center gap-0.5 px-2 py-3 text-xs font-medium text-red-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
-              <Icon size={22} aria-hidden="true" />
-              <span>{tab.label}</span>
+              <LogOut size={22} aria-hidden="true" />
+              <span>Log Out</span>
             </button>
-          );
-        })}
-      </nav>
+          </nav>
 
-      {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
-      <div className="h-16 sm:hidden" aria-hidden="true" />
-      
-      <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <ScrollToBottomButton activeTab={activeTab} />
-      <ScrollToTopButton activeTab={activeTab} />
-      <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
-      <WebcamNavigation enabled={webcamNavEnabled} />
+          {/* Bottom padding so content isn't hidden behind bottom nav on mobile */}
+          <div className="h-16 sm:hidden" aria-hidden="true" />
+          
+          <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+          <ScrollToBottomButton activeTab={activeTab} />
+          <ScrollToTopButton activeTab={activeTab} />
+        </>
+      )}
+      {isLoggedIn && (
+        <Footer onNavigate={navigateTo} tabs={tabs} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      )}
     </div>
   );
 }

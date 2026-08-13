@@ -88,6 +88,14 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
     []
   );
 
+  const toggleSpeakerBoost = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, use_speaker_boost: !prev.use_speaker_boost };
+      persistVoiceSettings(next);
+      return next;
+    });
+  }, []);
+
   const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
 
   return (

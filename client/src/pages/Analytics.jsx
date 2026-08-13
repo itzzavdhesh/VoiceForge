@@ -51,9 +51,48 @@ export default function Analytics() {
       } catch (err) {
         console.error("Error loading analytics:", err);
       }
-    }
-    calculateStats();
-  }, []);
+    });
+
+    const maxCount = Math.max(...data.map(d => d.count), 1);
+    return { data, maxCount };
+  }, [filteredHistory, dateRange]);
+
+  const exportCSV = () => {
+    if (!filteredHistory.length) return;
+    
+    const headers = ["ID", "Timestamp", "Language", "Text"];
+    const rows = filteredHistory.map(msg => [
+      msg.id,
+      new Date(msg.timestamp).toISOString(),
+      msg.language || "Unknown",
+      `"${msg.text.replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `voiceforge_analytics_${dateRange}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getCoordinatesForPercent = (percent) => {
+    const x = Math.cos(2 * Math.PI * percent);
+    const y = Math.sin(2 * Math.PI * percent);
+    return [x, y];
+  };
+
+  const chartTitle = dateRange === "today" 
+    ? "Messages (Today by Hour)" 
+    : dateRange === "7days" 
+    ? "Messages (Last 7 Days)" 
+    : dateRange === "30days" 
+    ? "Messages (Last 30 Days)" 
+    : "Messages (Last 6 Months)";
 
   return (
     <div className="space-y-6">
@@ -165,6 +204,30 @@ export default function Analytics() {
           )}
         </div>
       </div>
+
+      {/* Vocabulary Diversity Word Cloud */}
+      <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-6">Vocabulary Diversity (Word Cloud)</h3>
+        {wordCloudData.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-4 py-8 px-4 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl min-h-[160px]">
+            {wordCloudData.map((word, idx) => (
+              <span
+                key={word.text}
+                title={`Spoken ${word.value} time${word.value !== 1 ? "s" : ""}`}
+                className={`${getWordColorClass(idx)} hover:scale-110 hover:opacity-80 transition-all duration-150 cursor-help whitespace-nowrap inline-block`}
+                style={{ fontSize: getWordFontSize(word.value) }}
+              >
+                {word.text}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="h-40 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+            No vocabulary data available for this period.
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

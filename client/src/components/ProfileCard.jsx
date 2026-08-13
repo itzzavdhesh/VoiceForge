@@ -184,6 +184,14 @@ export function ProfileCard({ profile, onDelete, onShare, onUpdate }) {
           </button>
           <button
             type="button"
+            onClick={() => onExport(profile)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink/15 text-ink transition hover:bg-ink/5 dark:border-border dark:text-neutral-200 dark:hover:bg-white/5"
+            title="Export Profile Backup (.vfp)"
+          >
+            <Download size={16} />
+          </button>
+          <button
+            type="button"
             onClick={() => onDelete(profile.voice_id)}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-coral/30 text-coral transition hover:bg-coral hover:text-white"
             title="Delete Profile"
