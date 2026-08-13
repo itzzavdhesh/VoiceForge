@@ -12,7 +12,6 @@ const TRANSCRIPT_KEY = "vf_transcript";
 const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
-const MAX_FAVORITES = 10;
 
 function generateUUID() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -251,13 +250,6 @@ export function useSpeechHistory() {
   });
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
   const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
-
-  // Mirrors `favorites` so addMessage can read the latest pinned ids
-  // without depending on `favorites` state (keeps addMessage's identity stable).
-  const favoritesRef = useRef(favorites);
-  useEffect(() => {
-    favoritesRef.current = favorites;
-  }, [favorites]);
 
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {

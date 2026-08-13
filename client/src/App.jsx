@@ -27,6 +27,8 @@ const tabs = [
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
   { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
+  { id: "speaking-history", label: "History", icon: MessageSquare,},
+  { id: "voice-quality", label: "Quality", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -281,6 +283,8 @@ export default function App() {
             {activeTab === "settings"   && <Settings />}
             {activeTab === "analytics"  && <Analytics />}
             {activeTab === "voice-profiles" && <VoiceProfiles />}
+            {activeTab === "speaking-history" && <SpeakingHistory />}
+            {activeTab === "voice-quality" && <VoiceQualityAnalyzer />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy
