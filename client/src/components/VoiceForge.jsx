@@ -168,11 +168,8 @@ export default function VoiceForge() {
       textareaRef.current?.focus();
       return;
     }
-    const msgId = addMessage(text, language);
-    const result = await speak(text);
-    if (result?.blob && msgId) {
-      saveAudioBlob(msgId, result.blob).catch(err => console.error("Cache save error:", err));
-    }
+    speak(text);
+    addMessage(text, language);
     showToast("Saved to history", "success");
     setInputText("");
     try {

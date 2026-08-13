@@ -210,12 +210,6 @@ export default function Analytics() {
     return { data, maxCount };
   }, [filteredHistory, dateRange]);
 
-  const escapeCSVCell = (value) => {
-    if (value === null || value === undefined) return '""';
-    const str = String(value);
-    return `"${str.replace(/"/g, '""')}"`;
-  };
-
   const exportCSV = () => {
     if (!filteredHistory.length) return;
     
@@ -227,7 +221,7 @@ export default function Analytics() {
       `"${msg.text.replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = [headers.map(escapeCSVCell).join(","), ...rows.map(e => e.join(","))].join("\n");
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
