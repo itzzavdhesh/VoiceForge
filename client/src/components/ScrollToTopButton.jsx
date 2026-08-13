@@ -6,14 +6,13 @@ export default function ScrollToTopButton({ activeTab }) {
   const [visible, setVisible] = React.useState(false);
   const [atBottom, setAtBottom] = React.useState(false);
 
-
   React.useEffect(() => {
     function handleScroll() {
       const scrolled = window.scrollY + window.innerHeight;
       const total = document.body.scrollHeight;
       setVisible(window.scrollY > 40);
       setAtBottom(scrolled >= total - 40);
-  }
+    }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleScroll, { passive: true });

@@ -53,14 +53,21 @@ const ALLOWED_AUDIO_MIME_PREFIX = "audio/";
 
 const MOCK_AUDIO_MP3 = Buffer.from(
   "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA" +
-  "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
-  "AAABAAAB/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-  "base64"
+    "//uQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8A" +
+    "AAABAAAB/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "base64",
 );
 
 const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[VoiceForge] FATAL: STREAM_SECRET environment variable is required in production! " +
+      "Please set STREAM_SECRET in your .env or server environment to run securely."
+    );
+    throw new Error("STREAM_SECRET is required in production environment");
+  }
   console.warn(
     "[VoiceForge] STREAM_SECRET not set - using ephemeral key. " +
     "All speech tokens will be invalidated on server restart. " +
@@ -69,7 +76,11 @@ const STREAM_SECRET = process.env.STREAM_SECRET ?? (() => {
   return crypto.randomBytes(32).toString("hex");
 })();
 
-const ENCRYPTION_KEY = crypto.scryptSync(STREAM_SECRET, "voiceforge-stream-salt", 32);
+const ENCRYPTION_KEY = crypto.scryptSync(
+  STREAM_SECRET,
+  "voiceforge-stream-salt",
+  32,
+);
 const IV_LENGTH = 12;
 const ALGORITHM = "aes-256-gcm";
 
@@ -82,8 +93,11 @@ function createTimeoutSignal(ms = 30000) {
 function withTimeout(promise, ms, label, abortSignal = null) {
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-    
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+
     if (abortSignal) {
       if (abortSignal.aborted) {
         clearTimeout(timeoutId);
@@ -96,7 +110,9 @@ function withTimeout(promise, ms, label, abortSignal = null) {
       }
     }
   });
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+  return Promise.race([promise, timeoutPromise]).finally(() =>
+    clearTimeout(timeoutId),
+  );
 }
 
 function encryptToken(payload) {
@@ -111,7 +127,7 @@ function encryptToken(payload) {
   const tokenData = {
     iv: iv.toString("base64"),
     tag: authTag,
-    data: encrypted
+    data: encrypted,
   };
 
   return Buffer.from(JSON.stringify(tokenData)).toString("base64url");
@@ -125,7 +141,7 @@ function decryptToken(token) {
     const decipher = crypto.createDecipheriv(
       ALGORITHM,
       ENCRYPTION_KEY,
-      Buffer.from(iv, "base64")
+      Buffer.from(iv, "base64"),
     );
     decipher.setAuthTag(Buffer.from(tag, "base64"));
 
@@ -146,7 +162,7 @@ function decryptToken(token) {
       throw error;
     }
     const err = new Error("Invalid or tampered speech token.");
-    err.status = 400;
+    err.status = 401;
     throw err;
   }
 }
@@ -155,6 +171,33 @@ function decryptToken(token) {
 // Gradio / Chatterbox voice generation
 // ---------------------------------------------------------------------------
 
+let cachedGradioClient = null;
+let currentSpaceIdentifier = null;
+
+async function getGradioClient() {
+  const spaceIdentifier = process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
+  if (!cachedGradioClient || currentSpaceIdentifier !== spaceIdentifier) {
+    const { client } = await import("@gradio/client");
+    try {
+      cachedGradioClient = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+      currentSpaceIdentifier = spaceIdentifier;
+    } catch (err) {
+      if (
+        err.message?.includes("SPACE_INITIALIZING") || 
+        err.message?.includes("Space is sleeping") || 
+        err.message?.includes("is sleeping") ||
+        err.message?.includes("Chatterbox client init timed out")
+      ) {
+        const error = new Error("AI Engine is waking up");
+        error.isColdStart = true;
+        error.status = 503;
+        throw error;
+      }
+      throw err;
+    }
+  }
+  return cachedGradioClient;
+}
 /**
  * Calls the ResembleAI/Chatterbox-Multilingual-TTS Gradio space and returns
  * the URL of the generated audio file.
@@ -172,22 +215,61 @@ async function generateClonedVoice(
   targetText,
   languageCode = "en",
   voiceSettings = {},
-  abortSignal = null
+  abortSignal = null,
 ) {
   const normalizedVoiceSettings =
     voiceSettings && typeof voiceSettings === "object" ? voiceSettings : {};
-  const spaceIdentifier =
-    process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
+
+  // Check if space is running to avoid infinite stalls on cold-starts
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const hfRes = await fetch(`https://huggingface.co/api/spaces/${spaceIdentifier}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    
+    if (hfRes.ok) {
+      const hfData = await hfRes.json();
+      const stage = hfData.runtime?.stage;
+      if (stage && stage !== "RUNNING") {
+        const { client } = await import("@gradio/client");
+        // Trigger client initialization asynchronously in background to wake it up
+        client(spaceIdentifier).catch(() => {});
+        
+        const error = new Error(`Voice engine is warming up (current status: ${stage}). Please try again shortly.`);
+        error.status = 503;
+        throw error;
+      }
+    }
+  } catch (err) {
+    if (err.status === 503) {
+      throw err;
+    }
+    console.warn("[VoiceForge] Failed to check space status:", err.message);
+  }
 
   const { client } = await import("@gradio/client");
-  const app = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+  /** @type {import("@gradio/client").GradioApp} */
+  const app = await withTimeout(
+    client(spaceIdentifier),
+    10000,
+    "Chatterbox client init",
+  );
 
   // Wrap the raw Buffer in a Blob so Gradio treats it as a file upload.
   const referenceBlob = new Blob([audioBuffer], { type: mimeType });
   const exaggeration = clampNumber(normalizedVoiceSettings.style, 0.25, 2, 0.5);
   const cfgWeight = clampNumber(normalizedVoiceSettings.stability, 0.2, 1, 0.5);
-  const temperature = clampNumber(normalizedVoiceSettings.temperature, 0.05, 5, 0.8);
-  const seed = Number.isInteger(normalizedVoiceSettings.seed) ? normalizedVoiceSettings.seed : 0;
+  const temperature = clampNumber(
+    normalizedVoiceSettings.temperature,
+    0.05,
+    5,
+    0.8,
+  );
+  const seed = Number.isInteger(normalizedVoiceSettings.seed)
+    ? normalizedVoiceSettings.seed
+    : 0;
 
   const result = await withTimeout(
     app.predict("/generate_tts_audio", [
@@ -208,7 +290,6 @@ async function generateClonedVoice(
   if (!audioUrl) {
     throw new Error("Chatterbox returned no audio URL.");
   }
-  return audioUrl;
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -264,8 +345,13 @@ export async function cloneVoice(request, response, next) {
     // point, but without this check any client could still push
     // MAX_STORED_VOICES worth of arbitrarily large files (or non-audio
     // files) into `voiceStore`, where they'd be retained for VOICE_STORE_TTL_MS.
-    if (!audioFile.mimetype || !audioFile.mimetype.startsWith(ALLOWED_AUDIO_MIME_PREFIX)) {
-      response.status(400).json({ error: "Reference audio must be an audio file." });
+    if (
+      !audioFile.mimetype ||
+      !audioFile.mimetype.startsWith(ALLOWED_AUDIO_MIME_PREFIX)
+    ) {
+      response
+        .status(400)
+        .json({ error: "Reference audio must be an audio file." });
       return;
     }
     if (audioFile.buffer.length > MAX_VOICE_UPLOAD_BYTES) {
@@ -279,13 +365,12 @@ export async function cloneVoice(request, response, next) {
       console.warn("[VoiceForge] MOCK_CHATTERBOX: skipping real voice clone, returning fixture.");
       response.json({
         voice_id: request.body.voice_id || "mock-voice-id-00000000",
-        name: request.body.name || "VoiceForge Voice (mock)"
+        name: request.body.name || "VoiceForge Voice (mock)",
       });
       return;
     }
 
     // Store the audio buffer server-side so it can be used during speak/stream.
-    pruneVoiceStore();
     const voiceId = crypto.randomUUID();
 
     // Fix (IDOR): voice_id alone used to be sufficient to use someone else's
@@ -295,7 +380,10 @@ export async function cloneVoice(request, response, next) {
     // hash; speak() must present the matching plaintext token to use this
     // voice. The plaintext token is returned once, here, and never again.
     const ownerToken = crypto.randomBytes(24).toString("base64url");
-    const ownerTokenHash = crypto.createHash("sha256").update(ownerToken).digest("hex");
+    const ownerTokenHash = crypto
+      .createHash("sha256")
+      .update(ownerToken)
+      .digest("hex");
 
     voiceStore.set(voiceId, {
       name: request.body.name || "VoiceForge Voice",
@@ -308,7 +396,7 @@ export async function cloneVoice(request, response, next) {
     response.json({
       voice_id: voiceId,
       owner_token: ownerToken,
-      name: request.body.name || "VoiceForge Voice"
+      name: request.body.name || "VoiceForge Voice",
     });
   } catch (error) {
     next(error);
@@ -351,13 +439,13 @@ export async function speak(request, response, next) {
       voice_id: voiceId,
       owner_token: ownerToken,
       language_code,
-      voice_settings
+      voice_settings,
     } = request.body;
 
     if (pendingStreams.size >= PENDING_STREAMS_MAX) {
       response.status(503).json({
         error:
-          "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
+          "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams.",
       });
       return;
     }
@@ -367,29 +455,39 @@ export async function speak(request, response, next) {
     const trimmedVoiceId = typeof voiceId === "string" ? voiceId.trim() : "";
 
     if (!trimmedText && !trimmedVoiceId) {
-      response.status(400).json({ error: "Both text and voice_id are required." });
+      response
+        .status(400)
+        .json({ error: "Both text and voice_id are required." });
       return;
     }
     if (!trimmedText) {
-      response.status(400).json({ error: "text is required and must not be blank." });
+      response
+        .status(400)
+        .json({ error: "text is required and must not be blank." });
       return;
     }
     if (!trimmedVoiceId) {
-      response.status(400).json({ error: "voice_id is required and must not be blank." });
+      response
+        .status(400)
+        .json({ error: "voice_id is required and must not be blank." });
       return;
     }
     pruneVoiceStore();
     if (!getIsMock() && !voiceStore.has(trimmedVoiceId)) {
-      response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+      response.status(404).json({
+        error: "Voice profile not found. Please re-clone your voice.",
+      });
       return;
     }
     if (trimmedText.length > 300) {
-      response.status(400).json({ error: "Text too long; maximum 300 characters for Chatterbox TTS." });
+      response.status(400).json({
+        error: "Text too long; maximum 300 characters for Chatterbox TTS.",
+      });
       return;
     }
     if (!isValidLanguageCode(language_code)) {
       response.status(400).json({
-        error: `Unsupported language code "${language_code}". See Chatterbox Multilingual docs for supported codes.`
+        error: `Unsupported language code "${language_code}". See Chatterbox Multilingual docs for supported codes.`,
       });
       return;
     }
@@ -401,46 +499,93 @@ export async function speak(request, response, next) {
       pruneVoiceStore();
       const voiceEntry = voiceStore.get(trimmedVoiceId);
       if (!voiceEntry) {
-        response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+        response.status(404).json({
+          error: "Voice profile not found. Please re-clone your voice.",
+        });
         return;
       }
-      const trimmedOwnerToken = typeof ownerToken === "string" ? ownerToken.trim() : "";
+      const trimmedOwnerToken =
+        typeof ownerToken === "string" ? ownerToken.trim() : "";
       const providedHash = trimmedOwnerToken
         ? crypto.createHash("sha256").update(trimmedOwnerToken).digest("hex")
         : null;
       const isAuthorized =
         !!providedHash &&
         providedHash.length === voiceEntry.ownerTokenHash.length &&
-        crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(voiceEntry.ownerTokenHash));
+        crypto.timingSafeEqual(
+          Buffer.from(providedHash),
+          Buffer.from(voiceEntry.ownerTokenHash),
+        );
       if (!isAuthorized) {
-        response.status(403).json({ error: "Invalid or missing owner_token for this voice_id." });
+        response
+          .status(403)
+          .json({ error: "Invalid or missing owner_token for this voice_id." });
         return;
       }
     }
 
     const defaultVoiceSettings = {
       stability: 0.45,
-      style: 0.2,
+      style: 0.5,
       temperature: 0.8
     };
 
-    
     const sanitizedSettings = {};
-if (voice_settings !== undefined && voice_settings !== null) {
-  if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
-    response.status(400).json({ error: "voice_settings must be a plain object." });
-    return;
-  }
-  if (voice_settings.stability !== undefined) {
-    if (typeof voice_settings.stability !== "number" || !Number.isFinite(voice_settings.stability) || voice_settings.stability < 0 || voice_settings.stability > 1) {
-      response.status(400).json({ error: "stability must be a finite number between 0 and 1." });
-      return;
+    if (voice_settings !== undefined && voice_settings !== null) {
+      if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
+        response
+          .status(400)
+          .json({ error: "voice_settings must be a plain object." });
+        return;
+      }
+      if (voice_settings.stability !== undefined) {
+        if (
+          typeof voice_settings.stability !== "number" ||
+          !Number.isFinite(voice_settings.stability) ||
+          voice_settings.stability < 0 ||
+          voice_settings.stability > 1
+        ) {
+          response.status(400).json({
+            error: "stability must be a finite number between 0 and 1.",
+          });
+          return;
+        }
+        sanitizedSettings.stability = voice_settings.stability;
+      }
+      if (voice_settings.style !== undefined) {
+        if (
+          typeof voice_settings.style !== "number" ||
+          !Number.isFinite(voice_settings.style) ||
+          voice_settings.style < 0 ||
+          voice_settings.style > 1
+        ) {
+          response
+            .status(400)
+            .json({ error: "style must be a finite number between 0 and 1." });
+          return;
+        }
+        sanitizedSettings.style = voice_settings.style;
+      }
+      if (voice_settings.temperature !== undefined) {
+        if (
+          typeof voice_settings.temperature !== "number" ||
+          !Number.isFinite(voice_settings.temperature) ||
+          voice_settings.temperature < 0.05 ||
+          voice_settings.temperature > 5
+        ) {
+          response.status(400).json({
+            error: "temperature must be a finite number between 0.05 and 5.",
+          });
+          return;
+        }
+        sanitizedSettings.temperature = voice_settings.temperature;
+      }
     }
     sanitizedSettings.stability = voice_settings.stability;
   }
   if (voice_settings.style !== undefined) {
-    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 1) {
-      response.status(400).json({ error: "style must be a finite number between 0 and 1." });
+    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 2) {
+      response.status(400).json({ error: "style must be a finite number between 0 and 2." });
       return;
     }
     sanitizedSettings.style = voice_settings.style;
@@ -465,12 +610,18 @@ if (voice_settings !== undefined && voice_settings !== null) {
     }, PENDING_STREAM_TTL_MS);
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
-    
-    pendingStreams.set(speechId, { text: trimmedText, voiceId: trimmedVoiceId, mergedSettings, timeout });
+
+    pendingStreams.set(speechId, {
+      text: trimmedText,
+      voiceId: trimmedVoiceId,
+      mergedSettings,
+      timeout,
+    });
 
     if (getIsMock()) {
       console.warn(`[VoiceForge] MOCK_CHATTERBOX: speak enqueued mock stream for speechId=${speechId}`);
     }
+
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
       speechId,
@@ -478,12 +629,12 @@ if (voice_settings !== undefined && voice_settings !== null) {
       voiceId: trimmedVoiceId,
       language_code,
       voice_settings: mergedSettings,
-      expiresAt
+      expiresAt,
     });
 
     response.json({
       speechId: token,
-      audioUrl: `/api/voice/speak/stream?t=${token}`
+      audioUrl: `/api/voice/speak/stream?t=${token}`,
     });
   } catch (error) {
     next(error);
@@ -506,7 +657,8 @@ export async function streamSpeech(request, response, next) {
       response.status(400).json({ error: "Missing stream token." });
       return;
     }
-    const { speechId, text, voiceId, language_code, voice_settings } = decryptToken(token);
+    const { speechId, text, voiceId, language_code, voice_settings } =
+      decryptToken(token);
 
     // Fix (replay protection): decryptToken only checks that the token is
     // authentic and not expired - it does not check that it hasn't already
@@ -525,7 +677,8 @@ export async function streamSpeech(request, response, next) {
     const pendingEntry = speechId ? deletePendingStream(speechId) : undefined;
     if (!pendingEntry) {
       response.status(410).json({
-        error: "This speech token has already been used or has expired. Please request a new one."
+        error:
+          "This speech token has already been used or has expired. Please request a new one.",
       });
       return;
     }
@@ -540,10 +693,12 @@ export async function streamSpeech(request, response, next) {
     }
 
     // Resolve the stored reference audio for this voice profile.
-    pruneVoiceStore();
-    const voiceEntry = voiceStore.get(voiceId);
+    const db = await getDb();
+    const voiceEntry = await db.get('SELECT * FROM voice_profiles WHERE voice_id = ?', [voiceId]);
     if (!voiceEntry) {
-      response.status(404).json({ error: "Voice profile not found. Please re-clone your voice." });
+      response.status(404).json({
+        error: "Voice profile not found. Please re-clone your voice.",
+      });
       return;
     }
 
@@ -562,12 +717,12 @@ export async function streamSpeech(request, response, next) {
     let audioUrl;
     try {
       audioUrl = await generateClonedVoice(
-        voiceEntry.audioBuffer,
-        voiceEntry.mimeType,
+        voiceEntry.audio_data,
+        voiceEntry.mime_type,
         text,
         chatterboxLanguage,
         voice_settings,
-        generateController.signal
+        generateController.signal,
       );
     } catch (error) {
       if (error.message === "Request aborted by client") {
@@ -576,6 +731,10 @@ export async function streamSpeech(request, response, next) {
       }
       if (error.message.includes("timed out")) {
         response.status(504).json({ error: error.message });
+        return;
+      }
+      if (error.status === 503) {
+        response.status(503).json({ error: error.message });
         return;
       }
       throw error;
@@ -594,13 +753,18 @@ export async function streamSpeech(request, response, next) {
       clearTimeout(timer);
     } catch (error) {
       if (error.name === "AbortError") {
-        response.status(504).json({ error: "Failed to fetch generated audio from Chatterbox due to timeout." });
+        response.status(504).json({
+          error:
+            "Failed to fetch generated audio from Chatterbox due to timeout.",
+        });
         return;
       }
       throw error;
     }
     if (!upstream.ok) {
-      response.status(502).json({ error: "Failed to fetch generated audio from Chatterbox." });
+      response
+        .status(502)
+        .json({ error: "Failed to fetch generated audio from Chatterbox." });
       return;
     }
 
@@ -614,12 +778,21 @@ export async function streamSpeech(request, response, next) {
       reader.cancel().catch((err) => console.error("Error cancelling Chatterbox reader:", err));
     });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      response.write(value);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        response.write(value);
+      }
+      response.end();
+    } catch (streamError) {
+      console.error("Stream reading error:", streamError);
+      if (!response.headersSent) {
+        next(streamError);
+      } else {
+        response.end();
+      }
     }
-    response.end();
   } catch (error) {
     next(error);
   }
@@ -635,6 +808,41 @@ export function getStatus(request, response) {
   response.json({
     isMock: getIsMock(),
     engine: "ResembleAI/Chatterbox-Multilingual-TTS",
-    space: process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS"
+    space:
+      process.env.VOICE_ENGINE_SPACE ||
+      "ResembleAI/Chatterbox-Multilingual-TTS",
   });
+}
+
+/**
+ * Express handler to get all saved voice profiles (excluding binary audio data).
+ */
+export async function getProfiles(request, response, next) {
+  try {
+    const db = await getDb();
+    const profiles = await db.all('SELECT voice_id, name, created_at FROM voice_profiles ORDER BY created_at DESC');
+    const mappedProfiles = profiles.map(p => ({
+      id: p.voice_id,
+      voice_id: p.voice_id,
+      name: p.name,
+      createdAt: p.created_at
+    }));
+    response.json(mappedProfiles);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Express handler to delete a saved voice profile.
+ */
+export async function deleteProfile(request, response, next) {
+  try {
+    const { voiceId } = request.params;
+    const db = await getDb();
+    await db.run('DELETE FROM voice_profiles WHERE voice_id = ?', [voiceId]);
+    response.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
 }

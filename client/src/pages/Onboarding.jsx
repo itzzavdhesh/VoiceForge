@@ -12,9 +12,9 @@ import {
 } from "../utils/voiceSettings.js";
 
 /**
- * A labelled range slider for a 0–1 voice parameter.
+ * A labelled range slider for a voice parameter.
  */
-function VoiceSlider({ id, label, description, value, onChange }) {
+function VoiceSlider({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
     <div className="space-y-1.5">
       <label
@@ -33,8 +33,8 @@ function VoiceSlider({ id, label, description, value, onChange }) {
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
+        min={min}
+        max={max}
         step="0.01"
         value={value}
         onChange={onChange}
@@ -137,6 +137,8 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           description="Lower values are steadier; higher values allow more variation in the generated speech."
           value={settings.temperature}
           onChange={updateSlider("temperature")}
+          min={0.05}
+          max={5}
         />
         <VoiceSlider
           id="ob-style"
@@ -144,6 +146,7 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           description="Higher values exaggerate the style and prosody of the reference audio. Keep low for neutral delivery."
           value={settings.style}
           onChange={updateSlider("style")}
+          max={2}
         />
       </div>
 
@@ -216,9 +219,34 @@ export default function Onboarding({ onReady }) {
       .catch((err) => console.error("Failed to fetch server status:", err));
   }, []);
 
-  // Chatterbox needs no API key — just ensure the local server is reachable.
-  const hasKey = React.useMemo(() => {
-    return serverStatus.isMock || Boolean(serverStatus.space);
+  // Track the active onboarding step interface (1, 2, or 3) restored from storage
+  const [activeStep, setActiveStep] = useState(() => {
+    const savedStep = localStorage.getItem("voiceforge:onboardingStep");
+    const savedMax = localStorage.getItem("voiceforge:maxUnlockedStep");
+
+    const parsedStep = savedStep ? parseInt(savedStep, 10) : 1;
+    const parsedMax = savedMax ? parseInt(savedMax, 10) : 1;
+    
+    return Math.min(parsedStep, parsedMax);
+  });
+
+  // Refs for auto-focus
+  const voiceNameInputRef = useRef(null);
+  const step2FirstInputRef = useRef(null);
+  const step3FirstInputRef = useRef(null);
+
+  // Voice settings state
+  const [voiceSettings, setVoiceSettings] = useState(() => loadVoiceSettings());
+
+  useEffect(() => {
+    fetch("/api/voice/status")
+      .then((res) => res.json())
+      .then((data) => setServerStatus(data))
+      .catch((err) => console.error("Failed to fetch server status:", err));
+  }, []);
+
+  const hasKey = useMemo(() => {
+    return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
   }, [serverStatus]);
   
   const nameError = React.useMemo(() => {
@@ -254,7 +282,6 @@ export default function Onboarding({ onReady }) {
     return Math.min(parsedStep, parsedMax);
   });
 
-  // Dynamic content dictionary for the header banner based on activeStep
   const stepContent = {
     1: {
       title: "Create your voice profile",
@@ -290,8 +317,10 @@ export default function Onboarding({ onReady }) {
 
   return (
     <div className="space-y-6">
-      {/* GLOBAL ONBOARDING HEADER BANNER VIEW */}
-      <section className="rounded-lg border border-ink/10 bg-white p-6 text-ink shadow-soft dark:border-border dark:bg-surface dark:text-white dark:shadow-soft-dk">
+      <ToastContainer />
+      
+      {/* HEADER BANNER */}
+      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
@@ -333,7 +362,6 @@ export default function Onboarding({ onReady }) {
         </div>
       </section>
 
-
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
         <>
@@ -347,7 +375,10 @@ export default function Onboarding({ onReady }) {
             </div>
           )}
 
-          <VoiceRecorder onRecordingReady={handleRecordingReady} disabled={isCloning} />
+          <VoiceRecorder 
+            onRecordingReady={(blob, meta) => setRecording(blob ? { blob, ...meta } : null)} 
+            disabled={isCloning} 
+          />
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <label className="block text-sm font-bold text-ink dark:text-neutral-100" htmlFor="voice-name">
@@ -356,6 +387,7 @@ export default function Onboarding({ onReady }) {
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
               <input
                 id="voice-name"
+                ref={setVoiceNameRef}
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
@@ -374,7 +406,7 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
+                disabled={isCloning || !hasKey || !recording || recording.duration < 10 || Boolean(nameError)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCloning && <Loader2 className="animate-spin" size={18} />}
@@ -437,7 +469,7 @@ export default function Onboarding({ onReady }) {
         </>
       )}
 
-      {/* STEP 2: WORKSPACE PROPERTIES CONTROLS */}
+      {/* STEP 2 */}
       {activeStep === 2 && (
         <Step2VoiceSettings
           onBack={() => setActiveStep(1)}
@@ -445,7 +477,7 @@ export default function Onboarding({ onReady }) {
         />
       )}
 
-      {/* STEP 3: PIPELINE DEPLOYMENT CHECKLIST */}
+      {/* STEP 3 */}
       {activeStep === 3 && (
         <section className="rounded-lg border border-ink/10 bg-white p-6 shadow-soft dark:border-border dark:bg-surface">
           <h3 className="text-xl font-bold text-ink dark:text-neutral-100">Ready for Activation</h3>
@@ -453,6 +485,7 @@ export default function Onboarding({ onReady }) {
           <div className="my-6 p-12 border-2 border-dashed border-ink/10 rounded-md text-center text-neutral-400">
             Pipeline deployment status diagnostics verify operational conditions are ideal.
           </div>
+          
           <div className="flex justify-between items-center border-t pt-4">
             <button type="button" onClick={() => setActiveStep(2)} className="text-sm font-bold text-ink dark:text-neutral-300 hover:underline">
               ← Back to Settings

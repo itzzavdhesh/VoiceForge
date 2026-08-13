@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange, min = 0, max = 1, step = 0.01 }) {
+function SliderRow({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
     <div className="space-y-1">
       <label
@@ -30,12 +30,24 @@ function SliderRow({ id, label, description, value, onChange, min = 0, max = 1, 
         type="range"
         min={min}
         max={max}
-        step={step}
+        step="0.01"
         value={value}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (["ArrowRight", "ArrowUp"].includes(e.key)) {
+            e.preventDefault();
+            const nextVal = Math.min(Number(value) + Number(step), Number(max));
+            onChange({ target: { value: nextVal } });
+          } else if (["ArrowLeft", "ArrowDown"].includes(e.key)) {
+            e.preventDefault();
+            const nextVal = Math.max(Number(value) - Number(step), Number(min));
+            onChange({ target: { value: nextVal } });
+          }
+        }}
         onChange={onChange}
         aria-label={label}
         aria-describedby={`${id}-desc`}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-neutral-200 accent-blue-500 dark:bg-neutral-700 dark:accent-blue-400"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-neutral-200 accent-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-neutral-700 dark:accent-blue-400"
       />
       <p
         id={`${id}-desc`}
@@ -63,7 +75,10 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
   // Keep in sync when settings change
   useEffect(() => {
     function handleStorage(event) {
-      if (event.key === VOICE_SETTINGS_KEY || event.type === "voiceforge:settingsChanged") {
+      if (
+        event.key === VOICE_SETTINGS_KEY ||
+        event.type === "voiceforge:settingsChanged"
+      ) {
         setSettings(loadVoiceSettings());
       }
     }
@@ -85,8 +100,16 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
         return next;
       });
     },
-    []
+    [],
   );
+
+  const toggleSpeakerBoost = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, use_speaker_boost: !prev.use_speaker_boost };
+      persistVoiceSettings(next);
+      return next;
+    });
+  }, []);
 
   const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
 
@@ -132,6 +155,8 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Lower → steadier output. Higher → more variation."
             value={settings.temperature}
             onChange={updateSetting("temperature")}
+            min={0.05}
+            max={5}
           />
           <SliderRow
             id="vqs-style"
@@ -139,6 +164,27 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             description="Higher → more stylised delivery from the reference audio."
             value={settings.style}
             onChange={updateSetting("style")}
+            max={2}
+          />
+          <SliderRow
+            id="vqs-speed"
+            label="Playback Speed"
+            description="Lower → slower delivery. Higher → faster delivery."
+            value={settings.speed ?? 1.0}
+            min={0.5}
+            max={2.0}
+            step={0.1}
+            onChange={updateSetting("speed")}
+          />
+          <SliderRow
+            id="vqs-pitch"
+            label="Simulated Pitch Shift"
+            description="Adjust the synthesized voice pitch tones."
+            value={settings.pitch ?? 0.5}
+            min={0.0}
+            max={1.0}
+            step={0.05}
+            onChange={updateSetting("pitch")}
           />
           <SliderRow
             id="vqs-pitch"
@@ -164,8 +210,12 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           <details className="group border-t border-neutral-100 pt-3 dark:border-neutral-800">
             <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-neutral-600 dark:text-neutral-400 focus:outline-none">
               <span>Graphic Equalizer (EQ)</span>
-              <span className="text-[10px] text-neutral-400 group-open:hidden">Show</span>
-              <span className="text-[10px] text-neutral-400 hidden group-open:inline">Hide</span>
+              <span className="text-[10px] text-neutral-400 group-open:hidden">
+                Show
+              </span>
+              <span className="text-[10px] text-neutral-400 hidden group-open:inline">
+                Hide
+              </span>
             </summary>
             <div className="space-y-4 mt-3 pl-1">
               <SliderRow

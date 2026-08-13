@@ -1,21 +1,21 @@
+version: "3.8"
+
 services:
   voiceforge:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: voiceforge:latest
-    container_name: voiceforge-app
+      target: development
     ports:
       - "3001:3001"
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+      - /app/server/node_modules
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3001
-      - MOCK_CHATTERBOX=true
-      - CLIENT_URL=http://localhost:3001
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    command: npm run dev

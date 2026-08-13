@@ -18,17 +18,17 @@ export class FaceProcessor {
     try {
       // Create the vision task
       const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
       );
-      
+
       this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-          delegate: "GPU"
+          delegate: "GPU",
         },
         outputFaceBlendshapes: false,
         runningMode: "VIDEO",
-        numFaces: 1
+        numFaces: 1,
       });
 
       this.isInitialized = true;
@@ -48,7 +48,10 @@ export class FaceProcessor {
     if (!this.isInitialized || !this.faceLandmarker) return null;
 
     try {
-      const results = this.faceLandmarker.detectForVideo(videoElement, timestamp);
+      const results = this.faceLandmarker.detectForVideo(
+        videoElement,
+        timestamp,
+      );
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         return results.faceLandmarks[0];
       }
@@ -59,8 +62,11 @@ export class FaceProcessor {
   }
 
   /**
-   * A helper method to crop the lower half of the face (mouth region)
-   * which is typically what Wav2Lip expects as input.
+   * Crops the face from the source canvas, resizes to 96x96 on the target canvas,
+   * and builds a [1, 6, 96, 96] Float32Array tensor for Wav2Lip ONNX.
+   * Channels 0,1,2 = Target Face RGB.
+   * Channels 3,4,5 = Masked Target Face RGB (lower half is 0).
+   * 
    * @param {HTMLCanvasElement} sourceCanvas The canvas containing the full frame
    * @param {Array} landmarks The detected face landmarks
    * @param {HTMLCanvasElement} targetCanvas The canvas to draw the crop onto
@@ -71,9 +77,9 @@ export class FaceProcessor {
 
     // Mouth landmarks indices in MediaPipe FaceMesh
     const MOUTH_LANDMARKS = [
-      0, 13, 14, 17, 37, 39, 40, 61, 78, 80, 81, 82, 83, 84, 87, 88, 91, 95, 96, 146,
-      178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 313, 314, 317, 318,
-      321, 324, 326, 375, 402, 405, 409, 415
+      0, 13, 14, 17, 37, 39, 40, 61, 78, 80, 81, 82, 83, 84, 87, 88, 91, 95, 96,
+      146, 178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 313, 314,
+      317, 318, 321, 324, 326, 375, 402, 405, 409, 415,
     ];
 
     let minX = Infinity;
@@ -119,14 +125,25 @@ export class FaceProcessor {
     ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
     ctx.drawImage(
       sourceCanvas,
-      x, y, w, h,
-      0, 0, targetCanvas.width, targetCanvas.height
+      x,
+      y,
+      w,
+      h,
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
     );
 
-    const imageData = ctx.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+    const imageData = ctx.getImageData(
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
+    );
     return {
       imageData,
-      coords: { x, y, w, h }
+      coords: { x, y, w, h },
     };
   }
   /**

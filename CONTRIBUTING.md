@@ -1,4 +1,5 @@
 <!-- Explains how contributors can run VoiceForge locally and pick scoped starter issues. -->
+
 # Contributing To VoiceForge
 
 Thanks for helping build an assistive open source tool with care. Please keep consent, privacy, and accessibility at the center of every contribution.
@@ -56,11 +57,11 @@ MOCK_CHATTERBOX=true
 
 With this flag active the server behaves as follows:
 
-| Endpoint | Live mode | Mock mode |
-|---|---|---|
-| `POST /api/voice/clone` | Stores reference audio, returns `voice_id` | Returns fixture `voice_id` instantly |
-| `POST /api/voice/speak` | Enqueues real Chatterbox TTS stream | Enqueues mock stream |
-| `GET /api/voice/speak/stream` | Proxies audio from Hugging Face | Streams a short silent MP3 locally |
+| Endpoint                      | Live mode                                  | Mock mode                            |
+| ----------------------------- | ------------------------------------------ | ------------------------------------ |
+| `POST /api/voice/clone`       | Stores reference audio, returns `voice_id` | Returns fixture `voice_id` instantly |
+| `POST /api/voice/speak`       | Enqueues real Chatterbox TTS stream        | Enqueues mock stream                 |
+| `GET /api/voice/speak/stream` | Proxies audio from Hugging Face            | Streams a short silent MP3 locally   |
 
 You can exercise the **complete UI flow** — record → clone → type text → Speak
 → download — entirely offline.
@@ -76,11 +77,11 @@ PR description:
 
 ```markdown
 ## Testing Notes
+
 Tested clone and TTS end-to-end using MOCK_CHATTERBOX=true.
 Live Chatterbox path verified locally with MOCK_CHATTERBOX=false.
 UI logic confirmed with mock blob in CI.
 ```
-
 
 ## Program Contributions
 
@@ -120,7 +121,6 @@ To request assignment on an open issue, comment with one of these commands:
 Polite assignment requests such as "please assign this issue to me" or "I would like to work on this" are also accepted, but the short commands are preferred.
 
 ## Good First Issues
-
 
 ## Pull Request Checklist
 

@@ -12,6 +12,7 @@ export class AudioProcessor {
     this.analyzer = null;
     this.analyser = null; // AnalyserNode for audio visualization
     this.currentMelSpectrogram = null;
+    this.melHistory = [];
     this.currentVolume = 0;
     this.bassFilter = null;
     this.midFilter = null;
@@ -21,7 +22,7 @@ export class AudioProcessor {
 
   /**
    * Initializes the audio processor with a given audio element.
-   * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
+   * @param {HTMLMediaElement|null} audioElement The <audio> or <video> element to analyze (optional).
    */
   async initialize(audioElement) {
     if (!this.audioContext) {
@@ -106,13 +107,14 @@ export class AudioProcessor {
 
   /**
    * Returns the most recently extracted mel-spectrogram.
-   * Format expected by Wav2Lip ONNX is usually [batch_size, 1, 80, 16] (example).
+   * Format expected by Wav2Lip ONNX is usually [1, 1, 80, 16] 
+   * which flattens to a Float32Array of length 1280.
    * @returns {Float32Array|null}
    */
   getLatestFeatures() {
     const history = this.melHistory || [];
     const flat = new Float32Array(80 * 16);
-    
+
     // Fill the flat array in shape [1, 1, 80, 16] where time step changes fastest.
     // Flat index = b * 16 + t
     const missing = 16 - history.length;

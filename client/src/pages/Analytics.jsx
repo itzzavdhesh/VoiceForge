@@ -45,9 +45,9 @@ export default function Analytics() {
     });
     const total = analyticsHistory.length || 1; // avoid div by 0
     let currentAngle = 0;
-    
+
     const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
-    
+
     const slices = Object.entries(counts).map(([lang, count], index) => {
       const percentage = count / total;
       const slice = {
@@ -55,8 +55,8 @@ export default function Analytics() {
         count,
         percentage: (percentage * 100).toFixed(1),
         startAngle: currentAngle,
-        endAngle: currentAngle + (percentage * 360),
-        color: colors[index % colors.length]
+        endAngle: currentAngle + percentage * 360,
+        color: colors[index % colors.length],
       };
       currentAngle += percentage * 360;
       return slice;
@@ -102,7 +102,7 @@ export default function Analytics() {
       msg.id,
       new Date(msg.timestamp).toISOString(),
       msg.language || "Unknown",
-      `"${msg.text.replace(/"/g, '""')}"`
+      `"${msg.text.replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
@@ -147,25 +147,33 @@ export default function Analytics() {
         </button>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm flex items-center gap-4 transition-transform hover:-translate-y-1">
-          <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-            <MessageSquare size={24} />
+      {/* Analytics summary grid */}
+      <div className="grid gap-5 sm:grid-cols-3">
+        <div className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface flex items-center gap-4">
+          <div className="rounded-lg bg-moss/10 p-3 text-moss dark:bg-glow/20 dark:text-glow">
+            <BarChart3 size={24} />
           </div>
           <div>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Total Words</p>
-            <p className="text-2xl font-bold text-ink dark:text-neutral-100">{metrics.totalWords}</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              Total Words
+            </p>
+            <p className="text-2xl font-bold text-ink dark:text-neutral-100">
+              {metrics.totalWords}
+            </p>
           </div>
         </div>
-        
+
         <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm flex items-center gap-4 transition-transform hover:-translate-y-1">
           <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
             <Clock size={24} />
           </div>
           <div>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Avg. Length (words)</p>
-            <p className="text-2xl font-bold text-ink dark:text-neutral-100">{metrics.avgMessageLength}</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              Avg. Length (words)
+            </p>
+            <p className="text-2xl font-bold text-ink dark:text-neutral-100">
+              {metrics.avgMessageLength}
+            </p>
           </div>
         </div>
 
@@ -174,15 +182,18 @@ export default function Analytics() {
             <Globe size={24} />
           </div>
           <div>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Session Duration</p>
-            <p className="text-2xl font-bold text-ink dark:text-neutral-100">{metrics.sessionDuration}</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              Session Duration
+            </p>
+            <p className="text-2xl font-bold text-ink dark:text-neutral-100">
+              {metrics.sessionDuration}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
         {/* Usage Bar Chart */}
         <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm flex flex-col">
           <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-6">Messages (Last 7 Days)</h3>
@@ -216,21 +227,36 @@ export default function Analytics() {
 
         {/* Most Used Phrases Table */}
         <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm">
-          <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-4">Most Used Phrases</h3>
-          
+          <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-4">
+            Most Used Phrases
+          </h3>
+
           {mostUsedPhrases.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-neutral-500 uppercase bg-neutral-50 dark:bg-neutral-900/50 dark:text-neutral-400">
                   <tr>
-                    <th scope="col" className="px-4 py-3 rounded-tl-lg">Phrase</th>
-                    <th scope="col" className="px-4 py-3 rounded-tr-lg text-right">Frequency</th>
+                    <th scope="col" className="px-4 py-3 rounded-tl-lg">
+                      Phrase
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 rounded-tr-lg text-right"
+                    >
+                      Frequency
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {mostUsedPhrases.map(([phrase, count], idx) => (
-                    <tr key={idx} className="border-b border-neutral-100 dark:border-neutral-800 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-ink dark:text-neutral-200 max-w-[200px] truncate" title={phrase}>
+                    <tr
+                      key={idx}
+                      className="border-b border-neutral-100 dark:border-neutral-800 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/30 transition-colors"
+                    >
+                      <td
+                        className="px-4 py-3 font-medium text-ink dark:text-neutral-200 max-w-[200px] truncate"
+                        title={phrase}
+                      >
                         {phrase}
                       </td>
                       <td className="px-4 py-3 text-right text-moss dark:text-glow font-bold">
@@ -242,14 +268,31 @@ export default function Analytics() {
               </table>
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
-              No phrases used yet.
+            <div className="space-y-4">
+              {Object.entries(stats.languagesUsed).map(([lang, count]) => {
+                const total = stats.totalSpeechClips || 1;
+                const percent = ((count / total) * 100).toFixed(1);
+                return (
+                  <div key={lang}>
+                    <div className="flex justify-between text-sm mb-1 font-semibold">
+                      <span className="uppercase">{lang}</span>
+                      <span className="text-ink/60 dark:text-muted">{count} clips ({percent}%)</span>
+                    </div>
+                    <div className="h-2 w-full bg-cloud dark:bg-black rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-moss to-mint dark:from-glow dark:to-mint rounded-full"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Language Distribution */}
+      {/* Vocabulary Diversity Word Cloud */}
       <div className="bg-white dark:bg-surface border border-neutral-200 dark:border-border rounded-xl p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-ink dark:text-neutral-100 mb-6">Language Distribution</h3>
         
@@ -257,25 +300,37 @@ export default function Analytics() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-8 lg:gap-16">
             {/* Pie Chart SVG */}
             <div className="relative w-48 h-48 sm:w-64 sm:h-64 flex-shrink-0">
-              <svg viewBox="-1 -1 2 2" className="w-full h-full transform -rotate-90">
+              <svg
+                viewBox="-1 -1 2 2"
+                className="w-full h-full transform -rotate-90"
+              >
                 {languageData.map((slice, index) => {
                   if (slice.percentage === "100.0") {
-                    return <circle key={index} cx="0" cy="0" r="1" fill={slice.color} />;
+                    return (
+                      <circle
+                        key={index}
+                        cx="0"
+                        cy="0"
+                        r="1"
+                        fill={slice.color}
+                      />
+                    );
                   }
-                  
+
                   const startPercent = slice.startAngle / 360;
                   const endPercent = slice.endAngle / 360;
-                  
-                  const [startX, startY] = getCoordinatesForPercent(startPercent);
+
+                  const [startX, startY] =
+                    getCoordinatesForPercent(startPercent);
                   const [endX, endY] = getCoordinatesForPercent(endPercent);
-                  
+
                   const largeArcFlag = endPercent - startPercent > 0.5 ? 1 : 0;
-                  
+
                   const pathData = [
                     `M ${startX} ${startY}`, // Move
                     `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`, // Arc
                     `L 0 0`, // Line to center
-                  ].join(' ');
+                  ].join(" ");
 
                   return (
                     <path
@@ -284,20 +339,25 @@ export default function Analytics() {
                       fill={slice.color}
                       className="hover:opacity-80 transition-opacity cursor-pointer stroke-white dark:stroke-surface stroke-[0.02]"
                     >
-                      <title>{slice.lang}: {slice.percentage}%</title>
+                      <title>
+                        {slice.lang}: {slice.percentage}%
+                      </title>
                     </path>
                   );
                 })}
               </svg>
             </div>
-            
+
             {/* Legend */}
             <div className="flex flex-col gap-3 min-w-[150px]">
               {languageData.map((slice, index) => (
-                <div key={index} className="flex items-center justify-between gap-4">
+                <div
+                  key={index}
+                  className="flex items-center justify-between gap-4"
+                >
                   <div className="flex items-center gap-2">
-                    <span 
-                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                    <span
+                      className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: slice.color }}
                     ></span>
                     <span className="text-sm font-medium text-ink dark:text-neutral-200 truncate max-w-[120px]">
@@ -312,12 +372,11 @@ export default function Analytics() {
             </div>
           </div>
         ) : (
-          <div className="h-48 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
-            No language data available.
+          <div className="h-40 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+            No vocabulary data available for this period.
           </div>
         )}
       </div>
-
     </div>
   );
 }

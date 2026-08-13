@@ -1,6 +1,13 @@
 // Handles microphone permission, short reference recording, playback, and upload readiness.
 import React from "react";
-import { Mic, Square, Upload, CircleAlert, Loader2, FileUp } from "lucide-react";
+import {
+  Mic,
+  Square,
+  Upload,
+  CircleAlert,
+  Loader2,
+  FileUp,
+} from "lucide-react";
 import { extractAudioFromFile } from "../utils/audioExtractor.js";
 import { AudioTrimmer } from "./AudioTrimmer.jsx";
 
@@ -13,10 +20,7 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
-  const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
-
-  const fileInputRef = React.useRef(null);
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(null);
@@ -57,9 +61,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
 
     // Create the final audio Blob
     const blob = new Blob(chunksRef.current, {
-      type: recorderRef.current?.mimeType || "audio/webm"
+      type: recorderRef.current?.mimeType || "audio/webm",
     });
-    
+
     setRawAudioBlob(blob);
 
     const url = URL.createObjectURL(blob);
@@ -124,21 +128,28 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       recorder.onstop = () => {
         window.clearInterval(timerRef.current);
         setIsRecording(false);
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
         const url = URL.createObjectURL(blob);
         setAudioUrl((previous) => {
           if (previous) URL.revokeObjectURL(previous);
           return url;
         });
         const finalDuration = durationRef.current;
-        onRecordingReady(blob, { duration: finalDuration, isValid: finalDuration >= MIN_DURATION });
+        onRecordingReady(blob, {
+          duration: finalDuration,
+          isValid: finalDuration >= MIN_DURATION,
+        });
         streamRef.current?.getTracks().forEach((track) => track.stop());
       };
 
       recorder.onerror = (event) => {
         console.error("MediaRecorder runtime error:", event.error);
         if (!isMountedRef.current) return;
-        setRecorderError(`Recording error: ${event.error?.message || "Unknown error"}`);
+        setRecorderError(
+          `Recording error: ${event.error?.message || "Unknown error"}`,
+        );
         handleStopCleanup({ emitReady: false });
       };
 
@@ -166,10 +177,18 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       setIsRecording(false);
 
       let friendlyMessage = err?.message || String(err);
-      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        friendlyMessage = "Microphone access denied. Please grant permission in your browser settings and try again.";
-      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
-        friendlyMessage = "No microphone found. Please connect an input device and try again.";
+      if (
+        err?.name === "NotAllowedError" ||
+        err?.name === "PermissionDeniedError"
+      ) {
+        friendlyMessage =
+          "Microphone access denied. Please grant permission in your browser settings and try again.";
+      } else if (
+        err?.name === "NotFoundError" ||
+        err?.name === "DevicesNotFoundError"
+      ) {
+        friendlyMessage =
+          "No microphone found. Please connect an input device and try again.";
       }
 
       setRecorderError(friendlyMessage);
@@ -208,11 +227,41 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   function stopRecording() {
     if (durationRef.current < MIN_DURATION) {
       const confirmStop = window.confirm(
-        `Your recording is only ${durationRef.current} seconds. A minimum of ${MIN_DURATION} seconds is recommended for high-quality voice cloning. Stop recording anyway?`
+        `Your recording is only ${durationRef.current} seconds. A minimum of ${MIN_DURATION} seconds is recommended for high-quality voice cloning. Stop recording anyway?`,
       );
       if (!confirmStop) return;
     }
     recorderRef.current?.stop();
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl("");
+    setRecorderError("");
+    onRecordingReady(null);
+    setDuration(0);
+    durationRef.current = 0;
+    
+    setIsExtracting(true);
+    
+    try {
+      const { blob, duration } = await extractAudioFromFile(file);
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setDuration(duration);
+      durationRef.current = duration;
+      onRecordingReady(blob, duration);
+    } catch (err) {
+      setRecorderError(err.message || String(err));
+    } finally {
+      setIsExtracting(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   React.useEffect(() => {
@@ -260,7 +309,8 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
 
     (async () => {
       try {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        const AudioContextClass =
+          window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) {
           throw new Error("Web Audio API is not supported in this browser.");
         }
@@ -320,10 +370,13 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Record or upload a 10-second reference</h2>
+          <h2 className="text-xl font-bold">
+            Record or upload a 10-second reference
+          </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-ink/70 dark:text-muted">
             Use your own voice or a trusted reference speaker with consent. Keep
-            background noise low. You can also upload a video (.mp4, .mov) or audio file.
+            background noise low. You can also upload a video (.mp4, .mov) or
+            audio file.
           </p>
         </div>
         <span className="rounded-md bg-mint px-3 py-1 text-sm font-semibold text-ink dark:bg-glow/15 dark:text-glow">
@@ -335,24 +388,30 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-semibold text-ink/60 dark:text-muted mb-1.5">
           <span>Recording Progress</span>
-          <span>{duration}s / {MIN_DURATION}s</span>
+          <span>
+            {duration}s / {MIN_DURATION}s
+          </span>
         </div>
         <div className="w-full bg-ink/10 dark:bg-neutral-800 h-2 rounded-full overflow-hidden">
           <div
             className={`h-full transition-all duration-300 ${
               duration >= MIN_DURATION ? "bg-moss dark:bg-glow" : "bg-coral"
             }`}
-            style={{ width: `${Math.min((duration / MIN_DURATION) * 100, 100)}%` }}
+            style={{
+              width: `${Math.min((duration / MIN_DURATION) * 100, 100)}%`,
+            }}
           />
         </div>
         {duration < MIN_DURATION && isRecording && (
           <p className="mt-1.5 text-xs text-coral font-medium">
-            Keep recording! {MIN_DURATION - duration} more second{MIN_DURATION - duration !== 1 ? 's' : ''} needed for voice cloning.
+            Keep recording! {MIN_DURATION - duration} more second
+            {MIN_DURATION - duration !== 1 ? "s" : ""} needed for voice cloning.
           </p>
         )}
         {duration >= MIN_DURATION && isRecording && (
           <p className="mt-1.5 text-xs text-moss dark:text-glow font-medium">
-            Minimum duration met! You can stop recording or continue for a higher quality clone.
+            Minimum duration met! You can stop recording or continue for a
+            higher quality clone.
           </p>
         )}
       </div>
@@ -375,7 +434,11 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           ) : (
             <Mic size={18} aria-hidden="true" />
           )}
-          {isInitializing ? "Initializing..." : isRecording ? "Stop recording" : "Start recording"}
+          {isInitializing
+            ? "Initializing..."
+            : isRecording
+              ? "Stop recording"
+              : "Start recording"}
         </button>
 
         <button
@@ -439,24 +502,43 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           />
         </div>
       )}
-      
+
       {audioUrl && duration < 10 && (
         <div className="mt-4 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-sm font-semibold text-ink flex items-center gap-2 dark:bg-amber-900/20 dark:text-amber-300">
-          <CircleAlert size={18} aria-hidden="true" className="text-amber-500" />
-          <span>Recording is too short. Please record at least 10 seconds for best results.</span>
+          <CircleAlert
+            size={18}
+            aria-hidden="true"
+            className="text-amber-500"
+          />
+          <span>
+            Recording is too short. Please record at least 10 seconds for best
+            results.
+          </span>
         </div>
-        )}
+      )}
 
       {audioUrl && duration < MIN_DURATION && (
         <div className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2">
           <CircleAlert size={18} aria-hidden="true" className="text-coral" />
-          <span>Warning: Your recording is only {duration}s. A minimum of {MIN_DURATION}s is required for voice cloning. Please record a longer reference.</span>
+          <span>
+            Warning: Your recording is only {duration}s. A minimum of{" "}
+            {MIN_DURATION}s is required for voice cloning. Please record a
+            longer reference.
+          </span>
         </div>
       )}
 
       {recorderError && (
-        <div role="alert" aria-live="polite" className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2">
-          <CircleAlert size={18} aria-hidden="true" className="text-coral shrink-0" />
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mt-4 rounded-md border border-coral/40 bg-coral/10 p-3 text-sm font-semibold text-ink flex items-center gap-2"
+        >
+          <CircleAlert
+            size={18}
+            aria-hidden="true"
+            className="text-coral shrink-0"
+          />
           <span className="flex-1">{recorderError}</span>
           <button
             type="button"

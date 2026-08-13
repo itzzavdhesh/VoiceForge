@@ -11,7 +11,9 @@ function getDB() {
 
   dbPromise = new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
-      reject(new Error("IndexedDB is not supported in this browser environment."));
+      reject(
+        new Error("IndexedDB is not supported in this browser environment."),
+      );
       return;
     }
 
@@ -20,12 +22,21 @@ function getDB() {
 
       request.onerror = (event) => {
         dbPromise = null; // reset so next call retries
-        reject(new Error("Failed to open database: " + (event.target.error?.message || "Unknown error")));
+        reject(
+          new Error(
+            "Failed to open database: " +
+              (event.target.error?.message || "Unknown error"),
+          ),
+        );
       };
 
       request.onblocked = () => {
         dbPromise = null; // reset so next call retries
-        reject(new Error("Database access is blocked. Please close other open tabs."));
+        reject(
+          new Error(
+            "Database access is blocked. Please close other open tabs.",
+          ),
+        );
       };
 
       request.onsuccess = (event) => {
@@ -40,7 +51,11 @@ function getDB() {
       };
     } catch (err) {
       dbPromise = null;
-      reject(new Error("Failed to initialize IndexedDB: " + (err?.message || String(err))));
+      reject(
+        new Error(
+          "Failed to initialize IndexedDB: " + (err?.message || String(err)),
+        ),
+      );
     }
   });
 
@@ -63,27 +78,20 @@ export async function getAllProfiles() {
     };
 
     request.onerror = (event) => {
-      reject(new Error("Failed to retrieve profiles: " + (event.target.error?.message || "Unknown error")));
+      reject(
+        new Error(
+          "Failed to retrieve profiles: " +
+            (event.target.error?.message || "Unknown error"),
+        ),
+      );
     };
   });
 }
 
 export async function getProfile(voiceId) {
   if (!voiceId) return null;
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(voiceId);
-
-    request.onsuccess = () => {
-      resolve(request.result || null);
-    };
-
-    request.onerror = (event) => {
-      reject(new Error("Failed to retrieve profile: " + (event.target.error?.message || "Unknown error")));
-    };
-  });
+  const profiles = await getAllProfiles();
+  return profiles.find(p => p.voice_id === voiceId) || null;
 }
 
 export async function saveProfile(profile) {

@@ -363,6 +363,8 @@ function handleExportJson() {
                 tabIndex={tab === key ? 0 : -1}
                 onClick={() => setTab(key)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
+                title={`View ${label.toLowerCase()} messages`}
+                aria-label={`View ${label.toLowerCase()} messages`}
                 className={[
                   "rounded-t-md px-3 py-1.5 text-xs font-medium transition",
                   "focus:outline-none focus:ring-2 focus:ring-blue-400",
@@ -398,9 +400,6 @@ function handleExportJson() {
                       onToggleFav={onToggleFav}
                       onDelete={onDelete}
                       onCopy={onCopy}
-                      onAddTag={onAddTag}
-                      onRemoveTag={onRemoveTag}
-                      onAddToQuickReplies={onAddToQuickReplies}
                     />
                   </li>
                 ))}
@@ -458,6 +457,31 @@ function EmptyState({ tab, hasSearch }) {
       ? "Pin a message to keep it here."
       : "Speak a message to get started.";
 
+
+  function handleExportCSV() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const headers = ["Timestamp", "Text"];
+    const rows = sessionTranscript.map(item => [
+      new Date(item.timestamp).toLocaleString(),
+      `"${item.text.replace(/"/g, '""')}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.href = encodedUri;
+    link.download = `voiceforge_transcript_${Date.now()}.csv`;
+    link.click();
+  }
+
+  function handleExportJSON() {
+    if (!sessionTranscript || sessionTranscript.length === 0) return;
+    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionTranscript, null, 2));
+    const link = document.createElement("a");
+    link.href = jsonStr;
+    link.download = `voiceforge_transcript_${Date.now()}.json`;
+    link.click();
+  }
   return (
     <div className="flex flex-col items-center py-10 text-center text-sm text-neutral-400">
       <Icon size={28} aria-hidden="true" className="mb-2" />

@@ -9,7 +9,6 @@ import { useState, useEffect, useCallback } from "react";
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
 const TRANSCRIPT_KEY = "vf_transcript";
-const ANALYTICS_KEY = "vf_analytics_history";
 const MAX_HISTORY = 25;
 const MAX_ANALYTICS = 2000;
 
@@ -145,8 +144,8 @@ export function useSpeechHistory() {
    * @param {string} text - Message text to store
    * @param {string} lang - Language code
    */
-const addMessage = useCallback((text, lang = "en-US") => {
-  const trimmed = text.trim();
+  const addMessage = useCallback((text, lang = "en-US") => {
+    const trimmed = text.trim();
 
   if (!trimmed) return;
 
@@ -168,21 +167,24 @@ const addMessage = useCallback((text, lang = "en-US") => {
     return updated.slice(0, MAX_ANALYTICS);
   });
 
-  setHistory((prev) => {
-    // Check existing message
-    const existing = prev.find((m) => m.text === trimmed);
+    setHistory((prev) => {
+      // Check existing message
+      const existing = prev.find((m) => m.text === trimmed);
 
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
+    const uuid = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const updatedEntry = existing
-      ? { ...existing, timestamp: Date.now(), tags: Array.isArray(existing.tags) ? existing.tags : [] }
-      : { id: generateUUID(), text: trimmed, timestamp: Date.now(), tags: [] };
+      ? { ...existing, timestamp: Date.now() }
+      : { id: uuid, text: trimmed, timestamp: Date.now() };
 
-    // Move duplicate to top instead of recreating
-    const updated = [
-      updatedEntry,
-      ...prev.filter((m) => m.id !== updatedEntry.id),
-    ];
+      // Move duplicate to top instead of recreating
+      const updated = [
+        updatedEntry,
+        ...prev.filter((m) => m.id !== updatedEntry.id),
+      ];
 
     return updated.slice(0, MAX_HISTORY);
   });
@@ -197,7 +199,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
       const next = new Set(prev);
       next.delete(id);
       return next;
-      });
+    });
   }, []);
 
   /**
@@ -218,7 +220,6 @@ const addMessage = useCallback((text, lang = "en-US") => {
     setHistory([]);
     setFavorites(new Set());
     setSessionTranscript([]);
-    setAnalyticsHistory([]);
   }, []);
 
   /**
@@ -226,26 +227,43 @@ const addMessage = useCallback((text, lang = "en-US") => {
    * Merges imported items with the existing setup, preventing text duplicates
    * and updating favorite relationships.
    */
-  const importBackup = useCallback((importedHistory, importedFavorites) => {
-    const mergedMap = new Map();
-    // Add existing history
-    history.forEach(m => mergedMap.set(m.text, m));
+  const importBackup = useCallback(
+    (importedHistory, importedFavorites) => {
+      const mergedMap = new Map();
+      // Add existing history
+      history.forEach((m) => mergedMap.set(m.text, m));
 
-    const favIdsToAdd = [];
-    importedHistory.forEach((impMsg) => {
-      const isImportedFav = importedFavorites.includes(impMsg.id);
-      if (mergedMap.has(impMsg.text)) {
-        const existingMsg = mergedMap.get(impMsg.text);
-        if (isImportedFav) {
-          favIdsToAdd.push(existingMsg.id);
+      const favIdsToAdd = [];
+      importedHistory.forEach((impMsg) => {
+        const isImportedFav = importedFavorites.includes(impMsg.id);
+        if (mergedMap.has(impMsg.text)) {
+          const existingMsg = mergedMap.get(impMsg.text);
+          if (isImportedFav) {
+            favIdsToAdd.push(existingMsg.id);
+          }
+        } else {
+          mergedMap.set(impMsg.text, impMsg);
+          if (isImportedFav) {
+            favIdsToAdd.push(impMsg.id);
+          }
         }
-      } else {
-        mergedMap.set(impMsg.text, impMsg);
-        if (isImportedFav) {
-          favIdsToAdd.push(impMsg.id);
+      });
+
+      const mergedList = Array.from(mergedMap.values());
+      mergedList.sort((a, b) => b.timestamp - a.timestamp);
+      const finalHistory = mergedList.slice(0, MAX_HISTORY);
+
+      const nextFavorites = new Set(favorites);
+      favIdsToAdd.forEach((id) => nextFavorites.add(id));
+
+      // Clean up favorites: only keep favorites whose IDs are in the finalHistory
+      const finalHistoryIds = new Set(finalHistory.map((m) => m.id));
+      const cleanedFavorites = new Set();
+      nextFavorites.forEach((id) => {
+        if (finalHistoryIds.has(id)) {
+          cleanedFavorites.add(id);
         }
-      }
-    });
+      });
 
     const mergedList = Array.from(mergedMap.values());
     mergedList.sort((a, b) => b.timestamp - a.timestamp);
@@ -276,6 +294,7 @@ const addMessage = useCallback((text, lang = "en-US") => {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
     importBackup,
   };
 }

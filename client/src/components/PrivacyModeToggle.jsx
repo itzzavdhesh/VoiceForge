@@ -55,7 +55,11 @@ function loadImage(dataUrl) {
   });
 }
 
-export default function PrivacyModeToggle({ onModeChange, onAvatarChange, showToast }) {
+export default function PrivacyModeToggle({
+  onModeChange,
+  onAvatarChange,
+  showToast,
+}) {
   const [enabled, setEnabled] = React.useState(loadPersistedMode);
   const [avatarUrl, setAvatarUrl] = React.useState(loadPersistedAvatar);
   const [isDragOver, setIsDragOver] = React.useState(false);
@@ -241,7 +245,9 @@ export default function PrivacyModeToggle({ onModeChange, onAvatarChange, showTo
               </div>
               <div>
                 <p className="text-sm font-semibold text-ink dark:text-neutral-200">
-                  {isDragOver ? "Drop your image here" : "Drag & drop or click to upload"}
+                  {isDragOver
+                    ? "Drop your image here"
+                    : "Drag & drop or click to upload"}
                 </p>
                 <p className="mt-1 text-xs text-ink/50 dark:text-muted">
                   PNG, JPEG, or WebP · Max 2 MB

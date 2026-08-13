@@ -1,18 +1,13 @@
-import React, {
-  useCallback,
-  useRef,
-  useState,
-  useEffect,
-} from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import { Copy, Eraser, Mic2, History, X } from "lucide-react";
 import { VoiceQuickSettings } from "./VoiceQuickSettings.jsx";
 import { FavoriteMessages } from "./FavoriteMessages.jsx";
 import { QuickReplies } from "./QuickReplies.jsx";
 import { SpeechHistory } from "./SpeechHistory.jsx";
 import { ToastContainer, useToast } from "./useToast.jsx";
-import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
+import { useSpeechHistory } from "../hooks/useSpeechHistory";
 import { LanguageSelector } from "./LanguageSelector.jsx";
-import { loadLanguage, persistLanguage } from "../utils/languages.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
 import useTTS from "../hooks/useTTS.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 
@@ -36,11 +31,12 @@ export default function VoiceForge() {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
     importBackup,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
-  const { speak: ttsSpeak, audioUrl: ttsAudioUrl } = useTTS();
+  const { speak: ttsSpeak, audioUrl, playbackId } = useTTS();
   const [activeProfile, setActiveProfile] = useState(null);
   const [useClonedVoice, setUseClonedVoice] = useState(() => {
     try {
@@ -51,12 +47,34 @@ export default function VoiceForge() {
     }
   });
 
-  const handleAddToQuickReplies = useCallback((text) => {
-    try {
-      const saved = localStorage.getItem("vf_quick_replies");
-      let currentReplies = [];
-      if (saved) {
-        currentReplies = JSON.parse(saved);
+  const handleAddToQuickReplies = useCallback(
+    (text) => {
+      try {
+        const saved = localStorage.getItem("vf_quick_replies");
+        let currentReplies = [];
+        if (saved) {
+          currentReplies = JSON.parse(saved);
+        }
+        if (
+          currentReplies.some(
+            (r) => r.phrase.toLowerCase() === text.toLowerCase(),
+          )
+        ) {
+          showToast("Already in Quick Replies", "error");
+          return;
+        }
+        const newReply = {
+          id: Math.random().toString(36).substr(2, 9),
+          label: text.length > 25 ? text.slice(0, 22) + "..." : text,
+          phrase: text,
+          category: "General",
+        };
+        const updated = [...currentReplies, newReply];
+        localStorage.setItem("vf_quick_replies", JSON.stringify(updated));
+        window.dispatchEvent(new Event("voiceforge:quickRepliesChanged"));
+        showToast("Added to Quick Replies", "success");
+      } catch (err) {
+        showToast("Failed to add to Quick Replies", "error");
       }
       if (currentReplies.some((r) => r.phrase.toLowerCase() === text.toLowerCase())) {
         showToast("Already in Quick Replies", "error");
@@ -77,7 +95,6 @@ export default function VoiceForge() {
     }
   }, [showToast]);
 
-
   useEffect(() => {
     async function loadActiveProfile() {
       try {
@@ -93,20 +110,33 @@ export default function VoiceForge() {
   const speak = useCallback(async (text) => {
     if (!text.trim()) return;
 
-    if (useClonedVoice && activeProfile?.voice_id) {
-      try {
-        setIsSpeaking(true);
-        const result = await ttsSpeak({
-          text,
-          voiceId: activeProfile.voice_id,
-          language_code: language,
-        });
-        if (result?.fallback) {
-          showToast("Using browser voice fallback", "info");
+      if (useClonedVoice && activeProfile?.voice_id) {
+        try {
+          setIsSpeaking(true);
+          const result = await ttsSpeak({
+            text,
+            voiceId: activeProfile.voice_id,
+            language_code: language,
+          });
+          if (result?.fallback) {
+            showToast("Using browser voice fallback", "info");
+          }
+        } catch (err) {
+          console.error("TTS speech error:", err);
+          showToast("Speech generation failed", "error");
+          setIsSpeaking(false);
+        }
+      } else {
+        if (!("speechSynthesis" in window)) {
+          showToast(
+            "Speech synthesis is not supported in this browser",
+            "error",
+          );
+          return;
         }
       } catch (err) {
         console.error("TTS speech error:", err);
-        showToast("Speech generation failed", "error");
+        showToast(err?.message || "Speech generation failed", "error");
         setIsSpeaking(false);
       }
     } else {
@@ -146,18 +176,32 @@ export default function VoiceForge() {
     showToast("Replaying...", "info");
   }, [speak, showToast]);
 
-  const handleReuse = useCallback((text) => {
-    setInputText(text);
-    textareaRef.current?.focus();
-    showToast("Loaded into composer", "success");
-  }, [showToast]);
+      navigator.clipboard
+        .writeText(target)
+        .then(() => showToast("Copied to clipboard", "success"))
+        .catch(() => {
+          const ta = document.createElement("textarea");
+          ta.value = target;
+          ta.style.position = "absolute";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          showToast("Copied", "success");
+        });
+    },
+    [inputText, showToast],
+  );
 
-  const handleCopy = useCallback((text) => {
-    const target = text || inputText;
-    if (!target.trim()) {
-      showToast("Nothing to copy", "error");
-      return;
-    }
+  const handleQuickReply = useCallback(
+    (phrase) => {
+      speak(phrase);
+      addMessage(phrase, language);
+      showToast("Quick reply sent", "success");
+    },
+    [speak, addMessage, showToast, language],
+  );
 
     navigator.clipboard
       .writeText(target)
@@ -190,7 +234,6 @@ export default function VoiceForge() {
 
   const charsLeft = MAX_CHARS - inputText.length;
 
-  
   const hasAnnouncedRef = useRef(false);
 
   // Move focus into the history drawer when it opens (a11y)
@@ -209,19 +252,20 @@ export default function VoiceForge() {
       setAnnouncement("");
     }
   }, [charsLeft]);
+
   useEffect(() => {
     persistLanguage(language);
   }, [language]);
 
   function getCounterColor() {
-    if (charsLeft < 50)  return "text-red-500";
+    if (charsLeft < 50) return "text-red-500";
     if (charsLeft < 100) return "text-orange-500";
     if (charsLeft < 200) return "text-yellow-500";
     return "text-neutral-400 dark:text-neutral-500";
   }
 
   function getTextareaBorder() {
-    if (charsLeft < 50)  return "border-red-300 dark:border-red-800";
+    if (charsLeft < 50) return "border-red-300 dark:border-red-800";
     if (charsLeft < 100) return "border-orange-300 dark:border-orange-800";
     if (charsLeft < 200) return "border-yellow-300 dark:border-yellow-800";
     return "border-neutral-200 dark:border-border";
@@ -315,10 +359,7 @@ export default function VoiceForge() {
               Compose message
             </label>
             <span
-              className={[
-                "text-xs tabular-nums",
-                getCounterColor(),
-              ].join(" ")}
+              className={["text-xs tabular-nums", getCounterColor()].join(" ")}
               aria-live="polite"
             >
               {inputText.length} / {MAX_CHARS}
@@ -332,7 +373,9 @@ export default function VoiceForge() {
             id="vf-compose"
             ref={textareaRef}
             value={inputText}
-            onChange={(event) => setInputText(event.target.value.slice(0, MAX_CHARS))}
+            onChange={(event) =>
+              setInputText(event.target.value.slice(0, MAX_CHARS))
+            }
             onKeyDown={handleKeyDown}
             placeholder="Type your message or select a quick reply..."
             maxLength={MAX_CHARS}
@@ -350,16 +393,31 @@ export default function VoiceForge() {
             rows={6}
           />
 
-          <p id="vf-hint" className="text-xs text-neutral-400 dark:text-neutral-600">
-            Tip: Press <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Ctrl</kbd> +{" "}
-            <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Enter</kbd> to speak quickly.
+          <p
+            id="vf-hint"
+            className="text-xs text-neutral-400 dark:text-neutral-600"
+          >
+            Tip: Press{" "}
+            <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">
+              Ctrl
+            </kbd>{" "}
+            +{" "}
+            <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">
+              Enter
+            </kbd>{" "}
+            to speak quickly.
           </p>
 
           <VoiceQuickSettings />
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label htmlFor="vf-language" className="text-sm font-medium text-neutral-600 dark:text-neutral-300">Language:</label>
+              <label
+                htmlFor="vf-language"
+                className="text-sm font-medium text-neutral-600 dark:text-neutral-300"
+              >
+                Language:
+              </label>
               <LanguageSelector
                 id="vf-language"
                 value={language}
@@ -379,7 +437,9 @@ export default function VoiceForge() {
                   className={[
                     "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
                     "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30",
-                    useClonedVoice ? "bg-blue-600" : "bg-neutral-300 dark:bg-neutral-600",
+                    useClonedVoice
+                      ? "bg-blue-600"
+                      : "bg-neutral-300 dark:bg-neutral-600",
                   ].join(" ")}
                   aria-label="Toggle cloned voice use"
                 >
@@ -421,12 +481,16 @@ export default function VoiceForge() {
             <button
               onClick={handleSpeak}
               disabled={!inputText.trim() || isSpeaking}
-              aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
+              aria-label={
+                isSpeaking ? "Currently speaking" : "Speak and save to history"
+              }
               className={[
                 "ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-black",
                 "disabled:cursor-not-allowed disabled:opacity-50",
-                isSpeaking ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",
+                isSpeaking
+                  ? "bg-blue-400"
+                  : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",
               ].join(" ")}
             >
               <Mic2 size={16} aria-hidden="true" />
@@ -436,24 +500,30 @@ export default function VoiceForge() {
         </div>
       </main>
 
-      {ttsAudioUrl && useClonedVoice && activeProfile?.voice_id && (
+      {audioUrl && (
         <audio
-          key={ttsAudioUrl}
-          src={ttsAudioUrl}
-          autoPlay
+          ref={audioRef}
+          key={`${audioUrl}-${playbackId}`}
+          src={audioUrl}
           className="hidden"
-          onPlay={() => setIsSpeaking(true)}
+          autoPlay
+          onPlay={() => {
+            setIsSpeaking(true);
+            if (pendingSpeechRef.current) {
+              const { text, type } = pendingSpeechRef.current;
+              triggerSpeechSuccess(text, type);
+              pendingSpeechRef.current = null;
+            }
+          }}
           onPause={() => setIsSpeaking(false)}
           onEnded={() => setIsSpeaking(false)}
           onError={() => {
             setIsSpeaking(false);
             showToast("Speech playback failed", "error");
+            pendingSpeechRef.current = null;
           }}
-        >
-          <track kind="captions" />
-        </audio>
+        />
       )}
-
       <ToastContainer toasts={toasts} />
     </div>
   );

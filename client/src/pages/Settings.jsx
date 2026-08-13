@@ -65,17 +65,172 @@ export default function Settings() {
     loadProfiles();
   }, []);
 
-
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
   const selectedLangObj = getLanguageByCode(language);
 
 
+
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
     window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const [playingPreset, setPlayingPreset] = React.useState(null);
+  const audioRef = React.useRef(null);
+  const audioContextRef = React.useRef(null);
+  const sourceRef = React.useRef(null);
+  const bassFilterRef = React.useRef(null);
+  const midFilterRef = React.useRef(null);
+  const trebleFilterRef = React.useRef(null);
+  const pitchShifterRef = React.useRef(null);
+
+  const cleanupPreview = React.useCallback(() => {
+    setPlayingPreset(null);
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch (e) {}
+      sourceRef.current = null;
+    }
+    if (bassFilterRef.current) {
+      try { bassFilterRef.current.disconnect(); } catch (e) {}
+      bassFilterRef.current = null;
+    }
+    if (midFilterRef.current) {
+      try { midFilterRef.current.disconnect(); } catch (e) {}
+      midFilterRef.current = null;
+    }
+    if (trebleFilterRef.current) {
+      try { trebleFilterRef.current.disconnect(); } catch (e) {}
+      trebleFilterRef.current = null;
+    }
+    if (pitchShifterRef.current) {
+      try {
+        pitchShifterRef.current.input.disconnect();
+        pitchShifterRef.current.output.disconnect();
+      } catch (e) {}
+      pitchShifterRef.current = null;
+    }
+    audioRef.current = null;
+  }, []);
+
+  const stopPreview = React.useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch (e) {}
+    }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    cleanupPreview();
+  }, [cleanupPreview]);
+
+  React.useEffect(() => {
+    return () => {
+      stopPreview();
+    };
+  }, [stopPreview]);
+
+  async function playPresetPreview(presetKey, preset) {
+    if (playingPreset) {
+      stopPreview();
+      if (playingPreset === presetKey) return;
+    }
+    
+    const activeProfileId = localStorage.getItem("voiceforge:activeVoiceId") || (profiles[0]?.voice_id);
+    if (!activeProfileId) {
+      showToast("Please clone or select a voice profile first to hear previews.", "error");
+      return;
+    }
+    
+    setPlayingPreset(presetKey);
+    
+    try {
+      const response = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Testing VoiceForge presets.",
+          voice_id: activeProfileId,
+          language_code: language,
+          voice_settings: {
+            stability: preset.stability,
+            style: preset.style,
+            temperature: preset.temperature
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Speech synthesis failed");
+      }
+      
+      const payload = await response.json();
+      const audioUrl = payload.audioUrl;
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.playbackRate = preset.dspSpeed;
+      
+      const source = audioCtx.createMediaElementSource(audio);
+      sourceRef.current = source;
+      
+      const bass = audioCtx.createBiquadFilter();
+      bass.type = "lowshelf";
+      bass.frequency.value = 200;
+      bass.gain.value = preset.dspBass;
+      bassFilterRef.current = bass;
+      
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking";
+      mid.frequency.value = 1000;
+      mid.Q.value = 1.0;
+      mid.gain.value = preset.dspMid;
+      midFilterRef.current = mid;
+      
+      const treble = audioCtx.createBiquadFilter();
+      treble.type = "highshelf";
+      treble.frequency.value = 4000;
+      treble.gain.value = preset.dspTreble;
+      trebleFilterRef.current = treble;
+      
+      const shifter = new PitchShifter(audioCtx);
+      shifter.setPitch(preset.dspPitch);
+      pitchShifterRef.current = shifter;
+      
+      source.connect(bass);
+      bass.connect(mid);
+      mid.connect(treble);
+      treble.connect(shifter.input);
+      shifter.output.connect(audioCtx.destination);
+      
+      audio.onended = () => {
+        cleanupPreview();
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.error("Failed to play preset preview:", err);
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance("Testing VoiceForge presets.");
+        utterance.lang = language;
+        utterance.pitch = preset.dspPitch;
+        utterance.rate = preset.dspSpeed;
+        utterance.onend = () => setPlayingPreset(null);
+        utterance.onerror = () => setPlayingPreset(null);
+        window.speechSynthesis.speak(utterance);
+      } catch (fallbackErr) {
+        showToast("Preview play failed", "error");
+        setPlayingPreset(null);
+      }
+    }
   }
 
   const currentPresetKey = React.useMemo(() => {
@@ -112,6 +267,17 @@ export default function Settings() {
     }
   }
 
+  React.useEffect(() => {
+    function handleStorage(event) {
+      const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
+      if (event.key === VOICE_SETTINGS_KEY) {
+        setVoiceSettings(loadVoiceSettings());
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const handleExport = async () => {
     try {
       const storageData = {
@@ -120,8 +286,12 @@ export default function Settings() {
         quick_replies: localStorage.getItem("vf_quick_replies"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
-        calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
-        calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
+        calibrationXOffset: localStorage.getItem(
+          "voiceforge:calibrationXOffset",
+        ),
+        calibrationYOffset: localStorage.getItem(
+          "voiceforge:calibrationYOffset",
+        ),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
       };
 
@@ -143,7 +313,7 @@ export default function Settings() {
             createdAt: p.createdAt,
             audioDataUrl: base64Audio,
           };
-        })
+        }),
       );
 
       const backup = {
@@ -153,7 +323,9 @@ export default function Settings() {
         profiles: profilesData,
       };
 
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -181,7 +353,7 @@ export default function Settings() {
 
       // 2. Overwrite confirmation
       const confirmOverwrite = window.confirm(
-        "Importing this backup will overwrite your current settings, speech history, and voice profiles. Do you want to continue?"
+        "Importing this backup will overwrite your current settings, speech history, and voice profiles. Do you want to continue?",
       );
       if (!confirmOverwrite) {
         event.target.value = "";
@@ -191,7 +363,12 @@ export default function Settings() {
       const text = await file.text();
       const backup = JSON.parse(text);
 
-      if (!backup || backup.version !== 1 || !backup.storage || !Array.isArray(backup.profiles)) {
+      if (
+        !backup ||
+        backup.version !== 1 ||
+        !backup.storage ||
+        !Array.isArray(backup.profiles)
+      ) {
         throw new Error("Invalid backup file format.");
       }
 
@@ -203,11 +380,17 @@ export default function Settings() {
         let audioBlob = null;
         if (p.audioDataUrl) {
           try {
-            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+            if (
+              typeof p.audioDataUrl === "string" &&
+              p.audioDataUrl.startsWith("data:audio/")
+            ) {
               const res = await fetch(p.audioDataUrl);
               audioBlob = await res.blob();
             } else {
-              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+              console.warn(
+                "Skipped invalid or non-audio DataURL in voice profile backup:",
+                p.name,
+              );
             }
           } catch (e) {
             console.error("Failed to parse audio DataURL:", e);
@@ -263,6 +446,97 @@ export default function Settings() {
     }
   };
 
+  const handleExportProfile = async (profile) => {
+    try {
+      let base64Audio = null;
+      if (profile.audioBlob) {
+        base64Audio = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(profile.audioBlob);
+        });
+      }
+      
+      const vfpData = {
+        type: "voiceforge_profile",
+        version: 1,
+        voice_id: profile.voice_id,
+        name: profile.name,
+        createdAt: profile.createdAt,
+        audioDataUrl: base64Audio
+      };
+      
+      const jsonContent = JSON.stringify(vfpData, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${profile.name.replace(/\s+/g, "_")}.vfp`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported backup for ${profile.name}`, "success");
+    } catch (err) {
+      console.error("Failed to export profile:", err);
+      showToast("Failed to export voice profile", "error");
+    }
+  };
+
+  const handleImportVFP = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".vfp")) {
+      showToast("Invalid file format. Please upload a .vfp file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (
+        parsed.type !== "voiceforge_profile" ||
+        !parsed.voice_id ||
+        !parsed.name ||
+        !parsed.audioDataUrl
+      ) {
+        throw new Error("Missing or invalid profile fields.");
+      }
+
+      const arr = parsed.audioDataUrl.split(",");
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "audio/wav";
+      
+      if (!mime.startsWith("audio/")) {
+        throw new Error("Embedded file is not a valid audio format.");
+      }
+
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const audioBlob = new Blob([u8arr], { type: mime });
+
+      await saveVoiceProfile({
+        voice_id: parsed.voice_id,
+        name: parsed.name
+      }, audioBlob);
+
+      showToast(`Imported ${parsed.name} successfully!`, "success");
+      event.target.value = "";
+    } catch (err) {
+      console.error("VFP Import failed:", err);
+      showToast("VFP import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
+
   async function removeProfile(voiceId) {
     try {
       const next = await deleteVoiceProfile(voiceId);
@@ -276,9 +550,11 @@ export default function Settings() {
   }
 
   async function removeAllProfiles() {
-    const confirmOverwrite = window.confirm("Are you sure you want to delete all saved voice profiles? This action cannot be undone and will free up storage space.");
+    const confirmOverwrite = window.confirm(
+      "Are you sure you want to delete all saved voice profiles? This action cannot be undone and will free up storage space.",
+    );
     if (!confirmOverwrite) return;
-    
+
     try {
       const next = await clearAllVoiceProfiles();
       setProfiles(next);
@@ -302,18 +578,21 @@ export default function Settings() {
         </p>
       </section>
       {dbError && (
-      <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
-        <CircleAlert size={18} aria-hidden="true" />
-        <span>Database error: {dbError}</span>
-      </div>
-    )}
+        <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+          <CircleAlert size={18} aria-hidden="true" />
+          <span>Database error: {dbError}</span>
+        </div>
+      )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
 
         <div className="mb-5">
-          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+          <label
+            htmlFor="voice-preset"
+            className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+          >
             Voice Preset
           </label>
           <select
@@ -322,26 +601,9 @@ export default function Settings() {
             onChange={(e) => handlePresetChange(e.target.value)}
             className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
           >
-            <option value="custom" disabled>Custom</option>
-            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
-              <option key={key} value={key}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        
-        <div className="mb-5">
-          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
-            Voice Preset
-          </label>
-          <select
-            id="voice-preset"
-            value={currentPresetKey}
-            onChange={(e) => handlePresetChange(e.target.value)}
-            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
-          >
-            <option value="custom" disabled>Custom</option>
+            <option value="custom" disabled>
+              Custom
+            </option>
             {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
               <option key={key} value={key}>
                 {preset.name}
@@ -352,137 +614,273 @@ export default function Settings() {
 
         <div className="space-y-4">
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="stability">
+            <label
+              className="flex justify-between text-sm font-bold"
+              htmlFor="stability"
+            >
               <span>Stability</span>
               <span className="text-ink/65">{voiceSettings.stability}</span>
             </label>
             <input
               id="stability"
               type="range"
-              min="0" max="1" step="0.01"
+              min="0"
+              max="1"
+              step="0.01"
               value={voiceSettings.stability}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
-            <p className="text-xs text-ink/50 mt-1">Lower values are more expressive; higher values are more consistent.</p>
+            <p className="text-xs text-ink/50 mt-1">
+              Lower values are more expressive; higher values are more
+              consistent.
+            </p>
           </div>
-          
+
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="temperature">
+            <label
+              className="flex justify-between text-sm font-bold"
+              htmlFor="temperature"
+            >
               <span>Temperature</span>
               <span className="text-ink/65">{voiceSettings.temperature}</span>
             </label>
             <input
               id="temperature"
               type="range"
-              min="0" max="1" step="0.01"
+              min="0.05" max="5" step="0.01"
               value={voiceSettings.temperature}
-              onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
+              onChange={(e) =>
+                saveVoiceSettings({
+                  ...voiceSettings,
+                  temperature: parseFloat(e.target.value),
+                })
+              }
               className="w-full mt-2"
             />
-            <p className="text-xs text-ink/50 mt-1">Lower values are steadier; higher values allow more variation.</p>
+            <p className="text-xs text-ink/50 mt-1">
+              Lower values are steadier; higher values allow more variation.
+            </p>
           </div>
 
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="style">
+            <label
+              className="flex justify-between text-sm font-bold"
+              htmlFor="style"
+            >
               <span>Style Exaggeration</span>
               <span className="text-ink/65">{voiceSettings.style}</span>
             </label>
             <input
               id="style"
               type="range"
-              min="0" max="1" step="0.01"
+              min="0" max="2" step="0.01"
               value={voiceSettings.style}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
-            <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
+            <p className="text-xs text-ink/50 mt-1">
+              Higher values exaggerate the style of the reference audio.
+            </p>
           </div>
 
           <hr className="border-ink/10 dark:border-border my-4" />
-          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">Real-time Voice Modifiers (DSP)</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">
+            Real-time Voice Modifiers (DSP)
+          </h3>
 
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-pitch">
+            <label
+              className="flex justify-between text-sm font-bold"
+              htmlFor="dsp-pitch"
+            >
               <span>Voice Pitch</span>
               <span className="text-ink/65">{voiceSettings.dspPitch}x</span>
             </label>
             <input
               id="dsp-pitch"
               type="range"
-              min="0.5" max="1.5" step="0.05"
+              min="0.5"
+              max="1.5"
+              step="0.05"
               value={voiceSettings.dspPitch}
-              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspPitch: parseFloat(e.target.value) })}
-              className="w-full mt-2"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (["ArrowRight", "ArrowUp"].includes(e.key)) {
+                  e.preventDefault();
+                  const nextVal = Math.min(
+                    Number(voiceSettings.dspPitch) + 0.05,
+                    1.5,
+                  );
+                  saveVoiceSettings({
+                    ...voiceSettings,
+                    dspPitch: parseFloat(nextVal.toFixed(2)),
+                  });
+                } else if (["ArrowLeft", "ArrowDown"].includes(e.key)) {
+                  e.preventDefault();
+                  const nextVal = Math.max(
+                    Number(voiceSettings.dspPitch) - 0.05,
+                    0.5,
+                  );
+                  saveVoiceSettings({
+                    ...voiceSettings,
+                    dspPitch: parseFloat(nextVal.toFixed(2)),
+                  });
+                }
+              }}
+              onChange={(e) =>
+                saveVoiceSettings({
+                  ...voiceSettings,
+                  dspPitch: parseFloat(e.target.value),
+                })
+              }
+              className="w-full mt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-coral rounded-full"
             />
-            <p className="text-xs text-ink/50 mt-1">Pitch transposition. Lower → deeper voice; higher → higher voice.</p>
+            <p className="text-xs text-ink/50 mt-1">
+              Pitch transposition. Lower → deeper voice; higher → higher voice.
+            </p>
           </div>
 
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-speed">
+            <label
+              className="flex justify-between text-sm font-bold"
+              htmlFor="dsp-speed"
+            >
               <span>Speech Pace (Speed)</span>
               <span className="text-ink/65">{voiceSettings.dspSpeed}x</span>
             </label>
             <input
               id="dsp-speed"
               type="range"
-              min="0.5" max="2.0" step="0.05"
+              min="0.5"
+              max="2.0"
+              step="0.05"
               value={voiceSettings.dspSpeed}
-              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspSpeed: parseFloat(e.target.value) })}
-              className="w-full mt-2"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (["ArrowRight", "ArrowUp"].includes(e.key)) {
+                  e.preventDefault();
+                  const nextVal = Math.min(
+                    Number(voiceSettings.dspSpeed) + 0.05,
+                    2.0,
+                  );
+                  saveVoiceSettings({
+                    ...voiceSettings,
+                    dspSpeed: parseFloat(nextVal.toFixed(2)),
+                  });
+                } else if (["ArrowLeft", "ArrowDown"].includes(e.key)) {
+                  e.preventDefault();
+                  const nextVal = Math.max(
+                    Number(voiceSettings.dspSpeed) - 0.05,
+                    0.5,
+                  );
+                  saveVoiceSettings({
+                    ...voiceSettings,
+                    dspSpeed: parseFloat(nextVal.toFixed(2)),
+                  });
+                }
+              }}
+              onChange={(e) =>
+                saveVoiceSettings({
+                  ...voiceSettings,
+                  dspSpeed: parseFloat(e.target.value),
+                })
+              }
+              className="w-full mt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-coral rounded-full"
             />
-            <p className="text-xs text-ink/50 mt-1">Adjust speech speed. Lower → slower; higher → faster speech.</p>
+            <p className="text-xs text-ink/50 mt-1">
+              Adjust speech speed. Lower → slower; higher → faster speech.
+            </p>
           </div>
 
           <div className="pt-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">3-Band Graphic Equalizer</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">
+              3-Band Graphic Equalizer
+            </h4>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-bass">
+                <label
+                  className="flex justify-between text-xs font-bold"
+                  htmlFor="dsp-bass"
+                >
                   <span>Bass (200 Hz)</span>
-                  <span className="text-ink/65">{voiceSettings.dspBass} dB</span>
+                  <span className="text-ink/65">
+                    {voiceSettings.dspBass} dB
+                  </span>
                 </label>
                 <input
                   id="dsp-bass"
                   type="range"
-                  min="-10" max="10" step="1"
+                  min="-10"
+                  max="10"
+                  step="1"
                   value={voiceSettings.dspBass}
-                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspBass: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    saveVoiceSettings({
+                      ...voiceSettings,
+                      dspBass: parseInt(e.target.value),
+                    })
+                  }
                   className="w-full mt-1.5"
                 />
               </div>
 
               <div>
-                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-mid">
+                <label
+                  className="flex justify-between text-xs font-bold"
+                  htmlFor="dsp-mid"
+                >
                   <span>Mid (1000 Hz)</span>
                   <span className="text-ink/65">{voiceSettings.dspMid} dB</span>
                 </label>
                 <input
                   id="dsp-mid"
                   type="range"
-                  min="-10" max="10" step="1"
+                  min="-10"
+                  max="10"
+                  step="1"
                   value={voiceSettings.dspMid}
-                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspMid: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    saveVoiceSettings({
+                      ...voiceSettings,
+                      dspMid: parseInt(e.target.value),
+                    })
+                  }
                   className="w-full mt-1.5"
                 />
               </div>
 
               <div>
-                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-treble">
+                <label
+                  className="flex justify-between text-xs font-bold"
+                  htmlFor="dsp-treble"
+                >
                   <span>Treble (4000 Hz)</span>
-                  <span className="text-ink/65">{voiceSettings.dspTreble} dB</span>
+                  <span className="text-ink/65">
+                    {voiceSettings.dspTreble} dB
+                  </span>
                 </label>
                 <input
                   id="dsp-treble"
                   type="range"
-                  min="-10" max="10" step="1"
+                  min="-10"
+                  max="10"
+                  step="1"
                   value={voiceSettings.dspTreble}
-                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspTreble: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    saveVoiceSettings({
+                      ...voiceSettings,
+                      dspTreble: parseInt(e.target.value),
+                    })
+                  }
                   className="w-full mt-1.5"
                 />
               </div>
             </div>
-            <p className="text-xs text-ink/50 mt-2">Sculpt voice tone in real-time. Bass controls depth; mid controls presence; treble controls clarity.</p>
+            <p className="text-xs text-ink/50 mt-2">
+              Sculpt voice tone in real-time. Bass controls depth; mid controls
+              presence; treble controls clarity.
+            </p>
           </div>
         </div>
       </section>
@@ -490,7 +888,11 @@ export default function Settings() {
       {/* ── Language & Region ─────────────────────────────────────────── */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <div className="flex items-center gap-2 mb-1">
-          <Globe size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <Globe
+            size={20}
+            aria-hidden="true"
+            className="text-moss dark:text-glow"
+          />
           <h2 className="text-xl font-bold">Language &amp; Region</h2>
         </div>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
@@ -516,20 +918,23 @@ export default function Settings() {
                   code
                     ? `Language set to ${getLanguageByCode(code)?.name || code}`
                     : "Language set to Auto-detect",
-                  "success"
+                  "success",
                 );
               }}
             />
           </div>
           {selectedLangObj && (
             <div className="flex items-center gap-2 rounded-lg border border-ink/10 px-4 py-3 dark:border-border">
-              <span className="text-2xl" aria-hidden="true">{selectedLangObj.flag}</span>
+              <span className="text-2xl" aria-hidden="true">
+                {selectedLangObj.flag}
+              </span>
               <div>
                 <p className="text-sm font-bold text-ink dark:text-neutral-200">
                   {selectedLangObj.name}
                 </p>
                 <p className="text-xs text-ink/55 dark:text-muted">
-                  {selectedLangObj.nativeName} · <code className="font-mono">{selectedLangObj.code}</code>
+                  {selectedLangObj.nativeName} ·{" "}
+                  <code className="font-mono">{selectedLangObj.code}</code>
                 </p>
               </div>
             </div>
@@ -537,15 +942,17 @@ export default function Settings() {
         </div>
 
         <p className="mt-3 text-xs text-ink/50 dark:text-muted">
-          Powered by Chatterbox Multilingual TTS - supports 23 languages.
-          Choose &ldquo;Auto-detect&rdquo; to let the AI infer the language from your text.
+          Powered by Chatterbox Multilingual TTS - supports 23 languages. Choose
+          &ldquo;Auto-detect&rdquo; to let the AI infer the language from your
+          text.
         </p>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Backup & Restore</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
-          Save your speech history, custom quick replies, and calibration settings to a file, or restore them.
+          Save your speech history, custom quick replies, and calibration
+          settings to a file, or restore them.
         </p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -572,6 +979,15 @@ export default function Settings() {
               className="sr-only"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-ink px-5 font-bold text-white transition hover:bg-ink/85 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+          >
+            <QrCode size={18} aria-hidden="true" />
+            Transfer Setup (QR / Link)
+          </button>
         </div>
       </section>
 
@@ -579,6 +995,28 @@ export default function Settings() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
           <div className="flex items-center gap-3">
+            <label
+              htmlFor="settings-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
+            >
+              <Upload size={14} />
+              Import Profile (.vfp)
+              <input
+                id="settings-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsTransferOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200"
+            >
+              <QrCode size={16} />
+              Transfer Setup
+            </button>
             <button
               type="button"
               onClick={() => setIsReceiving(true)}
@@ -606,23 +1044,40 @@ export default function Settings() {
           {profiles.map((profile) => (
             <ProfileCard
               key={profile.voice_id}
-              profile={profile}
-              onDelete={removeProfile}
-              onShare={(p) => setSharingProfile(p)}
-            />
+              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="font-bold">{profile.name}</p>
+                <p className="mt-1 break-all text-sm text-ink/60 dark:text-muted">
+                  {profile.voice_id}
+                </p>
+                {profile.audioBlob && <AudioPlayback blob={profile.audioBlob} />}
+ 
+              </div>
+              <button
+                type="button"
+                onClick={() => removeProfile(profile.voice_id)}
+                title={`Delete voice profile "${profile.name}"`}
+                aria-label={`Delete voice profile "${profile.name}"`}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-coral/40 px-3 py-2 font-bold text-coral hover:bg-coral hover:text-white"
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                Delete
+              </button>
+            </div>
           ))}
         </div>
       </section>
-      
+
       {sharingProfile && (
-        <ShareProfileModal 
-          profile={sharingProfile} 
-          onClose={() => setSharingProfile(null)} 
+        <ShareProfileModal
+          profile={sharingProfile}
+          onClose={() => setSharingProfile(null)}
         />
       )}
 
       {isReceiving && (
-        <ReceiveProfileModal 
+        <ReceiveProfileModal
           onClose={() => setIsReceiving(false)}
           onSuccess={async () => {
             const loaded = await getSavedProfiles();
@@ -630,6 +1085,12 @@ export default function Settings() {
             setIsReceiving(false);
             showToast("Profile received successfully!", "success");
           }}
+        />
+      )}
+
+      {isTransferOpen && (
+        <TransferSetupModal
+          onClose={() => setIsTransferOpen(false)}
         />
       )}
       <ToastContainer toasts={toasts} />

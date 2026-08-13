@@ -63,12 +63,20 @@ export function ProfileCard({ profile, onDelete, onShare }) {
               onClick={togglePlay}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-moss text-white hover:bg-moss/90 dark:bg-glow dark:text-black"
             >
-              {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              {isPlaying ? (
+                <Pause size={14} fill="currentColor" />
+              ) : (
+                <Play size={14} fill="currentColor" className="ml-0.5" />
+              )}
             </button>
             <div className="h-6 flex-1 rounded-sm bg-ink/10 dark:bg-white/10 relative overflow-hidden flex items-center justify-between px-1">
               {/* Fake waveform for visual aesthetics */}
               {[...Array(20)].map((_, i) => (
-                <div key={i} className="w-1 bg-moss dark:bg-glow rounded-full opacity-50" style={{ height: `${Math.max(20, Math.random() * 100)}%` }}></div>
+                <div
+                  key={i}
+                  className="w-1 bg-moss dark:bg-glow rounded-full opacity-50"
+                  style={{ height: `${Math.max(20, Math.random() * 100)}%` }}
+                ></div>
               ))}
               {isPlaying && (
                 <div className="absolute inset-0 bg-moss/20 dark:bg-glow/20 animate-pulse pointer-events-none"></div>
@@ -86,6 +94,14 @@ export function ProfileCard({ profile, onDelete, onShare }) {
           >
             <Share2 size={16} />
             Share
+          </button>
+          <button
+            type="button"
+            onClick={() => onExport(profile)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink/15 text-ink transition hover:bg-ink/5 dark:border-border dark:text-neutral-200 dark:hover:bg-white/5"
+            title="Export Profile Backup (.vfp)"
+          >
+            <Download size={16} />
           </button>
           <button
             type="button"

@@ -3,18 +3,21 @@
 const CHUNK_SIZE = 16 * 1024; // 16 KB
 
 export async function sendDataInChunks(dataChannel, data) {
+  dataChannel.binaryType = 'arraybuffer';
   const jsonStr = JSON.stringify(data);
   const encoder = new TextEncoder();
   const bytes = encoder.encode(jsonStr);
 
   // Send metadata (total size)
-  dataChannel.send(JSON.stringify({ type: 'metadata', size: bytes.length }));
+  dataChannel.send(JSON.stringify({ type: "metadata", size: bytes.length }));
 
   let offset = 0;
   return new Promise((resolve, reject) => {
     const sendChunk = () => {
       while (offset < bytes.length) {
-        if (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
+        if (
+          dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold
+        ) {
           dataChannel.onbufferedamountlow = () => {
             dataChannel.onbufferedamountlow = null;
             sendChunk();
@@ -27,11 +30,11 @@ export async function sendDataInChunks(dataChannel, data) {
         offset += chunk.length;
       }
       // Send EOF
-      dataChannel.send(JSON.stringify({ type: 'eof' }));
+      dataChannel.send(JSON.stringify({ type: "eof" }));
       resolve();
     };
 
-    if (dataChannel.readyState === 'open') {
+    if (dataChannel.readyState === "open") {
       sendChunk();
     } else {
       dataChannel.onopen = sendChunk;
@@ -40,15 +43,16 @@ export async function sendDataInChunks(dataChannel, data) {
 }
 
 export function receiveDataInChunks(dataChannel, onComplete) {
+  dataChannel.binaryType = 'arraybuffer';
   let expectedSize = 0;
   let receivedBytes = [];
   let currentSize = 0;
 
   dataChannel.onmessage = (event) => {
-    if (typeof event.data === 'string') {
+    if (typeof event.data === "string") {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'metadata') {
+        if (msg.type === "metadata") {
           expectedSize = msg.size;
         } else if (msg.type === 'eof') {
           // Reconstruct

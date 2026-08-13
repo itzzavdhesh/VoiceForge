@@ -1,11 +1,10 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, ShieldCheck } from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
 import VirtualCamera from "../components/VirtualCamera.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
-import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
@@ -21,8 +20,23 @@ export default function Call() {
   const localVideoRef = React.useRef(null);
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
-  const [privacyMode, setPrivacyMode] = React.useState(false);
-  const [avatarImage, setAvatarImage] = React.useState(null);
+  
+  const [activeText, setActiveText] = React.useState("");
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitlesEnabled") !== "false";
+    } catch { return true; }
+  });
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
+    } catch { return "medium"; }
+  });
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
+    try {
+      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
+    } catch { return "0.6"; }
+  });
 
   const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
     try {
@@ -81,15 +95,36 @@ export default function Call() {
     const savedY     = localStorage.getItem("voiceforge:calibrationYOffset");
     const savedScale = localStorage.getItem("voiceforge:calibrationScale");
 
-    let x = savedX !== null ? parseInt(savedX, 10) : 0;
-    let y = savedY !== null ? parseInt(savedY, 10) : 0;
-    let scale = savedScale !== null ? parseFloat(savedScale) : 1.0;
+      let x = savedX !== null ? parseInt(savedX, 10) : 0;
+      let y = savedY !== null ? parseInt(savedY, 10) : 0;
+      let scale = savedScale !== null ? parseFloat(savedScale) : 1.0;
 
-    // Sanitize and clamp values to default limits
-    if (isNaN(x)) {
-      x = 0;
-    } else {
-      x = Math.max(-400, Math.min(400, x));
+      // Sanitize and clamp values to default limits
+      if (isNaN(x)) {
+        x = 0;
+      } else {
+        x = Math.max(-400, Math.min(400, x));
+      }
+
+      if (isNaN(y)) {
+        y = 0;
+      } else {
+        y = Math.max(-250, Math.min(150, y));
+      }
+
+      if (isNaN(scale)) {
+        scale = 1.0;
+      } else {
+        scale = Math.max(0.5, Math.min(2.5, scale));
+      }
+
+      return {
+        xOffset: x,
+        yOffset: y,
+        scale,
+      };
+    } catch {
+      return { xOffset: 0, yOffset: 0, scale: 1.0 };
     }
 
     if (isNaN(y)) {
@@ -152,14 +187,6 @@ export default function Call() {
   let isMounted = true;
 
   async function openCamera() {
-    if (privacyMode) {
-      setWebcamStream(null);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-      return;
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -198,36 +225,39 @@ export default function Call() {
       activeStream.getTracks().forEach((track) => track.stop());
     }
   };
-}, [showToast, privacyMode]);
+}, [showToast]);
 
-  async function handleSpeak(text, voice_settings_override) {
-    if (!activeProfile?.voice_id) return;
+  async function handleSpeak(text) {
+  if (!activeProfile?.voice_id) return;
 
-    try {
-      const result = await speak({
-        text,
-        voiceId: activeProfile.voice_id,
-        language_code: language,
-        voice_settings_override,
-      });
+  try {
+    setActiveText(text);
+    const result = await speak({
+      text,
+      voiceId: activeProfile.voice_id,
+      language_code: language,
+      onSpeakingChange: setIsSpeaking,
+    });
 
-      if (result?.fallback) {
-        showToast("Using browser voice fallback", "info");
-      }
-    } catch (err) {
-      console.error("TTS streaming error:", err);
-      showToast("Speech generation failed", "error");
+    if (result?.fallback) {
+      showToast("Using browser voice fallback", "info");
     }
+  } catch (err) {
+    console.error("TTS streaming error:", err);
+    showToast(err?.message || "Speech generation failed", "error");
   }
+}
+
+  const isSpeechActive = status === "speaking" || isSpeaking;
 
   return (
     <div className="space-y-5">
-      {/* ── Header card ───────────────────────────────────────────────────── */}
-      {engine === "browser" && (
-      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
-        Using Browser Voice (Offline Mode)
-      </div>
-    )}
+      <div inert={isSpeechActive ? "" : undefined} className="space-y-5">
+        {engine === "browser" && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+          Using Browser Voice (Offline Mode)
+        </div>
+      )}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -262,12 +292,6 @@ export default function Call() {
           Create or select a voice profile before speaking.
         </div>
       )}
-
-      <PrivacyModeToggle
-        onModeChange={setPrivacyMode}
-        onAvatarChange={setAvatarImage}
-        showToast={showToast}
-      />
 
       {/* Mouth Calibration Drawer */}
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
@@ -369,14 +393,16 @@ export default function Call() {
           </div>
         )}
       </section>
+      
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface">
         <label
           htmlFor="output-language"
-          className="mb-3 block text-sm font-bold dark:text-neutral-100"
+          className="mb-2 block text-sm font-bold dark:text-neutral-100"
         >
           Output Language
         </label>
-        <LanguageSelector
+
+        <select
           id="output-language"
           value={language}
           onChange={setLanguage}
@@ -448,47 +474,33 @@ export default function Call() {
           </div>
         )}
       </section>
+      </div> {/* Closes top settings inert wrapper */}
+
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_0.9fr]">
         {/* Webcam panel */}
-        <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
-          {privacyMode ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="mb-4 rounded-full bg-moss/20 p-4 text-moss dark:bg-glow/20 dark:text-glow">
-                <ShieldCheck size={32} aria-hidden="true" />
-              </div>
-              <h2 className="text-lg font-bold dark:text-neutral-100">
-                Privacy Mode Active
-              </h2>
-              <p className="mt-2 text-sm text-ink/65 dark:text-muted">
-                Your camera is disabled.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 flex items-center gap-2">
-                <Camera
-                  size={19}
-                  aria-hidden="true"
-                  className="dark:text-neutral-300"
-                />
-                <h2 className="text-lg font-bold dark:text-neutral-100">
-                  Live webcam
-                </h2>
-              </div>
-              {/* Video element: bg-black already looks fine in dark mode */}
-              <video
-                ref={localVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className="aspect-video w-full rounded-md bg-black object-cover"
-              />
-              {cameraError && (
-                <p className="mt-3 text-sm font-semibold text-coral">
-                  {cameraError}
-                </p>
-              )}
-            </>
+        <section inert={isSpeechActive ? "" : undefined} className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
+          <div className="mb-4 flex items-center gap-2">
+            <Camera
+              size={19}
+              aria-hidden="true"
+              className="dark:text-neutral-300"
+            />
+            <h2 className="text-lg font-bold dark:text-neutral-100">
+              Live webcam
+            </h2>
+          </div>
+          {/* Video element: bg-black already looks fine in dark mode */}
+          <video
+            ref={localVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className="aspect-video w-full rounded-md bg-black object-cover"
+          />
+          {cameraError && (
+            <p className="mt-3 text-sm font-semibold text-coral">
+              {cameraError}
+            </p>
           )}
         </section>
 
@@ -498,30 +510,38 @@ export default function Call() {
           status={status}
         />
 
-        <VideoPreview
-          ref={canvasRef}
-          webcamStream={webcamStream}
-          audioUrl={audioUrl}
-          isSpeaking={isSpeaking}
-          onSpeakingChange={setIsSpeaking}
-          calibration={calibration}
-          isCalibrating={isCalibrationOpen}
-          avatarImage={avatarImage}
-        />
+        <div inert={isSpeechActive ? "" : undefined}>
+          <VideoPreview
+            ref={canvasRef}
+            webcamStream={webcamStream}
+            audioUrl={audioUrl}
+            isSpeaking={isSpeaking}
+            onSpeakingChange={setIsSpeaking}
+            calibration={calibration}
+            isCalibrating={isCalibrationOpen}
+            activeText={activeText}
+            subtitlesEnabled={subtitlesEnabled}
+            subtitleFontSize={subtitleFontSize}
+            subtitleBgOpacity={parseFloat(subtitleBgOpacity)}
+          />
+        </div>
       </div>
 
-      <VirtualCamera
-        isLive={virtualCamera.isLive}
-        status={virtualCamera.status}
-        onStart={virtualCamera.start}
-        onStop={virtualCamera.stop}
-      />
+      <div inert={isSpeechActive ? "" : undefined} className="space-y-5">
+        <VirtualCamera
+          isLive={virtualCamera.isLive}
+          status={virtualCamera.status}
+          onStart={virtualCamera.start}
+          onStop={virtualCamera.stop}
+        />
 
-      {error && (
-        <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
+            {error}
+          </p>
+        )}
+      </div>
+
       <ToastContainer toasts={toasts} />
     </div>
   );
