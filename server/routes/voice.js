@@ -7,19 +7,19 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
-// Limit voice-cloning requests: cloning is expensive — allow 5 per hour per IP.
+// Limit voice-cloning requests: cloning is expensive — allow 10 per hour per IP.
 const cloneRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many voice clone requests. Please try again in an hour." },
 });
 
-// Limit TTS/speak requests: allow 30 per minute per IP.
+// Limit TTS/speak requests: allow 300 per hour per IP.
 const speakRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many speech requests. Please slow down." },

@@ -1,10 +1,32 @@
 import React, { useEffect, useState } from "react";
-import { Play, Pause, Share2, Trash2 } from "lucide-react";
+import { Play, Pause, Share2, Trash2, Briefcase, Heart, BookOpen, Sparkles, User, Palette } from "lucide-react";
+import { saveVoiceProfile } from "../hooks/useVoiceClone.js";
 
-export function ProfileCard({ profile, onDelete, onShare }) {
+export const COLOR_TAGS = {
+  emerald: { label: "Emerald", badge: "bg-emerald-600 text-white", border: "border-emerald-500" },
+  cobalt: { label: "Cobalt", badge: "bg-blue-600 text-white", border: "border-blue-600" },
+  rose: { label: "Rose", badge: "bg-rose-600 text-white", border: "border-rose-500" },
+  gold: { label: "Gold", badge: "bg-amber-600 text-white", border: "border-amber-500" },
+  purple: { label: "Purple", badge: "bg-purple-600 text-white", border: "border-purple-500" },
+};
+
+export const AVATAR_ICONS = {
+  user: User,
+  briefcase: Briefcase,
+  heart: Heart,
+  book: BookOpen,
+  sparkles: Sparkles,
+};
+
+export function ProfileCard({ profile, onDelete, onShare, onUpdate }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [isCustomizing, setIsCustomizing] = useState(false);
   const audioRef = React.useRef(null);
+
+  const activeColorKey = COLOR_TAGS[profile.colorTag] ? profile.colorTag : "emerald";
+  const activeColor = COLOR_TAGS[activeColorKey];
+  const IconComponent = AVATAR_ICONS[profile.avatarIcon] || User;
 
   useEffect(() => {
     if (profile.audioBlob) {
@@ -31,25 +53,98 @@ export function ProfileCard({ profile, onDelete, onShare }) {
     }
   };
 
+  async function handleSelectColor(colorKey) {
+    try {
+      const updated = { ...profile, colorTag: colorKey };
+      await saveVoiceProfile(updated, profile.audioBlob);
+      onUpdate?.(updated);
+    } catch (err) {
+      console.error("Failed to update profile color:", err);
+    }
+  }
+
+  async function handleSelectIcon(iconKey) {
+    try {
+      const updated = { ...profile, avatarIcon: iconKey };
+      await saveVoiceProfile(updated, profile.audioBlob);
+      onUpdate?.(updated);
+    } catch (err) {
+      console.error("Failed to update profile icon:", err);
+    }
+  }
+
   const formattedDate = profile.createdAt 
     ? new Date(profile.createdAt).toLocaleDateString()
     : "Unknown date";
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white shadow-soft transition-all hover:shadow-soft-md dark:border-border dark:bg-surface dark:shadow-soft-dk">
+    <div className={`flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white shadow-soft transition-all hover:shadow-soft-md dark:border-border dark:bg-surface dark:shadow-soft-dk`}>
       <div className="flex items-start justify-between bg-ink/5 p-4 dark:bg-black/20">
         <div>
-          <h3 className="font-bold text-lg text-ink dark:text-neutral-100">
-            {profile.name}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-lg text-ink dark:text-neutral-100">
+              {profile.name}
+            </h3>
+            <span className={`inline-block h-2 w-2 rounded-full ${activeColor.badge}`} title={`Tag: ${activeColor.label}`} />
+          </div>
           <p className="text-xs text-ink/60 dark:text-muted mt-1">
             Created on {formattedDate}
           </p>
         </div>
-        <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-full bg-moss/20 text-moss dark:bg-glow/20 dark:text-glow font-bold uppercase text-sm">
-          {profile.name.substring(0, 2)}
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCustomizing((prev) => !prev)}
+            title="Customize Tag & Icon"
+            aria-label="Customize profile avatar icon and color tag"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-ink/10 bg-white text-ink/60 transition hover:bg-neutral-100 hover:text-ink dark:border-border dark:bg-surface dark:text-neutral-300 dark:hover:bg-neutral-900"
+          >
+            <Palette size={14} aria-hidden="true" />
+          </button>
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${activeColor.badge} font-bold shadow-sm`}>
+            <IconComponent size={20} aria-hidden="true" />
+          </div>
         </div>
       </div>
+
+      {isCustomizing && (
+        <div className="border-b border-ink/10 bg-neutral-50 p-3 text-xs space-y-2 dark:border-border dark:bg-black/40">
+          <div>
+            <span className="font-bold text-ink/70 dark:text-neutral-300">Color Tag:</span>
+            <div className="flex items-center gap-2 mt-1.5">
+              {Object.entries(COLOR_TAGS).map(([key, item]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSelectColor(key)}
+                  title={item.label}
+                  aria-label={`Select ${item.label} color tag`}
+                  className={`h-5 w-5 rounded-full ${item.badge} transition-transform ${activeColorKey === key ? "ring-2 ring-moss ring-offset-1 scale-110" : "opacity-80 hover:opacity-100"}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="font-bold text-ink/70 dark:text-neutral-300">Avatar Icon:</span>
+            <div className="flex items-center gap-2 mt-1.5">
+              {Object.entries(AVATAR_ICONS).map(([key, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSelectIcon(key)}
+                  title={key}
+                  aria-label={`Select ${key} avatar icon`}
+                  className={`flex h-7 w-7 items-center justify-center rounded-md border text-ink/80 transition-transform dark:text-neutral-200 ${profile.avatarIcon === key ? "border-moss bg-mint/20 text-moss font-bold scale-105 dark:border-glow dark:text-glow" : "border-neutral-200 bg-white hover:bg-neutral-100 dark:border-border dark:bg-surface"}`}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="flex flex-1 flex-col p-4">
         <p className="mb-4 text-xs font-mono text-ink/50 dark:text-muted truncate">
