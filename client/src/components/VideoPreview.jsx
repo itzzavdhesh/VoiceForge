@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 export default React.forwardRef(function VideoPreview({
   webcamStream,
   audioUrl,
+  engine,
   isSpeaking,
   onSpeakingChange,
   calibration = { xOffset: 0, yOffset: 0, scale: 1.0 },
@@ -25,6 +26,14 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
+
+  React.useEffect(() => {
+    if (!tempCanvasRef.current && typeof document !== "undefined") {
+      tempCanvasRef.current = document.createElement("canvas");
+      tempCanvasRef.current.width = 96;
+      tempCanvasRef.current.height = 96;
+    }
+  }, []);
 
   React.useEffect(() => {
     calibrationRef.current = calibration;
@@ -70,6 +79,21 @@ export default React.forwardRef(function VideoPreview({
       }
     } catch (err) {
       console.warn("Web Audio API binding failed:", err);
+    }
+  }, [audioUrl]);
+
+  // Set speech playback speed (rate) on HTML5 audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      try {
+        const voiceSettings = loadVoiceSettings();
+        if (typeof voiceSettings.rate === "number") {
+          audioRef.current.defaultPlaybackRate = voiceSettings.rate;
+          audioRef.current.playbackRate = voiceSettings.rate;
+        }
+      } catch (err) {
+        console.error("Failed to set audio playback rate:", err);
+      }
     }
   }, [audioUrl]);
 
@@ -205,7 +229,7 @@ export default React.forwardRef(function VideoPreview({
         height="540"
         className="aspect-video w-full rounded-md bg-black object-cover"
       />
-      {audioUrl && (
+      {audioUrl && engine !== "chatterbox" && (
         <audio
           ref={audioRef}
           key={audioUrl}

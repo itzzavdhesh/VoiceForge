@@ -5,12 +5,20 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { saveTranscript, clearAllTranscripts } from "../utils/db.js";
+import { authFetch } from "../utils/auth.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
 const TRANSCRIPT_KEY = "vf_transcript";
 const MAX_HISTORY = 25;
+const MAX_ANALYTICS = 2000;
+
+function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+}
 
 /**
  * Safely reads a JSON value from localStorage.
@@ -81,6 +89,7 @@ export function useSpeechHistory() {
     () => new Set(readStorage(FAVS_KEY, []))
   );
   const [sessionTranscript, setSessionTranscript] = useState(() => readSessionStorage(TRANSCRIPT_KEY, []));
+  const [analyticsHistory, setAnalyticsHistory] = useState(() => readStorage(ANALYTICS_KEY, []));
 
   // ── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,6 +115,53 @@ export function useSpeechHistory() {
       /* storage quota exceeded — silently skip */
     }
   }, [favorites]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ANALYTICS_KEY, JSON.stringify(analyticsHistory));
+    } catch {
+      /* storage quota exceeded — silently skip */
+    }
+  }, [analyticsHistory]);
+
+  useEffect(() => {
+    async function syncSpeechHistory() {
+      try {
+        const res = await fetch("/api/speech-history");
+        if (res.ok) {
+          const remoteHistory = await res.json();
+          setHistory((prev) => {
+            const mergedMap = new Map();
+            prev.forEach(item => mergedMap.set(item.id, item));
+            remoteHistory.forEach(remote => {
+              const localMatch = prev.find(p => p.id === remote.id || p.text === remote.text);
+              const mergedItem = {
+                id: remote.id,
+                text: remote.text,
+                timestamp: remote.timestamp,
+                language: remote.language_code || "en-US",
+                tags: localMatch ? (localMatch.tags || []) : []
+              };
+              if (remote.is_favorite) {
+                setFavorites(prevFavs => {
+                  const next = new Set(prevFavs);
+                  next.add(remote.id);
+                  return next;
+                });
+              }
+              mergedMap.set(remote.id, mergedItem);
+            });
+
+            const sorted = Array.from(mergedMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+            return sorted.slice(0, MAX_HISTORY);
+          });
+        }
+      } catch (err) {
+        console.error("Failed to sync speech history:", err);
+      }
+    }
+    syncSpeechHistory();
+  }, []);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -139,18 +195,41 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
     voice_id: voiceId,
     session_id: sessionId,
     timestamp
-  }).then(() => {
-    window.dispatchEvent(new CustomEvent("vf-transcript-saved"));
   }).catch((err) => console.error("Error saving transcript to IndexedDB:", err));
 
   setHistory((prev) => {
     const existing = prev.find((m) => m.text === trimmed);
 
     // Fixed duplicate declaration syntax error
-    const newId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
     const entry = existing
       ? { ...existing, timestamp }
-      : { id: newId, text: trimmed, timestamp };
+      : { id: crypto.randomUUID(), text: trimmed, timestamp };
+
+    // Sync to backend database
+    authFetch("/api/speech-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updatedEntry.id,
+        text: updatedEntry.text,
+        language_code: lang,
+        timestamp: updatedEntry.timestamp,
+        is_favorite: favorites.has(updatedEntry.id) ? 1 : 0
+      })
+    }).catch(err => console.error("Failed to save speech log:", err));
+
+    // Sync to backend database
+    fetch("/api/speech-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updatedEntry.id,
+        text: updatedEntry.text,
+        language_code: lang,
+        timestamp: updatedEntry.timestamp,
+        is_favorite: favorites.has(updatedEntry.id) ? 1 : 0
+      })
+    }).catch(err => console.error("Failed to save speech log:", err));
 
     const updated = [
       entry,
@@ -159,7 +238,7 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
 
     return updated.slice(0, MAX_HISTORY);
   });
-}, []);
+}, [favorites]);
 
   /**
    * Removes a message by id and also removes it from favorites.
@@ -171,6 +250,9 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
       next.delete(id);
       return next;
     });
+    fetch(`/api/speech-history/${id}`, {
+      method: "DELETE"
+    }).catch(err => console.error("Failed to delete speech log:", err));
   }, []);
 
   /**
@@ -179,10 +261,27 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
   const toggleFavorite = useCallback((id) => {
     setFavorites((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      const isFav = next.has(id);
+      isFav ? next.delete(id) : next.add(id);
+
+      const msg = history.find(m => m.id === id);
+      if (msg) {
+        fetch("/api/speech-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: msg.id,
+            text: msg.text,
+            language_code: msg.language || "en-US",
+            timestamp: msg.timestamp,
+            is_favorite: !isFav ? 1 : 0
+          })
+        }).catch(err => console.error("Failed to toggle favorite:", err));
+      }
+
       return next;
     });
-  }, []);
+  }, [history]);
 
   /**
    * Wipes all history and favorites.
@@ -191,7 +290,6 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
     setHistory([]);
     setFavorites(new Set());
     setSessionTranscript([]);
-    clearAllTranscripts().catch((err) => console.error("Failed to clear transcripts from DB", err));
   }, []);
 
   return {
@@ -202,5 +300,7 @@ const addMessage = useCallback((text, voiceId = "", sessionId = "") => {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
+    importBackup,
   };
 }

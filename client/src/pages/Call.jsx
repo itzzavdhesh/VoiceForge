@@ -1,13 +1,6 @@
 // Renders the main call workspace for webcam preview, typed speech, output video, and virtual camera controls.
 import React from "react";
-import {
-  Camera,
-  CircleAlert,
-  Sliders,
-  ChevronDown,
-  RotateCcw,
-  Download,
-} from "lucide-react";
+import { Camera, CircleAlert, Sliders, ChevronDown, RotateCcw, Download, ShieldCheck, Grid } from "lucide-react";
 import TextToSpeech from "../components/TextToSpeech.jsx";
 import DeviceSelector from "../components/DeviceSelector.jsx";
 import VideoPreview from "../components/VideoPreview.jsx";
@@ -15,15 +8,13 @@ import VirtualCamera from "../components/VirtualCamera.jsx";
 import { AACSymbolBoard } from "../components/AACSymbolBoard.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
 import { COLOR_TAGS, AVATAR_ICONS } from "../components/ProfileCard.jsx";
+import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useVirtualCamera from "../hooks/useVirtualCamera.js";
 import { getActiveVoiceProfile } from "../hooks/useVoiceClone.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
-import {
-  loadLanguage,
-  persistLanguage,
-  subscribeLanguageChange,
-} from "../utils/languages.js";
+import { loadLanguage, persistLanguage, subscribeLanguageChange } from "../utils/languages.js";
+import { getStoredValue, setStoredValue } from "../utils/storage.js";
 
 export default function Call() {
   const [webcamStream, setWebcamStream] = React.useState(null);
@@ -37,60 +28,27 @@ export default function Call() {
   const [activeProfile, setActiveProfile] = React.useState(null);
   const [language, setLanguage] = React.useState(loadLanguage);
   const [sessionHistory, setSessionHistory] = React.useState([]);
-
-  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitlesEnabled") === "true";
-    } catch {
-      return false;
-    }
-  });
-  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
-    } catch {
-      return "medium";
-    }
-  });
-  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
-    } catch {
-      return "0.6";
-    }
-  });
-  const [activeText, setActiveText] = React.useState("");
-
-  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitlesEnabled") === "true";
-    } catch {
-      return false;
-    }
-  });
-  const [subtitleFontSize, setSubtitleFontSize] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleFontSize") || "medium";
-    } catch {
-      return "medium";
-    }
-  });
-  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(() => {
-    try {
-      return localStorage.getItem("voiceforge:subtitleBgOpacity") || "0.6";
-    } catch {
-      return "0.6";
-    }
-  });
-  const [activeText, setActiveText] = React.useState("");
-
-  React.useEffect(() => {
-    persistLanguage(language);
-  }, [language]);
   const [dbError, setDbError] = React.useState("");
   const { speak, status, error, audioUrl, engine } = useTTS();
   const virtualCamera = useVirtualCamera(canvasRef);
   const [isSymbolBoardOpen, setIsSymbolBoardOpen] = React.useState(false);
+  const [videoDevices, setVideoDevices] = React.useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState("");
+  const [privacyMode, setPrivacyMode] = React.useState(false);
+  const [avatarImage, setAvatarImage] = React.useState(null);
+  const [subtitlesEnabled, setSubtitlesEnabled] = React.useState(
+    () => getStoredValue("voiceforge:subtitlesEnabled") === "true"
+  );
+  const [subtitleFontSize, setSubtitleFontSize] = React.useState(
+    () => getStoredValue("voiceforge:subtitleFontSize", "medium")
+  );
+  const [subtitleBgOpacity, setSubtitleBgOpacity] = React.useState(
+    () => getStoredValue("voiceforge:subtitleBgOpacity", "0.6")
+  );
+
+  const handleSpeakingChange = React.useCallback((speaking) => {
+    setIsSpeaking(speaking);
+  }, []);
 
   React.useEffect(() => {
     async function loadActiveProfile() {
@@ -928,6 +886,7 @@ export default function Call() {
           ref={canvasRef}
           webcamStream={webcamStream}
           audioUrl={audioUrl}
+          engine={engine}
           isSpeaking={isSpeaking}
           onSpeakingChange={handleSpeakingChange}
           calibration={calibration}
@@ -947,7 +906,14 @@ export default function Call() {
         onStop={virtualCamera.stop}
       />
 
-      {error && (
+      {status === "waking_up" && (
+        <div className="flex animate-pulse items-center gap-3 rounded-md border border-sky-400/50 bg-sky-50 p-4 text-sm font-semibold text-sky-800 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-200">
+          <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+          Waking up AI Engine... this may take 1-2 minutes. Your request will fail right now, please try again shortly!
+        </div>
+      )}
+      
+      {status !== "waking_up" && error && (
         <p className="rounded-md border border-coral/30 bg-white p-3 text-sm font-semibold text-coral dark:border-coral/20 dark:bg-surface">
           {error}
         </p>

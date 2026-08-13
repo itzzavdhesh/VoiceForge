@@ -3,6 +3,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { cloneVoice, speak, streamSpeech, getStatus } from "../controllers/voiceController.js";
 import upload from "../middleware/upload.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
@@ -24,19 +25,10 @@ const speakRateLimit = rateLimit({
   message: { error: "Too many speech requests. Please slow down." },
 });
 
-// Limit status requests: allow 100 per 15 minutes per IP.
-const statusRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many status requests." },
-});
-
-router.post("/clone", cloneRateLimit, upload.single("audio"), cloneVoice);
-router.post("/speak", speakRateLimit, speak);
-router.get("/speak/stream", speakRateLimit, streamSpeech);
-router.get("/status", statusRateLimit, getStatus);
+router.post("/clone", authMiddleware, cloneRateLimit, upload.single("audio"), cloneVoice);
+router.post("/speak", authMiddleware, speakRateLimit, speak);
+router.get("/speak/stream", streamSpeech);
+router.get("/status", getStatus);
 
 // Handle multer and upload errors with structured JSON responses.
 router.use((err, req, res, next) => {
