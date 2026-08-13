@@ -1,6 +1,7 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 import { getSavedProfiles, saveVoiceProfile } from "./useVoiceClone.js";
+import { authFetch } from "../utils/auth.js";
 
 /**
  * React hook that manages Text-to-Speech (TTS) generation state.
@@ -16,6 +17,36 @@ export default function useTTS() {
   const [engine, setEngine] = React.useState("chatterbox");
   const abortControllerRef = React.useRef(null);
 
+  const updateAudioUrl = React.useCallback((nextUrl) => {
+    setAudioUrl((prevUrl) => {
+      if (prevUrl && prevUrl.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(prevUrl);
+        } catch {
+          // ignore
+        }
+      }
+      return nextUrl;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setAudioUrl((prevUrl) => {
+        if (prevUrl && prevUrl.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(prevUrl);
+          } catch {
+            // ignore
+          }
+        }
+        return "";
+      });
+    };
+  }, []);
 
   /**
    * Triggers local browser SpeechSynthesis as a fallback engine.
@@ -37,6 +68,12 @@ export default function useTTS() {
 
       if (languageCode) {
         utterance.lang = languageCode;
+      }
+
+      const voiceSettings = loadVoiceSettings();
+      if (voiceSettings.pitchShift !== undefined) {
+        // Map semitone transposition [-12, +12] to SpeechSynthesisUtterance pitch range [0.5, 2.0]
+        utterance.pitch = Math.min(2, Math.max(0.5, 1 + (voiceSettings.pitchShift / 12)));
       }
 
       utterance.onend = resolve;
@@ -93,7 +130,7 @@ export default function useTTS() {
       let activeVoiceId = voiceId;
       let resolvedOwnerToken = ownerToken || (await findProfileByVoiceId(voiceId))?.ownerToken || null;
 
-      let response = await fetch("/api/voice/speak", {
+      let response = await authFetch("/api/voice/speak", {
         method: "POST",
         signal: controller.signal,
         headers: {
@@ -119,7 +156,7 @@ export default function useTTS() {
           formData.append("name", profile.name);
           formData.append("voice_id", voiceId);
 
-          const cloneResponse = await fetch("/api/voice/clone", {
+          const cloneResponse = await authFetch("/api/voice/clone", {
             method: "POST",
             signal: controller.signal,
             body: formData,
@@ -127,7 +164,7 @@ export default function useTTS() {
 
           if (cloneResponse.ok) {
             // 3. Retry the speak request
-            response = await fetch("/api/voice/speak", {
+            response = await authFetch("/api/voice/speak", {
               method: "POST",
               signal: controller.signal,
               headers: {
@@ -136,6 +173,7 @@ export default function useTTS() {
               body: JSON.stringify({
                 text,
                 voice_id: voiceId,
+                owner_token: resolvedOwnerToken,
                 language_code,
                 voice_settings: voiceSettings,
               }),
@@ -154,7 +192,7 @@ export default function useTTS() {
             formData.append("audio", profile.audioBlob, "voiceforge-reference.webm");
             formData.append("name", profile.name);
 
-            const cloneResponse = await fetch("/api/voice/clone", {
+            const cloneResponse = await authFetch("/api/voice/clone", {
               method: "POST",
               signal: controller.signal,
               body: formData,
@@ -183,7 +221,7 @@ export default function useTTS() {
               resolvedOwnerToken = updatedProfile.ownerToken;
 
               // Retry the speak request after silent re-cloning succeeds
-              response = await fetch("/api/voice/speak", {
+              response = await authFetch("/api/voice/speak", {
                 method: "POST",
                 signal: controller.signal,
                 headers: {
@@ -204,44 +242,55 @@ export default function useTTS() {
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
+        if (payload.status === "waking_up") {
+          const err = new Error("Waking up AI Engine... this may take a minute.");
+          err.isColdStart = true;
+          throw err;
+        }
         throw new Error(payload.error || "Speech generation failed.");
       }
 
       const payload = await response.json();
       const nextAudioUrl = payload.audioUrl;
 
-      const streamResponse = await fetch(nextAudioUrl, { signal: controller.signal });
-      if (!streamResponse.ok) throw new Error("Failed to fetch audio stream");
-      const blob = await streamResponse.blob();
-      const localUrl = URL.createObjectURL(blob);
+      if (controller.signal.aborted) {
+        return;
+      }
 
       setEngine("chatterbox");
-      setAudioUrl(localUrl);
+      updateAudioUrl(nextAudioUrl);
       setStatus("ready");
 
       return {
-        audioUrl: localUrl,
-        blob,
+        audioUrl: nextAudioUrl,
+        blob: null,
         engine: "chatterbox",
       };
     } catch (ttsError) {
       // A cancelled request is not an error — a newer speak() call took over.
-      if (ttsError?.name === "AbortError") {
+      if (ttsError?.name === "AbortError" || controller.signal.aborted) {
         return;
       }
 
       try {
         await browserSpeak(text, language_code);
 
+        if (controller.signal.aborted) {
+          return;
+        }
+
         setEngine("browser");
-        setAudioUrl("");
+        updateAudioUrl("");
         setStatus("ready");
 
         return {
           fallback: true,
           engine: "browser",
         };
-      } catch {
+      } catch (fallbackError) {
+        if (fallbackError?.name === "AbortError" || controller.signal.aborted) {
+          return;
+        }
         setError(ttsError?.message || String(ttsError));
         setStatus("error");
         throw ttsError;

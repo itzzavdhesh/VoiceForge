@@ -6,15 +6,18 @@
 // Storage: one unified localStorage key ("voiceforge:language") replaces the
 // previously split "voiceforge:language" (Call) and "voiceforge:compose-language"
 // (VoiceForge Compose) keys.
+//
+// NOTE ON MARATHI ("mr"): the default public Chatterbox-Multilingual-TTS Space
+// does not natively support Marathi (it ships with 23 base languages). Marathi
+// is included here so it is selectable in the UI, but producing real speech for
+// it currently requires a compatible fine-tuned model (e.g. BosonLab/chatterbox-desi
+// on Hugging Face, MIT licensed, trained on ~72.7 hrs of Marathi speech data).
+// See issue #1110 for background and integration notes. Until a Marathi-capable
+// backend is wired in, requests for "mr" may fail or fall back to default
+// behavior depending on server configuration.
 
 export const LANGUAGE_STORAGE_KEY = "voiceforge:language";
 
-/**
- * All languages supported by the public Chatterbox Multilingual TTS Space,
- * grouped by region for the LanguageSelector UI.
- *
- * Each entry: { code, name, nativeName, flag, region }
- */
 export const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English", nativeName: "English", flag: "EN", region: "Europe" },
   { code: "fr", name: "French", nativeName: "Francais", flag: "FR", region: "Europe" },
@@ -33,6 +36,7 @@ export const SUPPORTED_LANGUAGES = [
   { code: "tr", name: "Turkish", nativeName: "Turkce", flag: "TR", region: "Europe" },
 
   { code: "hi", name: "Hindi", nativeName: "Hindi", flag: "HI", region: "Asia & Pacific" },
+  { code: "mr", name: "Marathi", nativeName: "मराठी", flag: "MR", region: "Asia & Pacific" },
   { code: "ja", name: "Japanese", nativeName: "Japanese", flag: "JA", region: "Asia & Pacific" },
   { code: "ko", name: "Korean", nativeName: "Korean", flag: "KO", region: "Asia & Pacific" },
   { code: "zh", name: "Chinese", nativeName: "Chinese", flag: "ZH", region: "Asia & Pacific" },
@@ -44,65 +48,71 @@ export const SUPPORTED_LANGUAGES = [
   { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "SW", region: "Africa" },
 ];
 
-/** Set of all valid language codes for O(1) lookups. */
 const VALID_CODES = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
 
-/**
- * Returns true when `code` is a supported Chatterbox language code,
- * or when it is falsy (meaning "auto-detect").
- */
-export function isValidLanguageCode(code) {
-  return !code || VALID_CODES.has(code);
-}
+export function isValidLanguageCode(code) { return code === "" || VALID_CODES.has(code); }
 
-const BY_CODE = Object.fromEntries(
-  SUPPORTED_LANGUAGES.map((l) => [l.code, l])
-);
+const BY_CODE = Object.fromEntries(SUPPORTED_LANGUAGES.map((l) => [l.code, l]));
+export function getLanguageByCode(code) { return BY_CODE[code]; }
 
-/** Returns the language object for a given code, or undefined. */
-export function getLanguageByCode(code) {
-  return BY_CODE[code];
-}
-
-/**
- * Reads the saved language code from localStorage.
- * Falls back to "en" if the stored value is missing, empty, or invalid.
- *
- * Also performs a one-time migration from the legacy "voiceforge:compose-language"
- * key used by the Compose page.
- */
 export function loadLanguage() {
   try {
     const legacyCompose = localStorage.getItem("voiceforge:compose-language");
     const current = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (!current && legacyCompose) {
-      const migrated = VALID_CODES.has(legacyCompose) ? legacyCompose : "en";
+    if (current === null && legacyCompose !== null) {
+      const migrated = legacyCompose === "" || VALID_CODES.has(legacyCompose) ? legacyCompose : "en";
       localStorage.setItem(LANGUAGE_STORAGE_KEY, migrated);
       localStorage.removeItem("voiceforge:compose-language");
       return migrated;
     }
-
-    const legacyNameToCode = Object.fromEntries(
+    const nameToCode = Object.fromEntries(
       SUPPORTED_LANGUAGES.map(({ name, code }) => [name, code])
     );
-    const normalized = legacyNameToCode[current] ?? current;
+    const normalized = nameToCode[current] ?? current;
+    return (current !== null && (normalized === "" || VALID_CODES.has(normalized))) ? normalized : "en";
+  } catch { return "en"; }
+}
 
-    return VALID_CODES.has(normalized) ? normalized : "en";
+export function persistLanguage(code) {
+  try {
+    const val = code || "en";
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, val);
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("voiceforge:languageChanged", { detail: val }));
+    }
   } catch {
-    return "en";
+    // Storage unavailable - continue without persisting.
   }
 }
 
 /**
- * Persists the selected language code to localStorage.
- * Silently ignores storage errors (private browsing, quota, etc.).
+ * Subscribes a callback to local and multi-tab storage language changes.
+ * Returns an unsubscribe function.
  */
-export function persistLanguage(code) {
-  try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, code || "en");
-  } catch {
-    // Storage unavailable - continue without persisting.
+export function subscribeLanguageChange(callback) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleLocalEvent(e) {
+    callback(e.detail || loadLanguage());
   }
+
+  function handleStorageEvent(e) {
+    if (
+      e.key === LANGUAGE_STORAGE_KEY ||
+      e.key === "voiceforge:compose-language" ||
+      !e.key
+    ) {
+      callback(loadLanguage());
+    }
+  }
+
+  window.addEventListener("voiceforge:languageChanged", handleLocalEvent);
+  window.addEventListener("storage", handleStorageEvent);
+
+  return () => {
+    window.removeEventListener("voiceforge:languageChanged", handleLocalEvent);
+    window.removeEventListener("storage", handleStorageEvent);
+  };
 }
 
 /**
