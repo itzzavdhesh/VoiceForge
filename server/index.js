@@ -5,15 +5,31 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { env } from "./config/env.js";
 import voiceRoutes from "./routes/voice.js";
+import authRoutes from "./routes/authRoutes.js";
+import dbRoutes from "./routes/dbRoutes.js";
+import { getDatabase } from "./utils/db.js";
 import { getIsMock } from "./utils/mock.js";
 import { logger } from "./utils/logger.js";
 
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
+// Initialize SQLite database
+getDatabase().then(() => {
+  console.log("[VoiceForge] SQLite Database initialized successfully.");
+}).catch((err) => {
+  console.error("[VoiceForge] Failed to initialize database:", err);
+});
+
 // Warn clearly when mock mode is active so it is never silently enabled.
 if (getIsMock()) {
-  logger.warn(
-    "Mock mode active — Chatterbox calls are stubbed." +
+  console.warn(
+    "\x1b[33m[VoiceForge] Mock mode active — Chatterbox calls are stubbed." +
     " Voice clone returns a fixture voice_id; TTS streams silent audio." +
-    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine."
+    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine.\x1b[0m"
   );
 }
 
@@ -43,22 +59,9 @@ app.get("/api/health", healthLimiter, (_request, response) => {
   response.json({ ok: true, service: "voiceforge-api" });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/voice", voiceRoutes);
-
-// In production or when client/dist exists, serve compiled React SPA static files
-const staticDistPath = path.resolve(__dirname, "../client/dist");
-app.use(express.static(staticDistPath));
-
-app.use((req, res, next) => {
-  if (req.method !== "GET" || req.path.startsWith("/api") || !req.headers.accept?.includes("text/html")) {
-    return next();
-  }
-  res.sendFile(path.join(staticDistPath, "index.html"), (err) => {
-    if (err) {
-      next();
-    }
-  });
-});
+app.use("/api", dbRoutes);
 
 app.use((error, _request, response, _next) => {
   logger.error({ err: error }, "Unhandled server error");

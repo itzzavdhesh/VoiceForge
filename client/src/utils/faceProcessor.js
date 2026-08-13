@@ -59,8 +59,11 @@ export class FaceProcessor {
   }
 
   /**
-   * A helper method to crop the lower half of the face (mouth region)
-   * which is typically what Wav2Lip expects as input.
+   * Crops the face from the source canvas, resizes to 96x96 on the target canvas,
+   * and builds a [1, 6, 96, 96] Float32Array tensor for Wav2Lip ONNX.
+   * Channels 0,1,2 = Target Face RGB.
+   * Channels 3,4,5 = Masked Target Face RGB (lower half is 0).
+   * 
    * @param {HTMLCanvasElement} sourceCanvas The canvas containing the full frame
    * @param {Array} landmarks The detected face landmarks
    * @param {HTMLCanvasElement} targetCanvas The canvas to draw the crop onto

@@ -5,6 +5,14 @@ import { env } from "../config/env.js";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
 import { logger } from "../utils/logger.js";
+import { z } from "zod";
+
+const voiceSettingsSchema = z.object({
+  stability: z.number().finite().min(0).max(1).optional(),
+  style: z.number().finite().min(0).max(2).optional(),
+  temperature: z.number().finite().min(0.05).max(5).optional(),
+  seed: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+}).strict();
 
 // ---------------------------------------------------------------------------
 // In-memory voice store: maps voice_id to { name, audioBuffer, mimeType, expiresAt }
@@ -123,6 +131,33 @@ function decryptToken(token) {
 // Gradio / Chatterbox voice generation
 // ---------------------------------------------------------------------------
 
+let cachedGradioClient = null;
+let currentSpaceIdentifier = null;
+
+async function getGradioClient() {
+  const spaceIdentifier = process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
+  if (!cachedGradioClient || currentSpaceIdentifier !== spaceIdentifier) {
+    const { client } = await import("@gradio/client");
+    try {
+      cachedGradioClient = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+      currentSpaceIdentifier = spaceIdentifier;
+    } catch (err) {
+      if (
+        err.message?.includes("SPACE_INITIALIZING") || 
+        err.message?.includes("Space is sleeping") || 
+        err.message?.includes("is sleeping") ||
+        err.message?.includes("Chatterbox client init timed out")
+      ) {
+        const error = new Error("AI Engine is waking up");
+        error.isColdStart = true;
+        error.status = 503;
+        throw error;
+      }
+      throw err;
+    }
+  }
+  return cachedGradioClient;
+}
 /**
  * Calls the ResembleAI/Chatterbox-Multilingual-TTS Gradio space and returns
  * the URL of the generated audio file.
@@ -144,11 +179,8 @@ async function generateClonedVoice(
 ) {
   const normalizedVoiceSettings =
     voiceSettings && typeof voiceSettings === "object" ? voiceSettings : {};
-  const spaceIdentifier =
-    process.env.VOICE_ENGINE_SPACE || "ResembleAI/Chatterbox-Multilingual-TTS";
 
-  const { client } = await import("@gradio/client");
-  const app = await withTimeout(client(spaceIdentifier), 10000, "Chatterbox client init");
+  const app = await getGradioClient();
 
   // Wrap the raw Buffer in a Blob so Gradio treats it as a file upload.
   const referenceBlob = new Blob([audioBuffer], { type: mimeType });
@@ -215,7 +247,6 @@ async function generateClonedVoice(
   if (!audioUrl) {
     throw new Error("Chatterbox returned no audio URL.");
   }
-  return audioUrl;
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -431,35 +462,20 @@ export async function speak(request, response, next) {
       temperature: 0.8
     };
 
-    
-    const sanitizedSettings = {};
-if (voice_settings !== undefined && voice_settings !== null) {
-  if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
-    response.status(400).json({ error: "voice_settings must be a plain object." });
-    return;
-  }
-  if (voice_settings.stability !== undefined) {
-    if (typeof voice_settings.stability !== "number" || !Number.isFinite(voice_settings.stability) || voice_settings.stability < 0 || voice_settings.stability > 1) {
-      response.status(400).json({ error: "stability must be a finite number between 0 and 1." });
-      return;
+    let sanitizedSettings = {};
+    if (voice_settings !== undefined && voice_settings !== null) {
+      if (typeof voice_settings !== "object" || Array.isArray(voice_settings)) {
+        response.status(400).json({ error: "voice_settings must be a plain object." });
+        return;
+      }
+      const parsed = voiceSettingsSchema.safeParse(voice_settings);
+      if (!parsed.success) {
+        const errorMsg = parsed.error.errors.map((e) => `${e.path.join('.') || 'voice_settings'}: ${e.message}`).join(", ");
+        response.status(400).json({ error: `Invalid voice_settings - ${errorMsg}` });
+        return;
+      }
+      sanitizedSettings = parsed.data;
     }
-    sanitizedSettings.stability = voice_settings.stability;
-  }
-  if (voice_settings.style !== undefined) {
-    if (typeof voice_settings.style !== "number" || !Number.isFinite(voice_settings.style) || voice_settings.style < 0 || voice_settings.style > 1) {
-      response.status(400).json({ error: "style must be a finite number between 0 and 1." });
-      return;
-    }
-    sanitizedSettings.style = voice_settings.style;
-  }
-  if (voice_settings.temperature !== undefined) {
-    if (typeof voice_settings.temperature !== "number" || !Number.isFinite(voice_settings.temperature) || voice_settings.temperature < 0.05 || voice_settings.temperature > 5) {
-      response.status(400).json({ error: "temperature must be a finite number between 0.05 and 5." });
-      return;
-    }
-    sanitizedSettings.temperature = voice_settings.temperature;
-  }
-}
     const mergedSettings = { ...defaultVoiceSettings, ...sanitizedSettings };
 
     // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
@@ -478,6 +494,7 @@ if (voice_settings !== undefined && voice_settings !== null) {
     if (getIsMock()) {
       logger.warn({ speechId }, "MOCK_CHATTERBOX: speak enqueued mock stream");
     }
+
     const expiresAt = Date.now() + 60000;
     const token = encryptToken({
       speechId,
@@ -621,12 +638,21 @@ export async function streamSpeech(request, response, next) {
       reader.cancel().catch((err) => logger.error({ err, speechId }, "Error cancelling Chatterbox reader"));
     });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      response.write(value);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        response.write(value);
+      }
+      response.end();
+    } catch (streamError) {
+      console.error("Stream reading error:", streamError);
+      if (!response.headersSent) {
+        next(streamError);
+      } else {
+        response.end();
+      }
     }
-    response.end();
   } catch (error) {
     next(error);
   }

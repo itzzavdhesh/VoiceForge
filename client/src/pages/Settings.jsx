@@ -1,14 +1,42 @@
 // Lets users manage browser-stored voice profiles and configure voice synthesis settings.
 import React from "react";
-import { ExternalLink, Trash2, CircleAlert, RotateCcw } from "lucide-react";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  persistVoiceSettings,
+  VOICE_PRESETS,
+} from "../utils/voiceSettings.js";
+import {
+  loadAccessibilitySettings,
+  persistAccessibilitySettings,
+  ACCESSIBILITY_SETTINGS_CHANGED_EVENT,
+  ACCESSIBILITY_SETTINGS_KEY
+} from "../utils/accessibilitySettings.js";
+import {
+  loadLanguage,
+  persistLanguage,
+  subscribeLanguageChange,
+  getLanguageByCode,
+  LANGUAGE_STORAGE_KEY,
+} from "../utils/languages.js";
+
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye, QrCode, Webcam } from "lucide-react";
+import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { useTheme } from "../components/ThemeContext.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
   clearAllVoiceProfiles,
-  subscribeProfileChanges,
+  saveVoiceProfile,
 } from "../hooks/useVoiceClone.js";
-import useOnboarding from "../hooks/useOnboarding.js";
-
+import { saveProfile } from "../utils/db.js";
+import { ProfileCard } from "../components/ProfileCard.jsx";
+import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
+import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { TransferSetupModal } from "../components/TransferSetupModal.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
+import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -34,23 +62,10 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
-  const { resetTour } = useOnboarding();
-  const [apiKey, setApiKey] = React.useState(() => {
-    try {
-      return getApiKey();
-    } catch {
-      return "";
-    }
-  });
-
-  React.useEffect(() => {
-    const migrated = migrateFromLocalStorage();
-    if (migrated) {
-      setApiKeyInput(getApiKey());
-      setMigratedNotice(true);
-    }
-  }, []);
-
+  const [sharingProfile, setSharingProfile] = React.useState(null);
+  const [isReceiving, setIsReceiving] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
+  const { toasts, showToast } = useToast();
   React.useEffect(() => {
     async function loadProfiles() {
       try {
@@ -62,7 +77,10 @@ export default function Settings() {
       }
     }
     loadProfiles();
-    return subscribeProfileChanges(loadProfiles);
+    window.addEventListener("voiceforge:profileChanged", loadProfiles);
+    return () => {
+      window.removeEventListener("voiceforge:profileChanged", loadProfiles);
+    };
   }, []);
 
 
@@ -87,6 +105,161 @@ export default function Settings() {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
     window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const [playingPreset, setPlayingPreset] = React.useState(null);
+  const audioRef = React.useRef(null);
+  const audioContextRef = React.useRef(null);
+  const sourceRef = React.useRef(null);
+  const bassFilterRef = React.useRef(null);
+  const midFilterRef = React.useRef(null);
+  const trebleFilterRef = React.useRef(null);
+  const pitchShifterRef = React.useRef(null);
+
+  const cleanupPreview = React.useCallback(() => {
+    setPlayingPreset(null);
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch (e) {}
+      sourceRef.current = null;
+    }
+    if (bassFilterRef.current) {
+      try { bassFilterRef.current.disconnect(); } catch (e) {}
+      bassFilterRef.current = null;
+    }
+    if (midFilterRef.current) {
+      try { midFilterRef.current.disconnect(); } catch (e) {}
+      midFilterRef.current = null;
+    }
+    if (trebleFilterRef.current) {
+      try { trebleFilterRef.current.disconnect(); } catch (e) {}
+      trebleFilterRef.current = null;
+    }
+    if (pitchShifterRef.current) {
+      try {
+        pitchShifterRef.current.input.disconnect();
+        pitchShifterRef.current.output.disconnect();
+      } catch (e) {}
+      pitchShifterRef.current = null;
+    }
+    audioRef.current = null;
+  }, []);
+
+  const stopPreview = React.useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch (e) {}
+    }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    cleanupPreview();
+  }, [cleanupPreview]);
+
+  React.useEffect(() => {
+    return () => {
+      stopPreview();
+    };
+  }, [stopPreview]);
+
+  async function playPresetPreview(presetKey, preset) {
+    if (playingPreset) {
+      stopPreview();
+      if (playingPreset === presetKey) return;
+    }
+    
+    const activeProfileId = localStorage.getItem("voiceforge:activeVoiceId") || (profiles[0]?.voice_id);
+    if (!activeProfileId) {
+      showToast("Please clone or select a voice profile first to hear previews.", "error");
+      return;
+    }
+    
+    setPlayingPreset(presetKey);
+    
+    try {
+      const response = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Testing VoiceForge presets.",
+          voice_id: activeProfileId,
+          language_code: language,
+          voice_settings: {
+            stability: preset.stability,
+            style: preset.style,
+            temperature: preset.temperature
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Speech synthesis failed");
+      }
+      
+      const payload = await response.json();
+      const audioUrl = payload.audioUrl;
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.playbackRate = preset.dspSpeed;
+      
+      const source = audioCtx.createMediaElementSource(audio);
+      sourceRef.current = source;
+      
+      const bass = audioCtx.createBiquadFilter();
+      bass.type = "lowshelf";
+      bass.frequency.value = 200;
+      bass.gain.value = preset.dspBass;
+      bassFilterRef.current = bass;
+      
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking";
+      mid.frequency.value = 1000;
+      mid.Q.value = 1.0;
+      mid.gain.value = preset.dspMid;
+      midFilterRef.current = mid;
+      
+      const treble = audioCtx.createBiquadFilter();
+      treble.type = "highshelf";
+      treble.frequency.value = 4000;
+      treble.gain.value = preset.dspTreble;
+      trebleFilterRef.current = treble;
+      
+      const shifter = new PitchShifter(audioCtx);
+      shifter.setPitch(preset.dspPitch);
+      pitchShifterRef.current = shifter;
+      
+      source.connect(bass);
+      bass.connect(mid);
+      mid.connect(treble);
+      treble.connect(shifter.input);
+      shifter.output.connect(audioCtx.destination);
+      
+      audio.onended = () => {
+        cleanupPreview();
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.error("Failed to play preset preview:", err);
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance("Testing VoiceForge presets.");
+        utterance.lang = language;
+        utterance.pitch = preset.dspPitch;
+        utterance.rate = preset.dspSpeed;
+        utterance.onend = () => setPlayingPreset(null);
+        utterance.onerror = () => setPlayingPreset(null);
+        window.speechSynthesis.speak(utterance);
+      } catch (fallbackErr) {
+        showToast("Preview play failed", "error");
+        setPlayingPreset(null);
+      }
+    }
   }
 
   const currentPresetKey = React.useMemo(() => {
@@ -122,6 +295,17 @@ export default function Settings() {
       });
     }
   }
+
+  React.useEffect(() => {
+    function handleStorage(event) {
+      const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
+      if (event.key === VOICE_SETTINGS_KEY) {
+        setVoiceSettings(loadVoiceSettings());
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const handleExport = async () => {
     try {
@@ -282,6 +466,97 @@ export default function Settings() {
     }
   };
 
+  const handleExportProfile = async (profile) => {
+    try {
+      let base64Audio = null;
+      if (profile.audioBlob) {
+        base64Audio = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(profile.audioBlob);
+        });
+      }
+      
+      const vfpData = {
+        type: "voiceforge_profile",
+        version: 1,
+        voice_id: profile.voice_id,
+        name: profile.name,
+        createdAt: profile.createdAt,
+        audioDataUrl: base64Audio
+      };
+      
+      const jsonContent = JSON.stringify(vfpData, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${profile.name.replace(/\s+/g, "_")}.vfp`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported backup for ${profile.name}`, "success");
+    } catch (err) {
+      console.error("Failed to export profile:", err);
+      showToast("Failed to export voice profile", "error");
+    }
+  };
+
+  const handleImportVFP = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".vfp")) {
+      showToast("Invalid file format. Please upload a .vfp file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (
+        parsed.type !== "voiceforge_profile" ||
+        !parsed.voice_id ||
+        !parsed.name ||
+        !parsed.audioDataUrl
+      ) {
+        throw new Error("Missing or invalid profile fields.");
+      }
+
+      const arr = parsed.audioDataUrl.split(",");
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "audio/wav";
+      
+      if (!mime.startsWith("audio/")) {
+        throw new Error("Embedded file is not a valid audio format.");
+      }
+
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const audioBlob = new Blob([u8arr], { type: mime });
+
+      await saveVoiceProfile({
+        voice_id: parsed.voice_id,
+        name: parsed.name
+      }, audioBlob);
+
+      showToast(`Imported ${parsed.name} successfully!`, "success");
+      event.target.value = "";
+    } catch (err) {
+      console.error("VFP Import failed:", err);
+      showToast("VFP import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
+
   async function removeProfile(voiceId) {
     try {
       const next = await deleteVoiceProfile(voiceId);
@@ -388,23 +663,62 @@ export default function Settings() {
           </select>
         </div>
         
-        <div className="mb-5">
-          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
-            Voice Preset
+        <div className="mb-6">
+          <label className="mb-3 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Presets & Previews
           </label>
-          <select
-            id="voice-preset"
-            value={currentPresetKey}
-            onChange={(e) => handlePresetChange(e.target.value)}
-            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
-          >
-            <option value="custom" disabled>Custom</option>
-            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
-              <option key={key} value={key}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2.5">
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => {
+              const isActive = currentPresetKey === key;
+              const isPlaying = playingPreset === key;
+              return (
+                <div
+                  key={key}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold transition duration-150 ${
+                    isActive
+                      ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:border-moss/40 hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-300 dark:hover:border-glow/40 dark:hover:bg-glow/5"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange(key)}
+                    className="outline-none text-left font-bold"
+                  >
+                    {preset.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => playPresetPreview(key, preset)}
+                    aria-label={isPlaying ? `Stop previewing ${preset.name}` : `Preview ${preset.name} voice`}
+                    className={`ml-1 flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150 ${
+                      isPlaying
+                        ? "bg-coral text-white scale-105"
+                        : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <span className="block h-2 w-2 rounded-sm bg-white" />
+                    ) : (
+                      <svg className="h-3 w-3 fill-current ml-0.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+            
+            <div
+              className={`inline-flex items-center rounded-lg border px-3.5 py-2 text-sm font-semibold ${
+                currentPresetKey === "custom"
+                  ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                  : "border-dashed border-neutral-300 bg-transparent text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
+              }`}
+            >
+              Custom Settings
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -762,6 +1076,15 @@ export default function Settings() {
               className="sr-only"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-ink px-5 font-bold text-white transition hover:bg-ink/85 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+          >
+            <QrCode size={18} aria-hidden="true" />
+            Transfer Setup (QR / Link)
+          </button>
         </div>
       </section>
 
@@ -769,6 +1092,28 @@ export default function Settings() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-xl font-bold">Saved voice profiles</h2>
           <div className="flex items-center gap-3">
+            <label
+              htmlFor="settings-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
+            >
+              <Upload size={14} />
+              Import Profile (.vfp)
+              <input
+                id="settings-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsTransferOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200"
+            >
+              <QrCode size={16} />
+              Transfer Setup
+            </button>
             <button
               type="button"
               onClick={() => setIsReceiving(true)}
@@ -799,6 +1144,7 @@ export default function Settings() {
               profile={profile}
               onDelete={removeProfile}
               onShare={(p) => setSharingProfile(p)}
+              onExport={handleExportProfile}
             />
           ))}
         </div>
@@ -820,6 +1166,12 @@ export default function Settings() {
             setIsReceiving(false);
             showToast("Profile received successfully!", "success");
           }}
+        />
+      )}
+
+      {isTransferOpen && (
+        <TransferSetupModal
+          onClose={() => setIsTransferOpen(false)}
         />
       )}
       <ToastContainer toasts={toasts} />

@@ -13,7 +13,6 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
   const [audioUrl, setAudioUrl] = React.useState("");
   const [duration, setDuration] = React.useState(0);
-  const durationRef = React.useRef(0);
   const [recorderError, setRecorderError] = React.useState("");
 
   const fileInputRef = React.useRef(null);
@@ -252,6 +251,49 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     }
     recorderRef.current?.stop();
   }
+  React.useEffect(() => {
+  function handleKeyDown(event) {
+
+    if (event.repeat) return;
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+const isInteractive =
+  target instanceof Element &&
+  target.closest(
+    "input, textarea, select, button, a, summary, [contenteditable='true'], [role='button'], [role='link'], [role='menuitem'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab']"
+  );
+if (isInteractive) return;
+
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+if (isInteractive) return;
+
+    // Space => Start/Stop recording
+    if (event.code === "Space") {
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else if (!disabled && !isInitializing) {
+      startRecording();
+      }
+    }
+
+    // Esc => Cancel recording
+    if (event.key === "Escape" && isRecording) {
+      event.preventDefault();
+      handleStopCleanup({ emitReady: false });
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [isRecording, disabled, isInitializing]);
 
   async function handleFileUpload(event) {
     const file = event.target.files?.[0];
@@ -286,6 +328,36 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
     } finally {
       setIsExtracting(false);
       event.target.value = "";
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl("");
+    setRecorderError("");
+    onRecordingReady(null);
+    setDuration(0);
+    durationRef.current = 0;
+    
+    setIsExtracting(true);
+    
+    try {
+      const { blob, duration } = await extractAudioFromFile(file);
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setDuration(duration);
+      durationRef.current = duration;
+      onRecordingReady(blob, duration);
+    } catch (err) {
+      setRecorderError(err.message || String(err));
+    } finally {
+      setIsExtracting(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
