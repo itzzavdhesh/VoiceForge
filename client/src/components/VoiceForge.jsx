@@ -239,6 +239,15 @@ export default function VoiceForge() {
       });
   }, [inputText, showToast]);
 
+  const handleClearHistory = useCallback(() => {
+    const isConfirmed = window.confirm("Are you sure you want to clear your entire speech history?");
+    if (isConfirmed) {
+      clearHistory();
+      showToast("History cleared successfully", "success");
+    }
+  }, [clearHistory, showToast]);
+
+
   const handleQuickReply = useCallback((phrase) => {
     speak(phrase);
     addMessage(phrase, language);
@@ -251,6 +260,51 @@ export default function VoiceForge() {
       handleSpeak();
     }
   }, [handleSpeak]);
+  useEffect(() => {
+  function handleGlobalShortcuts(event) {
+    const target = event.target;
+    const isTyping =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable);
+
+    if (isTyping) return;
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+    if (!event.repeat && event.ctrlKey && event.key === "Delete") {
+=======
+    if (event.ctrlKey && event.key === "Delete") {
+>>>>>>> 4745223 (feat: add keyboard shortcuts for voice recording controls)
+=======
+    if (!event.repeat && event.ctrlKey && event.key === "Delete") {
+>>>>>>> a0285fb (fix: prevent repeated keyboard shortcut actions)
+      event.preventDefault();
+
+      if (
+        history.length > 0 ||
+        favorites.size > 0 ||
+        sessionTranscript.length > 0
+      ) {
+        clearHistory();
+        showToast("History cleared", "success");
+      }
+    }
+  }
+
+  window.addEventListener("keydown", handleGlobalShortcuts);
+
+  return () => {
+    window.removeEventListener("keydown", handleGlobalShortcuts);
+  };
+}, [
+  clearHistory,
+  history.length,
+  favorites.size,
+  sessionTranscript.length,
+  showToast,
+]);
 
   const charsLeft = MAX_CHARS - inputText.length;
 
@@ -341,6 +395,19 @@ export default function VoiceForge() {
   }
 
   return (
+feat-clear-history-195
+    <div className="flex h-screen overflow-hidden bg-white font-sans antialiased dark:bg-black">
+      <SpeechHistory
+        history={history}
+        favorites={favorites}
+        onReuse={handleReuse}
+        onReplay={handleReplay}
+        onToggleFav={toggleFavorite}
+        onDelete={removeMessage}
+        onClearHistory={handleClearHistory}
+        onCopy={handleCopy}
+      />
+=======
     <div className="relative flex h-[calc(100vh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100vh-65px)]">
       {/* Mobile history drawer overlay */}
       {historyOpen && (
@@ -383,6 +450,7 @@ export default function VoiceForge() {
           showToast={showToast}
         />
       </div>
+ main
 
       <main
         data-tour="compose-workspace"
