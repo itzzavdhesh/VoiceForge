@@ -4,8 +4,8 @@ import { Camera, Mic2, Settings as SettingsIcon, MessageSquare, Sun, Moon, Menu,
 import Onboarding from "./pages/Onboarding.jsx";
 import Call from "./pages/Call.jsx";
 import Settings from "./pages/Settings.jsx";
-import OnboardingTour from "./components/OnboardingTour.jsx";
-import VoiceForge from "./components/VoiceForge";
+import Analytics from "./pages/Analytics.jsx";
+import VoiceForge from "./components/VoiceForge.jsx";
 import { useTheme } from "./components/ThemeContext.jsx";
 import Footer from './components/Footer.jsx';
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.jsx";
@@ -26,6 +26,7 @@ const tabs = [
   { id: "analytics",    label: "Analytics",     icon: BarChart2 },
   { id: "settings",     label: "Settings",      icon: SettingsIcon },
   { id: "contributors", label: "Contributors",  icon: Users },
+  { id: "voice-profiles", label: "Voice Profiles", icon: Mic2,},
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -184,7 +185,7 @@ export default function App() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
+    <div className="min-h-screen bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       <OnboardingTour activeTab={activeTab} onSelectTab={selectTab} />
       <header className="border-b border-ink/10 bg-white dark:border-border dark:bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
@@ -279,6 +280,7 @@ export default function App() {
             {activeTab === "call"       && <Call />}
             {activeTab === "settings"   && <Settings />}
             {activeTab === "analytics"  && <Analytics />}
+            {activeTab === "voice-profiles" && <VoiceProfiles />}
             {activeTab === "contributors" && <Contributors />}
             {activeTab === "about" && <About onNavigate={selectTab} />}
             {activeTab === "privacy-policy" && (<PrivacyPolicy

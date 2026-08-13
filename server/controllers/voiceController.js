@@ -1,6 +1,7 @@
 // Implements Chatterbox Multilingual TTS voice cloning and speech proxy handlers.
 // Uses the Hugging Face Gradio client to call ResembleAI/Chatterbox-Multilingual-TTS.
 import crypto from "crypto";
+import { env } from "../config/env.js";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
 import { logger } from "../utils/logger.js";
@@ -11,45 +12,11 @@ import { logger } from "../utils/logger.js";
 // ---------------------------------------------------------------------------
 export const voiceStore = new Map();
 
-function parseBoundedNumber(rawValue, fallback, min) {
-  const numeric = Number(rawValue);
-  return Number.isFinite(numeric) ? Math.max(min, numeric) : fallback;
-}
-
-const MAX_STORED_VOICES = parseBoundedNumber(process.env.VOICE_STORE_MAX, 20, 1);
-const VOICE_STORE_TTL_MS = parseBoundedNumber(
-  process.env.VOICE_STORE_TTL_MS,
-  2 * 60 * 60 * 1000,
-  60_000
-);
-
-const PENDING_STREAMS_MAX = parseBoundedNumber(
-  process.env.PENDING_STREAMS_MAX,
-  1000,
-  1
-);
-
-const PENDING_STREAM_TTL_MS = parseBoundedNumber(
-  process.env.PENDING_STREAM_TTL_MS,
-  60_000,
-  1
-);
-
-// Fix: bound the size of reference-audio uploads so a single (or repeated)
-// request cannot exhaust process memory, since uploaded buffers are held
-// in-memory in `voiceStore`. Also restrict to audio MIME types since the
-// buffer is forwarded to the Chatterbox space as a reference recording.
-//
-// This must stay in sync with the multer file-size limit configured on the
-// /api/voice/clone route (12 MB) - otherwise files between the two limits
-// pass multer but get rejected here with a different status/message, which
-// is confusing for callers. If you change the multer limit, change this
-// default too (or vice versa).
-const MAX_VOICE_UPLOAD_BYTES = parseBoundedNumber(
-  process.env.MAX_VOICE_UPLOAD_BYTES,
-  12 * 1024 * 1024, // 12 MB - matches the multer limit on the clone route
-  1
-);
+const getMaxStoredVoices = () => env.VOICE_STORE_MAX;
+const getVoiceStoreTtlMs = () => env.VOICE_STORE_TTL_MS;
+const getPendingStreamsMax = () => env.PENDING_STREAMS_MAX;
+const getPendingStreamTtlMs = () => env.PENDING_STREAM_TTL_MS;
+const getMaxVoiceUploadBytes = () => env.MAX_VOICE_UPLOAD_BYTES;
 const ALLOWED_AUDIO_MIME_PREFIX = "audio/";
 
 const MOCK_AUDIO_MP3 = Buffer.from(
@@ -271,7 +238,7 @@ function pruneVoiceStore(now = Date.now()) {
     }
   }
 
-  while (voiceStore.size >= MAX_STORED_VOICES) {
+  while (voiceStore.size >= getMaxStoredVoices()) {
     const oldestVoiceId = voiceStore.keys().next().value;
     if (!oldestVoiceId) break;
     voiceStore.delete(oldestVoiceId);
@@ -308,9 +275,9 @@ export async function cloneVoice(request, response, next) {
       response.status(400).json({ error: "Reference audio must be an audio file." });
       return;
     }
-    if (audioFile.buffer.length > MAX_VOICE_UPLOAD_BYTES) {
+    if (audioFile.buffer.length > getMaxVoiceUploadBytes()) {
       response.status(413).json({
-        error: `Reference audio exceeds maximum allowed size of ${MAX_VOICE_UPLOAD_BYTES} bytes.`
+        error: `Reference audio exceeds maximum allowed size of ${getMaxVoiceUploadBytes()} bytes.`
       });
       return;
     }
@@ -342,7 +309,7 @@ export async function cloneVoice(request, response, next) {
       audioBuffer: audioFile.buffer,
       mimeType: audioFile.mimetype,
       ownerTokenHash,
-      expiresAt: Date.now() + VOICE_STORE_TTL_MS
+      expiresAt: Date.now() + getVoiceStoreTtlMs()
     });
 
     response.json({
@@ -394,7 +361,7 @@ export async function speak(request, response, next) {
       voice_settings
     } = request.body;
 
-    if (pendingStreams.size >= PENDING_STREAMS_MAX) {
+    if (pendingStreams.size >= getPendingStreamsMax()) {
       response.status(503).json({
         error:
           "Too many pending speech requests. Please retry after retrieving or cancelling existing audio streams."
@@ -502,7 +469,7 @@ if (voice_settings !== undefined && voice_settings !== null) {
 
     const timeout = setTimeout(() => {
       deletePendingStream(speechId);
-    }, PENDING_STREAM_TTL_MS);
+    }, getPendingStreamTtlMs());
     // Do not keep the event loop alive solely for this cleanup timer.
     timeout.unref?.();
     

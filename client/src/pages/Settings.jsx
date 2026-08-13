@@ -85,21 +85,16 @@ export default function Settings() {
   const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
-
-  React.useEffect(() => {
-    return subscribeLanguageChange((newLang) => {
-      setLanguage(newLang);
-    });
-  }, []);
-
+  const [retentionPolicy, setRetentionPolicy] = React.useState(() => {
+    return localStorage.getItem("vf_history_retention") || "forever";
+  });
   const selectedLangObj = getLanguageByCode(language);
 
-  const [accSettings, setAccSettings] = React.useState(loadAccessibilitySettings);
-  
-  function saveAccSettings(newSettings) {
-    setAccSettings(newSettings);
-    persistAccessibilitySettings(newSettings);
-    window.dispatchEvent(new Event(ACCESSIBILITY_SETTINGS_CHANGED_EVENT));
+  function handleRetentionPolicyChange(value) {
+    setRetentionPolicy(value);
+    localStorage.setItem("vf_history_retention", value);
+    showToast("History retention policy updated", "success");
+    window.dispatchEvent(new Event("voiceforge:retentionPolicyChanged"));
   }
 
 
@@ -149,12 +144,14 @@ export default function Settings() {
         history: localStorage.getItem("vf_history"),
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
+        quick_reply_categories: localStorage.getItem("vf_quick_reply_categories"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
         accessibilitySettings: localStorage.getItem(ACCESSIBILITY_SETTINGS_KEY),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+        historyRetention: localStorage.getItem("vf_history_retention"),
       };
 
       const rawProfiles = await getSavedProfiles();
@@ -265,12 +262,14 @@ export default function Settings() {
         history: "vf_history",
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
+        quick_reply_categories: "vf_quick_reply_categories",
         voiceSettings: "voiceforge:voiceSettings",
         accessibilitySettings: ACCESSIBILITY_SETTINGS_KEY,
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
         calibrationScale: "voiceforge:calibrationScale",
+        historyRetention: "vf_history_retention",
       };
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
@@ -290,6 +289,7 @@ export default function Settings() {
       setVoiceSettings(loadVoiceSettings());
       setAccSettings(loadAccessibilitySettings());
       setLanguage(loadLanguage());
+      setRetentionPolicy(localStorage.getItem("vf_history_retention") || "forever");
       event.target.value = "";
     } catch (err) {
       showToast("Import failed: " + (err.message || String(err)), "error");
@@ -380,7 +380,9 @@ export default function Settings() {
 
               onChange={(event) => setApiKeyInput(event.target.value)}
               className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
-
+            />
+          </label>
+        </div>
 
         <div className="mb-5">
           <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
@@ -671,6 +673,34 @@ export default function Settings() {
           Powered by Chatterbox Multilingual TTS - supports 23 languages.
           Choose &ldquo;Auto-detect&rdquo; to let the AI infer the language from your text.
         </p>
+      </section>
+
+      {/* ── Privacy & Retention ────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Privacy &amp; Retention</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Configure how long your speech history is kept on this device.
+        </p>
+
+        <div className="mb-5">
+          <label
+            htmlFor="history-retention"
+            className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+          >
+            History Retention
+          </label>
+          <select
+            id="history-retention"
+            value={retentionPolicy}
+            onChange={(e) => handleRetentionPolicyChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="forever">Keep Forever</option>
+            <option value="7days">Clear after 7 days</option>
+            <option value="30days">Clear after 30 days</option>
+            <option value="session">Clear on session close</option>
+          </select>
+        </div>
       </section>
 
       {/* ── Audio & Hardware ───────────────────────────────────────────── */}

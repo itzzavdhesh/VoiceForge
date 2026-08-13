@@ -66,7 +66,10 @@ export default function Call() {
     window.addEventListener("storage", loadActiveProfile);
 
     return () => {
-      window.removeEventListener("voiceforge:profileChanged", loadActiveProfile);
+      window.removeEventListener(
+        "voiceforge:profileChanged",
+        loadActiveProfile
+      );
       window.removeEventListener("storage", loadActiveProfile);
     };
   }, []);
@@ -146,7 +149,9 @@ export default function Call() {
       if (!navigator.mediaDevices?.enumerateDevices) return;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputDevices = devices.filter((device) => device.kind === "videoinput");
+        const videoInputDevices = devices.filter(
+          (device) => device.kind === "videoinput"
+        );
         if (isMounted) {
           setVideoDevices(videoInputDevices);
         }
@@ -166,7 +171,9 @@ export default function Call() {
 
       try {
         const constraints = {
-          video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
+          video: selectedDeviceId
+            ? { deviceId: { exact: selectedDeviceId } }
+            : true,
           audio: false,
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -184,14 +191,14 @@ export default function Call() {
         }
 
         setCameraError("");
-        
+
         await fetchDevices();
-        
+
         if (isMounted && stream.getVideoTracks().length > 0) {
           const track = stream.getVideoTracks()[0];
           const settings = track.getSettings();
           if (settings.deviceId && !selectedDeviceId) {
-             setSelectedDeviceId(settings.deviceId);
+            setSelectedDeviceId(settings.deviceId);
           }
         }
       } catch (webcamError) {
@@ -202,15 +209,18 @@ export default function Call() {
     }
 
     openCamera();
-    
+
     if (navigator.mediaDevices?.addEventListener) {
-      navigator.mediaDevices.addEventListener('devicechange', fetchDevices);
+      navigator.mediaDevices.addEventListener("devicechange", fetchDevices);
     }
 
     return () => {
       isMounted = false;
       if (navigator.mediaDevices?.removeEventListener) {
-        navigator.mediaDevices.removeEventListener('devicechange', fetchDevices);
+        navigator.mediaDevices.removeEventListener(
+          "devicechange",
+          fetchDevices
+        );
       }
       if (activeStream) {
         activeStream.getTracks().forEach((track) => track.stop());
@@ -231,7 +241,10 @@ export default function Call() {
       setSessionHistory((prev) => [
         ...prev,
         {
-          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : String(Date.now()),
           text,
           timestamp: new Date().toISOString(),
           voiceName: activeProfile?.name || "Default Voice",
@@ -294,7 +307,10 @@ export default function Call() {
         osc.type = "sine";
         osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 0.8
+        );
         osc.connect(gain);
         gain.connect(destination);
         osc.start();
@@ -304,20 +320,26 @@ export default function Call() {
         const osc2 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
         const gain2 = audioCtx.createGain();
-        
+
         osc1.type = "sine";
         osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime);
         gain1.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+        gain1.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 0.6
+        );
         osc1.connect(gain1);
         gain1.connect(destination);
         osc1.start();
         osc1.stop(audioCtx.currentTime + 0.6);
-        
+
         osc2.type = "sine";
         osc2.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.4);
         gain2.gain.setValueAtTime(0.4, audioCtx.currentTime + 0.4);
-        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+        gain2.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 1.2
+        );
         osc2.connect(gain2);
         gain2.connect(destination);
         osc2.start(audioCtx.currentTime + 0.4);
@@ -330,31 +352,41 @@ export default function Call() {
         osc.frequency.setValueAtTime(460, audioCtx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime + 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 0.3
+        );
         osc.connect(gain);
         gain.connect(destination);
         osc.start();
         osc.stop(audioCtx.currentTime + 0.3);
       } else if (type === "applaud") {
         const bufferSize = audioCtx.sampleRate * 1.5;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const buffer = audioCtx.createBuffer(
+          1,
+          bufferSize,
+          audioCtx.sampleRate
+        );
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
           data[i] = Math.random() * 2 - 1;
         }
-        
+
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
-        
+
         const filter = audioCtx.createBiquadFilter();
         filter.type = "bandpass";
         filter.frequency.value = 1000;
         filter.Q.value = 1.0;
-        
+
         const gain = audioCtx.createGain();
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
-        
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 1.5
+        );
+
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(destination);
@@ -372,10 +404,10 @@ export default function Call() {
     <div className="space-y-5">
       {/* ── Header card ───────────────────────────────────────────────────── */}
       {engine === "browser" && (
-      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
-        Using Browser Voice (Offline Mode)
-      </div>
-    )}
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+          Using Browser Voice (Offline Mode)
+        </div>
+      )}
       <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -397,7 +429,11 @@ export default function Call() {
               type="button"
               onClick={handleExportTranscript}
               disabled={sessionHistory.length === 0}
-              title={sessionHistory.length === 0 ? "No speech history in current session" : "Download call transcript (.md)"}
+              title={
+                sessionHistory.length === 0
+                  ? "No speech history in current session"
+                  : "Download call transcript (.md)"
+              }
               className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-2 text-ink shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-surface dark:text-neutral-200 dark:hover:bg-black"
             >
               <Download size={15} aria-hidden="true" />
@@ -408,14 +444,23 @@ export default function Call() {
       </section>
 
       {dbError && (
-        <div role="alert" className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink"
+        >
           <CircleAlert size={18} aria-hidden="true" />
-          <span>Database Error: {dbError}. Please ensure IndexedDB is enabled and not blocked.</span>
+          <span>
+            Database Error: {dbError}. Please ensure IndexedDB is enabled and
+            not blocked.
+          </span>
         </div>
       )}
 
       {!activeProfile && !dbError && (
-        <div role="alert" className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink"
+        >
           <CircleAlert size={18} aria-hidden="true" />
           Create or select a voice profile before speaking.
         </div>
@@ -449,18 +494,28 @@ export default function Call() {
         </button>
 
         {isCalibrationOpen && (
-          <div id="calibration-panel" className="mt-4 border-t border-ink/10 pt-4">
+          <div
+            id="calibration-panel"
+            className="mt-4 border-t border-ink/10 pt-4"
+          >
             <p className="text-sm text-ink/65 mb-4">
-              Calibrate the audio-driven mouth position and size overlay to align with your camera.
+              Calibrate the audio-driven mouth position and size overlay to
+              align with your camera.
             </p>
             <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-x-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-x-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Horizontal Position (X Offset)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
-                    {calibration.xOffset > 0 ? `+${calibration.xOffset}` : calibration.xOffset}px
+                    {calibration.xOffset > 0
+                      ? `+${calibration.xOffset}`
+                      : calibration.xOffset}
+                    px
                   </span>
                 </div>
                 <input
@@ -470,7 +525,12 @@ export default function Call() {
                   max="400"
                   step="1"
                   value={calibration.xOffset}
-                  onChange={(e) => handleCalibrationChange("xOffset", parseInt(e.target.value, 10))}
+                  onChange={(e) =>
+                    handleCalibrationChange(
+                      "xOffset",
+                      parseInt(e.target.value, 10)
+                    )
+                  }
                   aria-label="Horizontal position X offset"
                   aria-valuemin={-400}
                   aria-valuemax={400}
@@ -480,11 +540,17 @@ export default function Call() {
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-y-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-y-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Vertical Position (Y Offset)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
-                    {calibration.yOffset > 0 ? `+${calibration.yOffset}` : calibration.yOffset}px
+                    {calibration.yOffset > 0
+                      ? `+${calibration.yOffset}`
+                      : calibration.yOffset}
+                    px
                   </span>
                 </div>
                 <input
@@ -494,7 +560,12 @@ export default function Call() {
                   max="150"
                   step="1"
                   value={calibration.yOffset}
-                  onChange={(e) => handleCalibrationChange("yOffset", parseInt(e.target.value, 10))}
+                  onChange={(e) =>
+                    handleCalibrationChange(
+                      "yOffset",
+                      parseInt(e.target.value, 10)
+                    )
+                  }
                   aria-label="Vertical position Y offset"
                   aria-valuemin={-250}
                   aria-valuemax={150}
@@ -504,7 +575,10 @@ export default function Call() {
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label htmlFor="calibration-scale-slider" className="text-sm font-bold text-ink">
+                  <label
+                    htmlFor="calibration-scale-slider"
+                    className="text-sm font-bold text-ink"
+                  >
                     Mouth Size (Scale)
                   </label>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded bg-cloud border border-ink/10 text-moss">
@@ -518,7 +592,9 @@ export default function Call() {
                   max="2.5"
                   step="0.1"
                   value={calibration.scale}
-                  onChange={(e) => handleCalibrationChange("scale", parseFloat(e.target.value))}
+                  onChange={(e) =>
+                    handleCalibrationChange("scale", parseFloat(e.target.value))
+                  }
                   aria-label="Mouth size scale"
                   aria-valuemin={0.5}
                   aria-valuemax={2.5}
@@ -559,7 +635,10 @@ export default function Call() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-base font-bold">Subtitles Overlay Settings</h2>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500">Overlay spoken words on the webcam video preview sent to the virtual camera.</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">
+              Overlay spoken words on the webcam video preview sent to the
+              virtual camera.
+            </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -567,7 +646,10 @@ export default function Call() {
               checked={subtitlesEnabled}
               onChange={(e) => {
                 setSubtitlesEnabled(e.target.checked);
-                setStoredValue("voiceforge:subtitlesEnabled", e.target.checked.toString());
+                setStoredValue(
+                  "voiceforge:subtitlesEnabled",
+                  e.target.checked.toString()
+                );
               }}
               className="sr-only peer"
             />
@@ -577,11 +659,14 @@ export default function Call() {
             </span>
           </label>
         </div>
-        
+
         {subtitlesEnabled && (
           <div className="grid gap-4 sm:grid-cols-2 pt-3 border-t border-neutral-200 dark:border-neutral-700">
             <div>
-              <label htmlFor="sub-font-size" className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">
+              <label
+                htmlFor="sub-font-size"
+                className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2"
+              >
                 Font Size
               </label>
               <select
@@ -598,9 +683,12 @@ export default function Call() {
                 <option value="large">Large (32px)</option>
               </select>
             </div>
-            
+
             <div>
-              <label htmlFor="sub-bg-opacity" className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">
+              <label
+                htmlFor="sub-bg-opacity"
+                className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2"
+              >
                 Background Box Opacity
               </label>
               <select
@@ -608,7 +696,10 @@ export default function Call() {
                 value={subtitleBgOpacity}
                 onChange={(e) => {
                   setSubtitleBgOpacity(e.target.value);
-                  setStoredValue("voiceforge:subtitleBgOpacity", e.target.value);
+                  setStoredValue(
+                    "voiceforge:subtitleBgOpacity",
+                    e.target.value
+                  );
                 }}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-coral/45 dark:border-border dark:bg-black dark:text-neutral-200"
               >
@@ -654,7 +745,9 @@ export default function Call() {
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <div className="mb-3 flex items-center gap-2">
               <Sliders size={18} className="text-moss dark:text-glow" />
-              <h2 className="text-lg font-bold dark:text-neutral-100">Sound Board &amp; Chimes</h2>
+              <h2 className="text-lg font-bold dark:text-neutral-100">
+                Sound Board &amp; Chimes
+              </h2>
             </div>
             <p className="text-xs text-ink/65 dark:text-muted mb-4">
               Play quick alerts and expressions to other call participants.
@@ -717,10 +810,10 @@ export default function Call() {
                     Live webcam
                   </h2>
                 </div>
-                <DeviceSelector 
-                  devices={videoDevices} 
-                  selectedDeviceId={selectedDeviceId} 
-                  onChange={setSelectedDeviceId} 
+                <DeviceSelector
+                  devices={videoDevices}
+                  selectedDeviceId={selectedDeviceId}
+                  onChange={setSelectedDeviceId}
                 />
               </div>
               {/* Video element: bg-black already looks fine in dark mode */}
@@ -733,12 +826,16 @@ export default function Call() {
                 className="aspect-video w-full rounded-md bg-black object-cover"
               />
               {cameraError && (
-                <div className="mt-3 flex flex-col gap-2 items-start" role="alert" aria-live="polite">
+                <div
+                  className="mt-3 flex flex-col gap-2 items-start"
+                  role="alert"
+                  aria-live="polite"
+                >
                   <p className="text-sm font-semibold text-coral">
                     {cameraError}
                   </p>
                   <button
-                    onClick={() => setRetryCamera(prev => prev + 1)}
+                    onClick={() => setRetryCamera((prev) => prev + 1)}
                     className="rounded-md border border-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-bold text-coral hover:bg-coral hover:text-white transition"
                   >
                     Retry Camera
@@ -753,7 +850,11 @@ export default function Call() {
         <div className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border border-ink/10 bg-white px-4 py-2.5 shadow-soft dark:border-border dark:bg-surface">
             <div className="flex items-center gap-2">
-              <Grid size={16} className="text-moss dark:text-glow" aria-hidden="true" />
+              <Grid
+                size={16}
+                className="text-moss dark:text-glow"
+                aria-hidden="true"
+              />
               <span className="text-xs font-bold text-ink dark:text-neutral-200">
                 AAC Picture-Symbol Board
               </span>

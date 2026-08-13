@@ -29,6 +29,9 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
   const rafRef = React.useRef(null);
   const errorTimerRef = React.useRef(null);
   const didFinalizeRef = React.useRef(false);
+  const [rawAudioBlob, setRawAudioBlob] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+  const [isExtracting, setIsExtracting] = React.useState(false);
 
   const processFile = async (file) => {
     setIsExtracting(true);
@@ -248,6 +251,85 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
       if (!confirmStop) return;
     }
     recorderRef.current?.stop();
+  }
+  React.useEffect(() => {
+  function handleKeyDown(event) {
+
+    if (event.repeat) return;
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+const isInteractive =
+  target instanceof Element &&
+  target.closest(
+    "input, textarea, select, button, a, summary, [contenteditable='true'], [role='button'], [role='link'], [role='menuitem'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab']"
+  );
+if (isInteractive) return;
+
+    // Don't trigger shortcuts while typing
+   const target = event.target;
+
+if (isInteractive) return;
+
+    // Space => Start/Stop recording
+    if (event.code === "Space") {
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else if (!disabled && !isInitializing) {
+      startRecording();
+      }
+    }
+
+    // Esc => Cancel recording
+    if (event.key === "Escape" && isRecording) {
+      event.preventDefault();
+      handleStopCleanup({ emitReady: false });
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [isRecording, disabled, isInitializing]);
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setRecorderError("");
+    setIsExtracting(true);
+
+    try {
+      const { blob, duration: extractedDuration } = await extractAudioFromFile(file);
+
+      const roundedDuration = Math.round(extractedDuration || 0);
+      setDuration(roundedDuration);
+      durationRef.current = roundedDuration;
+
+      chunksRef.current = [blob];
+      setRawAudioBlob(blob);
+
+      const url = URL.createObjectURL(blob);
+      setAudioUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return url;
+      });
+
+      onRecordingReady(blob, {
+        duration: roundedDuration,
+        isValid: roundedDuration >= MIN_DURATION,
+      });
+    } catch (err) {
+      console.error("Failed to extract audio from file:", err);
+      setRecorderError(err?.message || "Could not process that file. Please try a different audio or video file.");
+    } finally {
+      setIsExtracting(false);
+      event.target.value = "";
+    }
   }
 
   React.useEffect(() => {

@@ -194,11 +194,51 @@ export function toggleFavoriteWithCap(currentFavorites, id, maxFavorites) {
  * @returns {Object} Speech history state and actions
  */
 
+/**
+ * Prunes history based on the retention policy and favorite status.
+ */
+export function pruneHistory(historyList, favoritesList, policy) {
+  if (!policy || policy === "forever" || policy === "session") {
+    return historyList;
+  }
+
+  const now = Date.now();
+  let maxAgeMs = 0;
+  if (policy === "7days") {
+    maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+  } else if (policy === "30days") {
+    maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+  } else {
+    return historyList;
+  }
+
+  const cutoff = now - maxAgeMs;
+  const favSet = new Set(favoritesList);
+
+  return historyList.filter((item) => favSet.has(item.id) || item.timestamp >= cutoff);
+}
+
 export function useSpeechHistory() {
   // ── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(() => {
-    const raw = readStorage(HISTORY_KEY, []);
-    return raw.map((item) => ({
+    let raw = readStorage(HISTORY_KEY, []);
+    const favs = readStorage(FAVS_KEY, []);
+    const policy = localStorage.getItem("vf_history_retention") || "forever";
+    const favSet = new Set(favs);
+
+    // 1. Session check: if session is new and policy is "session", clear non-pinned
+    const isNewSession = !sessionStorage.getItem("vf_session_active");
+    if (isNewSession) {
+      sessionStorage.setItem("vf_session_active", "true");
+      if (policy === "session") {
+        raw = raw.filter((item) => favSet.has(item.id));
+      }
+    }
+
+    // 2. Duration check: prune items older than 7 or 30 days
+    const pruned = pruneHistory(raw, favs, policy);
+
+    return pruned.map((item) => ({
       ...item,
       tags: Array.isArray(item.tags) ? item.tags : [],
     }));
@@ -251,6 +291,46 @@ export function useSpeechHistory() {
       /* storage quota exceeded — silently skip */
     }
   }, [analyticsHistory]);
+
+  // ── Retention Policy Effect ──────────────────────────────────────────────
+  useEffect(() => {
+    const handlePolicyChange = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "forever" || policy === "session") return;
+
+      setHistory((prev) => {
+        const favs = readStorage(FAVS_KEY, []);
+        return pruneHistory(prev, favs, policy);
+      });
+    };
+
+    window.addEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    return () => {
+      window.removeEventListener("voiceforge:retentionPolicyChanged", handlePolicyChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUnload = () => {
+      const policy = localStorage.getItem("vf_history_retention") || "forever";
+      if (policy === "session") {
+        const rawHistory = readStorage(HISTORY_KEY, []);
+        const favs = readStorage(FAVS_KEY, []);
+        const favSet = new Set(favs);
+        const pruned = rawHistory.filter((item) => favSet.has(item.id));
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(pruned));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, []);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

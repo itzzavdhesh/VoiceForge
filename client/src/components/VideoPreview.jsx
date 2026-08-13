@@ -25,7 +25,7 @@ export default React.forwardRef(function VideoPreview({
   const audioProcessorRef = useRef(null);
   const faceProcessorRef = useRef(null);
   const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleTextRef = React.useRef(subtitleText);
+  const subtitleTextRef = React.useRef(activeText);
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
   const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortRef = useRef(null);
@@ -38,6 +38,7 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
+  const activeTextRef = React.useRef(activeText);
 
   const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
@@ -72,22 +73,6 @@ export default React.forwardRef(function VideoPreview({
   React.useEffect(() => { subtitleFontSizeRef.current = subtitleFontSize; }, [subtitleFontSize]);
   React.useEffect(() => { subtitleBgOpacityRef.current = subtitleBgOpacity; }, [subtitleBgOpacity]);
   React.useEffect(() => { activeTextRef.current = activeText; }, [activeText]);
-
-  React.useEffect(() => {
-    subtitlesEnabledRef.current = subtitlesEnabled;
-  }, [subtitlesEnabled]);
-
-  React.useEffect(() => {
-    subtitleTextRef.current = subtitleText;
-  }, [subtitleText]);
-
-  React.useEffect(() => {
-    subtitleFontSizeRef.current = subtitleFontSize;
-  }, [subtitleFontSize]);
-
-  React.useEffect(() => {
-    subtitleBgOpacityRef.current = Number(subtitleBgOpacity);
-  }, [subtitleBgOpacity]);
 
   React.useEffect(() => {
     async function initSegmenter() {
