@@ -6,14 +6,13 @@ import { rateLimit } from "express-rate-limit";
 import { env } from "./config/env.js";
 import voiceRoutes from "./routes/voice.js";
 import { getIsMock } from "./utils/mock.js";
-import { logger } from "./utils/logger.js";
 
 // Warn clearly when mock mode is active so it is never silently enabled.
 if (getIsMock()) {
-  logger.warn(
-    "Mock mode active — Chatterbox calls are stubbed." +
+  console.warn(
+    "\x1b[33m[VoiceForge] Mock mode active — Chatterbox calls are stubbed." +
     " Voice clone returns a fixture voice_id; TTS streams silent audio." +
-    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine."
+    " Set MOCK_CHATTERBOX=false to use the real Hugging Face engine.\x1b[0m"
   );
 }
 

@@ -227,6 +227,25 @@ export function QuickReplies({ onSelect, showToast }) {
     setEditingReplyData({ phrase: reply.phrase, category: reply.category || "General" });
   };
 
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (draggedItem === null) return;
+    const oldIndex = replies.findIndex((r) => r.id === draggedItem);
+    const newIndex = replies.findIndex((r) => r.id === targetId);
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newReplies = [...replies];
+      const [removed] = newReplies.splice(oldIndex, 1);
+      newReplies.splice(newIndex, 0, removed);
+      setReplies(newReplies);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
   const handleEditSave = (e) => {
     e.preventDefault();
     if (!editingReplyId || !editingReplyData) return;
@@ -266,8 +285,7 @@ export function QuickReplies({ onSelect, showToast }) {
     if (selectedCategoryTab === "All") return true;
     return reply.category === selectedCategoryTab;
   });
-
-  const allCats = ["All", ...CATEGORIES];
+  const allCats = ["All", ...categories];
 
   const handleTabKeyDown = (e) => {
     const currentIndex = allCats.indexOf(selectedCategoryTab);

@@ -29,6 +29,10 @@ export default React.forwardRef(function VideoPreview({
   const subtitleFontSizeRef = React.useRef(subtitleFontSize);
   const subtitleBgOpacityRef = React.useRef(Number(subtitleBgOpacity));
   const ortSessionRef = useRef(null);
+  const ortRef = useRef(null);
+  const isInferencingRef = useRef(false);
+  const tempCanvasRef = useRef(null);
+  const lastInferenceRef = useRef(null);
   const waveRef = useRef(null);
   const [modelStatus, setModelStatus] = React.useState(
     "Audio-driven animation ready",
@@ -37,11 +41,6 @@ export default React.forwardRef(function VideoPreview({
 
   const calibrationRef = React.useRef(calibration);
   const isCalibratingRef = React.useRef(isCalibrating);
-  const activeTextRef = React.useRef(activeText);
-
-  const subtitlesEnabledRef = React.useRef(subtitlesEnabled);
-  const subtitleFontSizeRef = React.useRef(subtitleFontSize);
-  const subtitleBgOpacityRef = React.useRef(subtitleBgOpacity);
   const activeTextRef = React.useRef(activeText);
 
   const pipVideoRef = React.useRef(null);
@@ -117,6 +116,14 @@ export default React.forwardRef(function VideoPreview({
       }
     }
     initSegmenter();
+  }, []);
+
+  React.useEffect(() => {
+    if (!tempCanvasRef.current && typeof document !== "undefined") {
+      tempCanvasRef.current = document.createElement("canvas");
+      tempCanvasRef.current.width = 96;
+      tempCanvasRef.current.height = 96;
+    }
   }, []);
 
   React.useEffect(() => {
@@ -338,39 +345,78 @@ export default React.forwardRef(function VideoPreview({
         const useONNX = isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current;
 
         // Try ONNX Inference first
-        if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current) {
-          try {
-             // 1. Get Audio Features
-             const melFeatures = audioProcessorRef.current.getLatestFeatures();
-             
-             // 2. Synchronize visual timestamp to the audio master clock to prevent drift
-             let syncTimestamp = timestamp;
-             const audioTime = audioProcessorRef.current.getAudioTime() * 1000;
-             if (audioTime > 0) {
-                if (audioTimeOffset === null) {
-                   audioTimeOffset = timestamp - audioTime;
+        if (isSpeaking && ortSessionRef.current && audioProcessorRef.current && faceProcessorRef.current && ortRef.current) {
+          if (!isInferencingRef.current) {
+            isInferencingRef.current = true;
+            (async () => {
+              try {
+                const melFeatures = audioProcessorRef.current.getLatestFeatures();
+                let syncTimestamp = timestamp;
+                const audioTime = audioProcessorRef.current.getAudioTime() * 1000;
+                if (audioTime > 0) {
+                  if (audioTimeOffset === null) {
+                     audioTimeOffset = timestamp - audioTime;
+                  }
+                  const targetSyncTime = audioTime + audioTimeOffset;
+                  syncTimestamp = targetSyncTime <= lastSyncTime ? lastSyncTime + 1 : targetSyncTime;
+                  lastSyncTime = syncTimestamp;
                 }
-                const targetSyncTime = audioTime + audioTimeOffset;
-                // MediaPipe requires strictly increasing timestamps
-                syncTimestamp = targetSyncTime <= lastSyncTime ? lastSyncTime + 1 : targetSyncTime;
-                lastSyncTime = syncTimestamp;
-             }
 
-             // 3. Get Face Crop
-             const landmarks = faceProcessorRef.current.detectFace(video, syncTimestamp);
-             
-             if (melFeatures && landmarks) {
-               // TODO: Construct Tensors and run inference when real model is available
-               // const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
-               // const videoCrop = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvas);
-               // const videoTensor = ... convert videoCrop to tensor ...
-               // const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
-               // ... draw results back to canvas ...
-               
-               // inferenceSucceeded = true;
-             }
-          } catch (e) {
-             console.error("Inference loop error:", e);
+                const landmarks = faceProcessorRef.current.detectFace(video, syncTimestamp);
+                
+                if (melFeatures && landmarks && tempCanvasRef.current) {
+                  const ort = ortRef.current;
+                  const audioTensor = new ort.Tensor('float32', melFeatures, [1, 1, 80, 16]);
+                  
+                  const cropResult = faceProcessorRef.current.cropMouthRegion(canvas, landmarks, tempCanvasRef.current);
+                  if (cropResult) {
+                    const { imageData, coords } = cropResult;
+                    const float32Data = new Float32Array(1 * 6 * 96 * 96);
+                    for (let i = 0; i < 96 * 96; i++) {
+                      const r = imageData.data[i * 4 + 0] / 255.0;
+                      const g = imageData.data[i * 4 + 1] / 255.0;
+                      const b = imageData.data[i * 4 + 2] / 255.0;
+                      float32Data[i] = r;
+                      float32Data[96 * 96 + i] = g;
+                      float32Data[2 * 96 * 96 + i] = b;
+                      float32Data[3 * 96 * 96 + i] = r;
+                      float32Data[4 * 96 * 96 + i] = g;
+                      float32Data[5 * 96 * 96 + i] = b;
+                    }
+                    const videoTensor = new ort.Tensor('float32', float32Data, [1, 6, 96, 96]);
+                    
+                    const results = await ortSessionRef.current.run({ audio: audioTensor, video: videoTensor });
+                    const outTensor = results[Object.keys(results)[0]];
+                    
+                    const outData = outTensor.data;
+                    const newImageData = new ImageData(96, 96);
+                    for (let i = 0; i < 96 * 96; i++) {
+                      newImageData.data[i * 4 + 0] = Math.max(0, Math.min(255, outData[i] * 255));
+                      newImageData.data[i * 4 + 1] = Math.max(0, Math.min(255, outData[96 * 96 + i] * 255));
+                      newImageData.data[i * 4 + 2] = Math.max(0, Math.min(255, outData[2 * 96 * 96 + i] * 255));
+                      newImageData.data[i * 4 + 3] = 255;
+                    }
+                    
+                    lastInferenceRef.current = {
+                      imageData: newImageData,
+                      coords: coords
+                    };
+                  }
+                }
+              } catch (e) {
+                console.error("ONNX Inference Error", e);
+              } finally {
+                isInferencingRef.current = false;
+              }
+            })();
+          }
+
+          if (lastInferenceRef.current && tempCanvasRef.current) {
+            const { imageData, coords } = lastInferenceRef.current;
+            const tempCtx = tempCanvasRef.current.getContext("2d");
+            tempCtx.putImageData(imageData, 0, 0);
+            context.drawImage(tempCanvasRef.current, 0, 0, 96, 96, coords.x, coords.y, coords.w, coords.h);
+            inferenceSucceeded = true;
           }
         }
 
