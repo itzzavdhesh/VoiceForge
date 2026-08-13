@@ -4,22 +4,39 @@ import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
   persistVoiceSettings,
+  VOICE_PRESETS,
 } from "../utils/voiceSettings.js";
+import {
+  loadAccessibilitySettings,
+  persistAccessibilitySettings,
+  ACCESSIBILITY_SETTINGS_CHANGED_EVENT,
+  ACCESSIBILITY_SETTINGS_KEY
+} from "../utils/accessibilitySettings.js";
 import {
   loadLanguage,
   persistLanguage,
+  subscribeLanguageChange,
   getLanguageByCode,
   LANGUAGE_STORAGE_KEY,
 } from "../utils/languages.js";
 
-import { Trash2, CircleAlert, Download, Upload, Globe } from "lucide-react";
+import { Trash2, CircleAlert, Download, Upload, Globe, Eye, QrCode, Webcam } from "lucide-react";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { LanguageSelector } from "../components/LanguageSelector.jsx";
+import { useTheme } from "../components/ThemeContext.jsx";
 import {
   deleteVoiceProfile,
   getSavedProfiles,
+  clearAllVoiceProfiles,
+  saveVoiceProfile,
 } from "../hooks/useVoiceClone.js";
 import { saveProfile } from "../utils/db.js";
+import { ProfileCard } from "../components/ProfileCard.jsx";
+import { ShareProfileModal } from "../components/ShareProfileModal.jsx";
+import { ReceiveProfileModal } from "../components/ReceiveProfileModal.jsx";
+import { TransferSetupModal } from "../components/TransferSetupModal.jsx";
+import { PeakLevelMeter } from "../components/PeakLevelMeter.jsx";
+import { AudioOutputSelector } from "../components/AudioOutputSelector.jsx";
 
 function AudioPlayback({ blob }) {
   const [audioUrl, setAudioUrl] = React.useState(null);
@@ -36,6 +53,7 @@ function AudioPlayback({ blob }) {
     <audio
       src={audioUrl}
       controls
+      aria-label="Generated speech audio playback"
       className="mt-2 h-8 w-full max-w-xs"
     />
   );
@@ -44,6 +62,9 @@ function AudioPlayback({ blob }) {
 export default function Settings() {
   const [profiles, setProfiles] = React.useState([]);
   const [dbError, setDbError] = React.useState("");
+  const [sharingProfile, setSharingProfile] = React.useState(null);
+  const [isReceiving, setIsReceiving] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
   const { toasts, showToast } = useToast();
   React.useEffect(() => {
     async function loadProfiles() {
@@ -56,18 +77,223 @@ export default function Settings() {
       }
     }
     loadProfiles();
+    window.addEventListener("voiceforge:profileChanged", loadProfiles);
+    return () => {
+      window.removeEventListener("voiceforge:profileChanged", loadProfiles);
+    };
   }, []);
 
 
   const defaultSettings = DEFAULT_VOICE_SETTINGS;
+  const { theme, toggleTheme, isHighContrast, toggleHighContrast } = useTheme();
   const [voiceSettings, setVoiceSettings] = React.useState(loadVoiceSettings);
   const [language, setLanguage] = React.useState(loadLanguage);
+  const [retentionPolicy, setRetentionPolicy] = React.useState(() => {
+    return localStorage.getItem("vf_history_retention") || "forever";
+  });
   const selectedLangObj = getLanguageByCode(language);
+
+  function handleRetentionPolicyChange(value) {
+    setRetentionPolicy(value);
+    localStorage.setItem("vf_history_retention", value);
+    showToast("History retention policy updated", "success");
+    window.dispatchEvent(new Event("voiceforge:retentionPolicyChanged"));
+  }
 
 
   function saveVoiceSettings(newSettings) {
     setVoiceSettings(newSettings);
     persistVoiceSettings(newSettings);
+    window.dispatchEvent(new Event("voiceforge:settingsChanged"));
+  }
+
+  const [playingPreset, setPlayingPreset] = React.useState(null);
+  const audioRef = React.useRef(null);
+  const audioContextRef = React.useRef(null);
+  const sourceRef = React.useRef(null);
+  const bassFilterRef = React.useRef(null);
+  const midFilterRef = React.useRef(null);
+  const trebleFilterRef = React.useRef(null);
+  const pitchShifterRef = React.useRef(null);
+
+  const cleanupPreview = React.useCallback(() => {
+    setPlayingPreset(null);
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch (e) {}
+      sourceRef.current = null;
+    }
+    if (bassFilterRef.current) {
+      try { bassFilterRef.current.disconnect(); } catch (e) {}
+      bassFilterRef.current = null;
+    }
+    if (midFilterRef.current) {
+      try { midFilterRef.current.disconnect(); } catch (e) {}
+      midFilterRef.current = null;
+    }
+    if (trebleFilterRef.current) {
+      try { trebleFilterRef.current.disconnect(); } catch (e) {}
+      trebleFilterRef.current = null;
+    }
+    if (pitchShifterRef.current) {
+      try {
+        pitchShifterRef.current.input.disconnect();
+        pitchShifterRef.current.output.disconnect();
+      } catch (e) {}
+      pitchShifterRef.current = null;
+    }
+    audioRef.current = null;
+  }, []);
+
+  const stopPreview = React.useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch (e) {}
+    }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    cleanupPreview();
+  }, [cleanupPreview]);
+
+  React.useEffect(() => {
+    return () => {
+      stopPreview();
+    };
+  }, [stopPreview]);
+
+  async function playPresetPreview(presetKey, preset) {
+    if (playingPreset) {
+      stopPreview();
+      if (playingPreset === presetKey) return;
+    }
+    
+    const activeProfileId = localStorage.getItem("voiceforge:activeVoiceId") || (profiles[0]?.voice_id);
+    if (!activeProfileId) {
+      showToast("Please clone or select a voice profile first to hear previews.", "error");
+      return;
+    }
+    
+    setPlayingPreset(presetKey);
+    
+    try {
+      const response = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Testing VoiceForge presets.",
+          voice_id: activeProfileId,
+          language_code: language,
+          voice_settings: {
+            stability: preset.stability,
+            style: preset.style,
+            temperature: preset.temperature
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Speech synthesis failed");
+      }
+      
+      const payload = await response.json();
+      const audioUrl = payload.audioUrl;
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.playbackRate = preset.dspSpeed;
+      
+      const source = audioCtx.createMediaElementSource(audio);
+      sourceRef.current = source;
+      
+      const bass = audioCtx.createBiquadFilter();
+      bass.type = "lowshelf";
+      bass.frequency.value = 200;
+      bass.gain.value = preset.dspBass;
+      bassFilterRef.current = bass;
+      
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking";
+      mid.frequency.value = 1000;
+      mid.Q.value = 1.0;
+      mid.gain.value = preset.dspMid;
+      midFilterRef.current = mid;
+      
+      const treble = audioCtx.createBiquadFilter();
+      treble.type = "highshelf";
+      treble.frequency.value = 4000;
+      treble.gain.value = preset.dspTreble;
+      trebleFilterRef.current = treble;
+      
+      const shifter = new PitchShifter(audioCtx);
+      shifter.setPitch(preset.dspPitch);
+      pitchShifterRef.current = shifter;
+      
+      source.connect(bass);
+      bass.connect(mid);
+      mid.connect(treble);
+      treble.connect(shifter.input);
+      shifter.output.connect(audioCtx.destination);
+      
+      audio.onended = () => {
+        cleanupPreview();
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.error("Failed to play preset preview:", err);
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance("Testing VoiceForge presets.");
+        utterance.lang = language;
+        utterance.pitch = preset.dspPitch;
+        utterance.rate = preset.dspSpeed;
+        utterance.onend = () => setPlayingPreset(null);
+        utterance.onerror = () => setPlayingPreset(null);
+        window.speechSynthesis.speak(utterance);
+      } catch (fallbackErr) {
+        showToast("Preview play failed", "error");
+        setPlayingPreset(null);
+      }
+    }
+  }
+
+  const currentPresetKey = React.useMemo(() => {
+    const presetEntry = Object.entries(VOICE_PRESETS).find(([_, preset]) => {
+      return (
+        Math.abs(voiceSettings.stability - preset.stability) < 0.001 &&
+        Math.abs(voiceSettings.temperature - preset.temperature) < 0.001 &&
+        Math.abs(voiceSettings.style - preset.style) < 0.001 &&
+        Math.abs(voiceSettings.dspPitch - preset.dspPitch) < 0.001 &&
+        Math.abs(voiceSettings.dspSpeed - preset.dspSpeed) < 0.001 &&
+        Math.abs(voiceSettings.dspBass - preset.dspBass) < 0.001 &&
+        Math.abs(voiceSettings.dspMid - preset.dspMid) < 0.001 &&
+        Math.abs(voiceSettings.dspTreble - preset.dspTreble) < 0.001
+      );
+    });
+    return presetEntry ? presetEntry[0] : "custom";
+  }, [voiceSettings]);
+
+  function handlePresetChange(presetKey) {
+    if (presetKey === "custom") return;
+    const preset = VOICE_PRESETS[presetKey];
+    if (preset) {
+      saveVoiceSettings({
+        ...voiceSettings,
+        stability: preset.stability,
+        temperature: preset.temperature,
+        style: preset.style,
+        dspPitch: preset.dspPitch,
+        dspSpeed: preset.dspSpeed,
+        dspBass: preset.dspBass,
+        dspMid: preset.dspMid,
+        dspTreble: preset.dspTreble,
+      });
+    }
   }
 
   React.useEffect(() => {
@@ -87,11 +313,14 @@ export default function Settings() {
         history: localStorage.getItem("vf_history"),
         favorites: localStorage.getItem("vf_favorites"),
         quick_replies: localStorage.getItem("vf_quick_replies"),
+        quick_reply_categories: localStorage.getItem("vf_quick_reply_categories"),
         voiceSettings: localStorage.getItem("voiceforge:voiceSettings"),
+        accessibilitySettings: localStorage.getItem(ACCESSIBILITY_SETTINGS_KEY),
         language: localStorage.getItem(LANGUAGE_STORAGE_KEY),
         calibrationXOffset: localStorage.getItem("voiceforge:calibrationXOffset"),
         calibrationYOffset: localStorage.getItem("voiceforge:calibrationYOffset"),
         calibrationScale: localStorage.getItem("voiceforge:calibrationScale"),
+        historyRetention: localStorage.getItem("vf_history_retention"),
       };
 
       const rawProfiles = await getSavedProfiles();
@@ -171,15 +400,16 @@ export default function Settings() {
       for (const p of importedProfiles) {
         let audioBlob = null;
         if (p.audioDataUrl) {
-          const arr = p.audioDataUrl.split(",");
-          const mime = arr[0].match(/:(.*?);/)?.[1] || "audio/webm";
-          const bstr = atob(arr[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
+          try {
+            if (typeof p.audioDataUrl === "string" && p.audioDataUrl.startsWith("data:audio/")) {
+              const res = await fetch(p.audioDataUrl);
+              audioBlob = await res.blob();
+            } else {
+              console.warn("Skipped invalid or non-audio DataURL in voice profile backup:", p.name);
+            }
+          } catch (e) {
+            console.error("Failed to parse audio DataURL:", e);
           }
-          audioBlob = new Blob([u8arr], { type: mime });
         }
 
         profilesToSave.push({
@@ -201,11 +431,14 @@ export default function Settings() {
         history: "vf_history",
         favorites: "vf_favorites",
         quick_replies: "vf_quick_replies",
+        quick_reply_categories: "vf_quick_reply_categories",
         voiceSettings: "voiceforge:voiceSettings",
+        accessibilitySettings: ACCESSIBILITY_SETTINGS_KEY,
         language: LANGUAGE_STORAGE_KEY,
         calibrationXOffset: "voiceforge:calibrationXOffset",
         calibrationYOffset: "voiceforge:calibrationYOffset",
         calibrationScale: "voiceforge:calibrationScale",
+        historyRetention: "vf_history_retention",
       };
 
       for (const [backupKey, storageKey] of Object.entries(keysMap)) {
@@ -223,10 +456,103 @@ export default function Settings() {
       const loaded = await getSavedProfiles();
       setProfiles(loaded);
       setVoiceSettings(loadVoiceSettings());
+      setAccSettings(loadAccessibilitySettings());
       setLanguage(loadLanguage());
+      setRetentionPolicy(localStorage.getItem("vf_history_retention") || "forever");
       event.target.value = "";
     } catch (err) {
       showToast("Import failed: " + (err.message || String(err)), "error");
+      event.target.value = "";
+    }
+  };
+
+  const handleExportProfile = async (profile) => {
+    try {
+      let base64Audio = null;
+      if (profile.audioBlob) {
+        base64Audio = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(profile.audioBlob);
+        });
+      }
+      
+      const vfpData = {
+        type: "voiceforge_profile",
+        version: 1,
+        voice_id: profile.voice_id,
+        name: profile.name,
+        createdAt: profile.createdAt,
+        audioDataUrl: base64Audio
+      };
+      
+      const jsonContent = JSON.stringify(vfpData, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${profile.name.replace(/\s+/g, "_")}.vfp`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported backup for ${profile.name}`, "success");
+    } catch (err) {
+      console.error("Failed to export profile:", err);
+      showToast("Failed to export voice profile", "error");
+    }
+  };
+
+  const handleImportVFP = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".vfp")) {
+      showToast("Invalid file format. Please upload a .vfp file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (
+        parsed.type !== "voiceforge_profile" ||
+        !parsed.voice_id ||
+        !parsed.name ||
+        !parsed.audioDataUrl
+      ) {
+        throw new Error("Missing or invalid profile fields.");
+      }
+
+      const arr = parsed.audioDataUrl.split(",");
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "audio/wav";
+      
+      if (!mime.startsWith("audio/")) {
+        throw new Error("Embedded file is not a valid audio format.");
+      }
+
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const audioBlob = new Blob([u8arr], { type: mime });
+
+      await saveVoiceProfile({
+        voice_id: parsed.voice_id,
+        name: parsed.name
+      }, audioBlob);
+
+      showToast(`Imported ${parsed.name} successfully!`, "success");
+      event.target.value = "";
+    } catch (err) {
+      console.error("VFP Import failed:", err);
+      showToast("VFP import failed: " + (err.message || String(err)), "error");
       event.target.value = "";
     }
   };
@@ -243,9 +569,27 @@ export default function Settings() {
     }
   }
 
+  async function removeAllProfiles() {
+    const confirmOverwrite = window.confirm("Are you sure you want to delete all saved voice profiles? This action cannot be undone and will free up storage space.");
+    if (!confirmOverwrite) return;
+    
+    try {
+      const next = await clearAllVoiceProfiles();
+      setProfiles(next);
+      setDbError("");
+      showToast("All voice profiles deleted", "success");
+    } catch (err) {
+      setDbError(err?.message || String(err));
+      showToast("Failed to clear profiles", "error");
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
+      <section
+        data-tour="settings-overview"
+        className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk"
+      >
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
           Step 3 of 3
         </p>
@@ -262,9 +606,121 @@ export default function Settings() {
     )}
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Voice Synthesis Settings</h2>
-        <p className="mt-1 text-sm text-ink/65 mb-5">Adjust how Chatterbox generates your cloned speech.</p>
+        <div
+          data-tour="restart-onboarding"
+          className="mb-5 flex flex-col gap-3 rounded-md border border-moss/20 bg-mint/40 p-4 dark:border-glow/25 dark:bg-glow/10 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 className="text-base font-bold">Onboarding tour</h2>
+            <p className="mt-1 text-sm text-ink/65 dark:text-muted">
+              Replay the guided workflow for recording, cloning, and generating speech.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={resetTour}
+            aria-label="Restart onboarding tour"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-moss px-4 font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black dark:hover:bg-glow/90"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Restart Onboarding Tour
+          </button>
+        </div>
+
+        <div
+          data-tour="settings-api-key"
+          className="flex flex-col gap-3 lg:flex-row lg:items-end"
+        >
+          <label className="flex-1 text-sm font-bold" htmlFor="api-key">
+            ElevenLabs API key
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+
+              onChange={(event) => setApiKeyInput(event.target.value)}
+              className="mt-2 min-h-11 w-full rounded-md border border-ink/15 bg-cloud px-3 text-ink outline-none focus:border-moss focus:ring-4 focus:ring-mint dark:border-border dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-glow dark:focus:ring-glow/25"
+            />
+          </label>
+        </div>
+
+        <div className="mb-5">
+          <label htmlFor="voice-preset" className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Preset
+          </label>
+          <select
+            id="voice-preset"
+            value={currentPresetKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="custom" disabled>Custom</option>
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => (
+              <option key={key} value={key}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </div>
         
+        <div className="mb-6">
+          <label className="mb-3 block text-sm font-bold text-ink dark:text-neutral-200">
+            Voice Presets & Previews
+          </label>
+          <div className="flex flex-wrap gap-2.5">
+            {Object.entries(VOICE_PRESETS).map(([key, preset]) => {
+              const isActive = currentPresetKey === key;
+              const isPlaying = playingPreset === key;
+              return (
+                <div
+                  key={key}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-semibold transition duration-150 ${
+                    isActive
+                      ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:border-moss/40 hover:bg-neutral-50 dark:border-border dark:bg-black dark:text-neutral-300 dark:hover:border-glow/40 dark:hover:bg-glow/5"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange(key)}
+                    className="outline-none text-left font-bold"
+                  >
+                    {preset.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => playPresetPreview(key, preset)}
+                    aria-label={isPlaying ? `Stop previewing ${preset.name}` : `Preview ${preset.name} voice`}
+                    className={`ml-1 flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150 ${
+                      isPlaying
+                        ? "bg-coral text-white scale-105"
+                        : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <span className="block h-2 w-2 rounded-sm bg-white" />
+                    ) : (
+                      <svg className="h-3 w-3 fill-current ml-0.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+            
+            <div
+              className={`inline-flex items-center rounded-lg border px-3.5 py-2 text-sm font-semibold ${
+                currentPresetKey === "custom"
+                  ? "border-moss bg-mint/10 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+                  : "border-dashed border-neutral-300 bg-transparent text-neutral-400 dark:border-neutral-700 dark:text-neutral-500"
+              }`}
+            >
+              Custom Settings
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-4">
           <div>
             <label className="flex justify-between text-sm font-bold" htmlFor="stability">
@@ -276,6 +732,7 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.stability}
+              aria-label="Stability"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, stability: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
@@ -291,6 +748,7 @@ export default function Settings() {
               id="temperature"
               type="range"
               min="0" max="1" step="0.01"
+              aria-label="Temperature"
               value={voiceSettings.temperature}
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, temperature: parseFloat(e.target.value) })}
               className="w-full mt-2"
@@ -308,26 +766,156 @@ export default function Settings() {
               type="range"
               min="0" max="1" step="0.01"
               value={voiceSettings.style}
+              aria-label="Style Exaggeration"
               onChange={(e) => saveVoiceSettings({ ...voiceSettings, style: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
             <p className="text-xs text-ink/50 mt-1">Higher values exaggerate the style of the reference audio.</p>
           </div>
+
+          <hr className="border-ink/10 dark:border-border my-4" />
+          <h3 className="text-sm font-bold uppercase tracking-wider text-moss dark:text-glow mb-3">Real-time Voice Modifiers (DSP)</h3>
+
           <div>
-            <label className="flex justify-between text-sm font-bold" htmlFor="rate">
-              <span>Speech Rate</span>
-              <span className="text-ink/65">{voiceSettings.rate}x</span>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-pitch">
+              <span>Voice Pitch</span>
+              <span className="text-ink/65">{voiceSettings.dspPitch}x</span>
             </label>
             <input
-              id="rate"
+              id="dsp-pitch"
               type="range"
-              min="0.5" max="2.0" step="0.05"
-              value={voiceSettings.rate}
-              onChange={(e) => saveVoiceSettings({ ...voiceSettings, rate: parseFloat(e.target.value) })}
+              min="0.5" max="1.5" step="0.05"
+              value={voiceSettings.dspPitch}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspPitch: parseFloat(e.target.value) })}
               className="w-full mt-2"
             />
-            <p className="text-xs text-ink/50 mt-1">Adjust speaking speed. Lower values are slower; higher values are faster.</p>
+            <p className="text-xs text-ink/50 mt-1">Pitch transposition. Lower → deeper voice; higher → higher voice.</p>
           </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dsp-speed">
+              <span>Speech Pace (Speed)</span>
+              <span className="text-ink/65">{voiceSettings.dspSpeed}x</span>
+            </label>
+            <input
+              id="dsp-speed"
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={voiceSettings.dspSpeed}
+              onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspSpeed: parseFloat(e.target.value) })}
+              className="w-full mt-2"
+            />
+            <p className="text-xs text-ink/50 mt-1">Adjust speech speed. Lower → slower; higher → faster speech.</p>
+          </div>
+
+          <div className="pt-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">3-Band Graphic Equalizer</h4>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-bass">
+                  <span>Bass (200 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspBass} dB</span>
+                </label>
+                <input
+                  id="dsp-bass"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspBass}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspBass: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-mid">
+                  <span>Mid (1000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspMid} dB</span>
+                </label>
+                <input
+                  id="dsp-mid"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspMid}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspMid: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+
+              <div>
+                <label className="flex justify-between text-xs font-bold" htmlFor="dsp-treble">
+                  <span>Treble (4000 Hz)</span>
+                  <span className="text-ink/65">{voiceSettings.dspTreble} dB</span>
+                </label>
+                <input
+                  id="dsp-treble"
+                  type="range"
+                  min="-10" max="10" step="1"
+                  value={voiceSettings.dspTreble}
+                  onChange={(e) => saveVoiceSettings({ ...voiceSettings, dspTreble: parseInt(e.target.value) })}
+                  className="w-full mt-1.5"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/50 mt-2">Sculpt voice tone in real-time. Bass controls depth; mid controls presence; treble controls clarity.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Accessibility ─────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <div className="flex items-center gap-2 mb-1">
+          <Webcam size={20} aria-hidden="true" className="text-moss dark:text-glow" />
+          <h2 className="text-xl font-bold">Accessibility</h2>
+        </div>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Enable hands-free navigation using your webcam to track head movements.
+        </p>
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-bold block" htmlFor="webcam-nav-toggle">
+                Webcam Navigation
+              </label>
+              <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+                Control the cursor with your head. Click by dwelling over an element.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                id="webcam-nav-toggle"
+                type="checkbox"
+                className="peer sr-only"
+                checked={accSettings.webcamNavigationEnabled}
+                onChange={(e) => saveAccSettings({ ...accSettings, webcamNavigationEnabled: e.target.checked })}
+              />
+              <div className="peer h-6 w-11 rounded-full bg-ink/20 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-moss peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-moss dark:bg-ink/60 dark:peer-checked:bg-glow dark:peer-focus:ring-glow"></div>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex justify-between text-sm font-bold" htmlFor="dwell-time">
+              <span>Dwell Time (Click Delay)</span>
+              <span className="text-ink/65">{accSettings.dwellTime / 1000}s</span>
+            </label>
+            <input
+              id="dwell-time"
+              type="range"
+              min="500" max="3000" step="100"
+              value={accSettings.dwellTime}
+              onChange={(e) => saveAccSettings({ ...accSettings, dwellTime: parseInt(e.target.value, 10) })}
+              className="w-full mt-2"
+              disabled={!accSettings.webcamNavigationEnabled}
+            />
+            <p className="text-xs text-ink/50 mt-1 dark:text-muted">
+              How long you must look at a button before it clicks.
+            </p>
+          </div>
+        </div>
+
+        {/* Audio Peak Level VU Meter & Clipping Warning */}
+        <div className="mt-5 pt-4 border-t border-ink/10 dark:border-border">
+          <PeakLevelMeter isActive={true} />
         </div>
       </section>
 
@@ -386,6 +974,77 @@ export default function Settings() {
         </p>
       </section>
 
+      {/* ── Privacy & Retention ────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold">Privacy &amp; Retention</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
+          Configure how long your speech history is kept on this device.
+        </p>
+
+        <div className="mb-5">
+          <label
+            htmlFor="history-retention"
+            className="mb-2 block text-sm font-bold text-ink dark:text-neutral-200"
+          >
+            History Retention
+          </label>
+          <select
+            id="history-retention"
+            value={retentionPolicy}
+            onChange={(e) => handleRetentionPolicyChange(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-moss/40 dark:border-border dark:bg-black dark:text-neutral-200 dark:focus:ring-glow/40"
+          >
+            <option value="forever">Keep Forever</option>
+            <option value="7days">Clear after 7 days</option>
+            <option value="30days">Clear after 30 days</option>
+            <option value="session">Clear on session close</option>
+          </select>
+        </div>
+      </section>
+
+      {/* ── Audio & Hardware ───────────────────────────────────────────── */}
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Audio &amp; Hardware</h2>
+        <p className="mt-1 text-sm text-ink/65 mb-4 dark:text-muted">
+          Configure hardware routing for synthesized speech playback across video calls and webcams.
+        </p>
+        <AudioOutputSelector />
+      </section>
+
+      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
+        <h2 className="text-xl font-bold mb-1">Appearance & Accessibility</h2>
+        <p className="text-sm text-ink/65 mb-5 dark:text-muted">
+          Customize high-contrast accessibility options, contrast ratios, and visual boundaries.
+        </p>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-between rounded-md border border-ink/10 bg-amber-50/40 p-4 dark:border-border dark:bg-black">
+          <div className="flex items-start gap-3">
+            <Eye size={20} className="mt-0.5 text-moss dark:text-glow" aria-hidden="true" />
+            <div>
+              <h3 className="font-semibold text-sm text-ink dark:text-neutral-100">
+                High-Contrast Accessibility Mode
+              </h3>
+              <p className="text-xs text-ink/65 dark:text-muted mt-0.5">
+                Enforces maximum WCAG AAA contrast ratios, thick element borders, and bright yellow focus rings.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleHighContrast}
+            aria-pressed={isHighContrast}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition-all ${
+              isHighContrast
+                ? "bg-amber-500 text-black shadow-sm ring-2 ring-amber-400"
+                : "bg-ink/10 text-ink hover:bg-ink/20 dark:bg-neutral-800 dark:text-neutral-200"
+            }`}
+          >
+            {isHighContrast ? "High-Contrast ON" : "High-Contrast OFF"}
+          </button>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
         <h2 className="text-xl font-bold">Backup & Restore</h2>
         <p className="mt-1 text-sm text-ink/65 mb-5 dark:text-muted">
@@ -412,46 +1071,109 @@ export default function Settings() {
               id="import-config-file"
               type="file"
               accept=".json"
+              aria-label="Choose backup file to import"
               onChange={handleImport}
               className="sr-only"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-ink px-5 font-bold text-white transition hover:bg-ink/85 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+          >
+            <QrCode size={18} aria-hidden="true" />
+            Transfer Setup (QR / Link)
+          </button>
         </div>
       </section>
 
       <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:text-neutral-100 dark:shadow-soft-dk">
-        <h2 className="text-xl font-bold">Saved voice profiles</h2>
-        <div className="mt-4 divide-y divide-ink/10 rounded-md border border-ink/10 dark:divide-border dark:border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h2 className="text-xl font-bold">Saved voice profiles</h2>
+          <div className="flex items-center gap-3">
+            <label
+              htmlFor="settings-import-vfp"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
+            >
+              <Upload size={14} />
+              Import Profile (.vfp)
+              <input
+                id="settings-import-vfp"
+                type="file"
+                accept=".vfp"
+                onChange={handleImportVFP}
+                className="sr-only"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsTransferOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-moss hover:text-moss dark:border-border dark:bg-black dark:text-neutral-200"
+            >
+              <QrCode size={16} />
+              Transfer Setup
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsReceiving(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-bold text-white transition hover:bg-moss/90 dark:bg-glow dark:text-black"
+            >
+              Receive Profile
+            </button>
+            {profiles.length > 0 && (
+              <button
+                type="button"
+                onClick={removeAllProfiles}
+                className="text-sm font-bold text-coral hover:underline"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {profiles.length === 0 && (
-            <p className="p-4 text-sm text-ink/65 dark:text-muted">
+            <p className="col-span-full p-4 text-sm text-ink/65 dark:text-muted border border-ink/10 rounded-md dark:border-border">
               No saved profiles yet.
             </p>
           )}
           {profiles.map((profile) => (
-            <div
+            <ProfileCard
               key={profile.voice_id}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="font-bold">{profile.name}</p>
-                <p className="mt-1 break-all text-sm text-ink/60 dark:text-muted">
-                  {profile.voice_id}
-                </p>
-                {profile.audioBlob && <AudioPlayback blob={profile.audioBlob} />}
- 
-              </div>
-              <button
-                type="button"
-                onClick={() => removeProfile(profile.voice_id)}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-coral/40 px-3 py-2 font-bold text-coral hover:bg-coral hover:text-white"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-                Delete
-              </button>
-            </div>
+              profile={profile}
+              onDelete={removeProfile}
+              onShare={(p) => setSharingProfile(p)}
+              onExport={handleExportProfile}
+            />
           ))}
         </div>
       </section>
+      
+      {sharingProfile && (
+        <ShareProfileModal 
+          profile={sharingProfile} 
+          onClose={() => setSharingProfile(null)} 
+        />
+      )}
+
+      {isReceiving && (
+        <ReceiveProfileModal 
+          onClose={() => setIsReceiving(false)}
+          onSuccess={async () => {
+            const loaded = await getSavedProfiles();
+            setProfiles(loaded);
+            setIsReceiving(false);
+            showToast("Profile received successfully!", "success");
+          }}
+        />
+      )}
+
+      {isTransferOpen && (
+        <TransferSetupModal
+          onClose={() => setIsTransferOpen(false)}
+        />
+      )}
       <ToastContainer toasts={toasts} />
     </div>
   );

@@ -9,7 +9,7 @@ import {
 /**
  * A single labelled range slider row.
  */
-function SliderRow({ id, label, description, value, onChange, min = "0", max = "1", step = "0.01" }) {
+function SliderRow({ id, label, description, value, formattedValue, min = 0, max = 1, step = 0.01, onChange }) {
   return (
     <div className="space-y-1">
       <label
@@ -18,11 +18,11 @@ function SliderRow({ id, label, description, value, onChange, min = "0", max = "
       >
         <span>{label}</span>
         <span
-          className="tabular-nums text-neutral-500 dark:text-neutral-400"
+          className="tabular-nums text-neutral-500 dark:text-neutral-400 font-mono text-[11px]"
           aria-live="polite"
-          aria-label={`${label} value: ${value}`}
+          aria-label={`${label} value: ${formattedValue !== undefined ? formattedValue : value}`}
         >
-          {value}
+          {formattedValue !== undefined ? formattedValue : value}
         </span>
       </label>
       <input
@@ -60,15 +60,19 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [settings, setSettings] = useState(loadVoiceSettings);
 
-  // Keep in sync when the Settings page changes localStorage from another tab/component.
+  // Keep in sync when settings change
   useEffect(() => {
     function handleStorage(event) {
-      if (event.key === VOICE_SETTINGS_KEY) {
+      if (event.key === VOICE_SETTINGS_KEY || event.type === "voiceforge:settingsChanged") {
         setSettings(loadVoiceSettings());
       }
     }
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener("voiceforge:settingsChanged", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("voiceforge:settingsChanged", handleStorage);
+    };
   }, []);
 
   const updateSetting = useCallback(
@@ -77,6 +81,7 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
       setSettings((prev) => {
         const next = { ...prev, [key]: val };
         persistVoiceSettings(next);
+        window.dispatchEvent(new Event("voiceforge:settingsChanged"));
         return next;
       });
     },
@@ -123,6 +128,28 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
           className="space-y-4 border-t border-neutral-200 px-4 py-4 dark:border-border"
         >
           <SliderRow
+            id="vqs-pitch"
+            label="Pitch Transposition"
+            description="Transposes synthesized pitch up or down (-12 to +12 semitones)."
+            value={settings.pitchShift !== undefined ? settings.pitchShift : 0}
+            formattedValue={`${settings.pitchShift > 0 ? "+" : ""}${settings.pitchShift || 0} st`}
+            min={-12}
+            max={12}
+            step={1}
+            onChange={updateSetting("pitchShift")}
+          />
+          <SliderRow
+            id="vqs-tone"
+            label="DSP Tone Clarity"
+            description="Boosts high-frequency speech definition and acoustic presence."
+            value={settings.toneEq !== undefined ? settings.toneEq : 0.5}
+            formattedValue={((settings.toneEq !== undefined ? settings.toneEq : 0.5) * 100).toFixed(0) + "%"}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={updateSetting("toneEq")}
+          />
+          <SliderRow
             id="vqs-stability"
             label="Stability"
             description="Lower → more expressive. Higher → more consistent."
@@ -144,53 +171,65 @@ export function VoiceQuickSettings({ defaultOpen = false }) {
             onChange={updateSetting("style")}
           />
           <SliderRow
-            id="vqs-rate"
-            label="Speech Rate"
-            description="Adjust speaking speed. Lower → slower, Higher → faster."
-            value={settings.rate}
-            onChange={updateSetting("rate")}
-            min="0.5"
-            max="2.0"
-            step="0.05"
+            id="vqs-pitch"
+            label="Voice Pitch"
+            description="Adjust voice pitch."
+            value={settings.dspPitch}
+            onChange={updateSetting("dspPitch")}
+            min={0.5}
+            max={1.5}
+            step={0.05}
+          />
+          <SliderRow
+            id="vqs-speed"
+            label="Speech Pace (Speed)"
+            description="Adjust speech playback speed."
+            value={settings.dspSpeed}
+            onChange={updateSetting("dspSpeed")}
+            min={0.5}
+            max={2.0}
+            step={0.05}
           />
 
-          {/* ── Speaker Boost toggle ── */}
-          <div className="flex items-center justify-between rounded-lg border border-neutral-200 p-3 dark:border-border">
-            <div>
-              <p className="text-xs font-bold text-neutral-700 dark:text-neutral-300">
-                Speaker Boost
-              </p>
-              <p
-                id="vqs-speaker-boost-desc"
-                className="mt-0.5 text-[10px] leading-snug text-neutral-400 dark:text-neutral-500"
-              >
-                Boosts similarity to the reference speaker. Disable if you hear metallic artifacts.
-              </p>
-            </div>
-            <button
-              id="vqs-speaker-boost"
-              type="button"
-              role="switch"
-              aria-checked={settings.use_speaker_boost}
-              aria-describedby="vqs-speaker-boost-desc"
-              onClick={toggleSpeakerBoost}
-              className={[
-                "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
-                "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1 dark:focus:ring-offset-black",
-                settings.use_speaker_boost
-                  ? "bg-blue-500 dark:bg-blue-600"
-                  : "bg-neutral-200 dark:bg-neutral-700",
-              ].join(" ")}
-              aria-label="Toggle Speaker Boost"
-            >
-              <span
-                className={[
-                  "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200",
-                  settings.use_speaker_boost ? "translate-x-4" : "translate-x-0",
-                ].join(" ")}
+          <details className="group border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-neutral-600 dark:text-neutral-400 focus:outline-none">
+              <span>Graphic Equalizer (EQ)</span>
+              <span className="text-[10px] text-neutral-400 group-open:hidden">Show</span>
+              <span className="text-[10px] text-neutral-400 hidden group-open:inline">Hide</span>
+            </summary>
+            <div className="space-y-4 mt-3 pl-1">
+              <SliderRow
+                id="vqs-bass"
+                label="Bass (200 Hz)"
+                description="Adjust low-end bass frequencies."
+                value={settings.dspBass}
+                onChange={updateSetting("dspBass")}
+                min={-10}
+                max={10}
+                step={1}
               />
-            </button>
-          </div>
+              <SliderRow
+                id="vqs-mid"
+                label="Mid (1000 Hz)"
+                description="Adjust mid-range vocal presence."
+                value={settings.dspMid}
+                onChange={updateSetting("dspMid")}
+                min={-10}
+                max={10}
+                step={1}
+              />
+              <SliderRow
+                id="vqs-treble"
+                label="Treble (4000 Hz)"
+                description="Adjust high-frequency clarity."
+                value={settings.dspTreble}
+                onChange={updateSetting("dspTreble")}
+                min={-10}
+                max={10}
+                step={1}
+              />
+            </div>
+          </details>
 
           <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
             Changes apply to Chatterbox voice synthesis.{" "}
