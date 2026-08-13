@@ -51,7 +51,8 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
     setIsOpen(true);
     setSearch("");
     setFocusIndex(-1);
-    requestAnimationFrame(() => searchRef.current?.focus());
+    // Restore focus to the trigger button
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
   const toggle = useCallback(() => (isOpen ? closeDropdown() : openDropdown()), [isOpen, openDropdown, closeDropdown]);
@@ -100,37 +101,62 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
 
   return (
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
-      <button 
-        ref={triggerRef} 
-        id={id} 
-        type="button" 
-        onClick={toggle} 
-        aria-haspopup="listbox" 
-        aria-expanded={isOpen} 
-        aria-label={`Select output language, current: ${selectedLang ? selectedLang.name : "Auto-detect"}`}
-        className={`group inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200 ${compact ? "px-3 py-2 text-sm" : "w-full px-4 py-3 text-sm"} ${isOpen ? "border-moss bg-mint/20 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100" : "border-neutral-200 bg-white dark:border-border dark:bg-black dark:text-neutral-100"}`}
+      {/* ── Trigger Button ─────────────────────────────────────────────── */}
+      <button
+        ref={triggerRef}
+        id={id}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label="Select output language"
+        className={[
+          "group inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200",
+          "focus:outline-none focus:ring-2 focus:ring-moss/40 dark:focus:ring-glow/40",
+          compact
+            ? "px-3 py-2 text-sm"
+            : "w-full px-4 py-3 text-sm",
+          isOpen
+            ? "border-moss bg-mint/20 text-ink dark:border-glow dark:bg-glow/10 dark:text-neutral-100"
+            : "border-neutral-200 bg-white text-neutral-700 hover:border-moss/50 hover:bg-moss/5 dark:border-border dark:bg-black dark:text-neutral-200 dark:hover:border-glow/50 dark:hover:bg-glow/5",
+        ].join(" ")}
       >
         <span className="flex-1 text-left truncate">{selectedLang ? `${selectedLang.flag} ${selectedLang.name}` : "🌐 Auto-detect"}</span>
         <ChevronDown size={compact ? 14 : 16} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
-        <div role="dialog" tabIndex={-1} aria-label="Language selection" className={`absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg border-neutral-200 bg-white dark:border-border dark:bg-surface animate-fade-in-up ${compact ? "right-0 w-72" : "left-0 right-0 min-w-[320px] sm:w-96"}`} style={{ maxHeight: "420px" }}>
+        <div
+          role="dialog"
+          aria-label="Language selection"
+          className={[
+            "absolute z-50 mt-2 flex flex-col overflow-hidden rounded-xl border shadow-lg",
+            "border-neutral-200/80 bg-white dark:border-border dark:bg-surface",
+            "animate-fade-in-up",
+            "max-w-[calc(100vw-2rem)]",
+            compact ? "left-0 w-72" : "left-0 right-0 min-w-0 sm:min-w-[320px] sm:w-96", 
+          ].join(" ")}
+          style={{ maxHeight: "420px" }}
+        >
+          {/* Search bar */}
           <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2.5 dark:border-border">
-            <Search size={15} className="text-neutral-400" />
-            <input 
-              ref={searchRef} 
-              type="text" 
-              role="combobox"
-              aria-autocomplete="list"
-              aria-expanded={isOpen}
-              aria-controls={id ? `${id}-listbox` : "language-listbox"}
-              aria-activedescendant={focusIndex >= 0 ? (id ? `${id}-option-${focusIndex}` : `option-${focusIndex}`) : undefined}
-              aria-label="Search languages" 
-              value={search} 
-              onChange={(e) => { setSearch(e.target.value); setFocusIndex(-1); }} 
-              placeholder="Search languages..." 
-              className="flex-1 bg-transparent text-sm outline-none dark:text-neutral-100" 
+            <Search
+              size={15}
+              aria-hidden="true"
+              className="flex-shrink-0 text-neutral-400 dark:text-neutral-500"
+            />
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setFocusIndex(-1);
+              }}
+              placeholder="Search languages..."
+              aria-label="Search languages"
+              aria-activedescendant={focusIndex >= 0 && flatItems[focusIndex] ? `lang-option-${flatItems[focusIndex].code ?? "auto"}` : undefined}
+              className="flex-1 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
             />
             {search && <button type="button" aria-label="Clear language search" onClick={() => { setSearch(""); searchRef.current?.focus(); }}><X size={14} /></button>}
           </div>
@@ -146,8 +172,54 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
               <li role="presentation" className="px-4 py-8 text-center text-sm text-neutral-400">No matches</li>
             )}
             {flatItems.map((item, index) => {
-              if (item.type === "header") return <li key={item.region} role="presentation" className="sticky top-0 bg-neutral-50 px-4 py-2 text-[11px] font-bold uppercase text-neutral-400 dark:bg-black dark:text-neutral-500">{item.region}</li>;
-              
+              if (item.type === "auto") {
+                const isSelected = !value;
+                const isFocused = focusIndex === index;
+                return (
+                  <button
+                    key="auto-detect"
+                    type="button"
+                    role="option"
+                    id="lang-option-auto"
+                    aria-selected={isSelected}
+                    data-index={index}
+                    onClick={() => selectLanguage("")}
+                    onMouseEnter={() => setFocusIndex(index)}
+                    className={[
+                      "flex w-full items-center gap-3 border-b border-neutral-100 px-4 py-3 text-left text-sm transition-colors dark:border-border",
+                      isFocused
+                        ? "bg-moss/8 dark:bg-glow/8"
+                        : "hover:bg-neutral-50 dark:hover:bg-white/5",
+                      isSelected
+                        ? "font-semibold text-moss dark:text-glow"
+                        : "text-neutral-700 dark:text-neutral-300",
+                    ].join(" ")}
+                  >
+                    <Globe size={18} aria-hidden="true" className="flex-shrink-0 text-neutral-400 dark:text-neutral-500" />
+                    <span className="flex-1">Auto-detect</span>
+                    <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                      Let AI detect
+                    </span>
+                    {isSelected && (
+                      <Check size={15} aria-hidden="true" className="flex-shrink-0 text-moss dark:text-glow" />
+                    )}
+                  </button>
+                );
+              }
+
+              if (item.type === "header") {
+                return (
+                  <div
+                    key={`region-${item.region}`}
+                    className="sticky top-0 z-10 bg-neutral-50/95 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-neutral-400 backdrop-blur-sm dark:bg-surface/95 dark:text-neutral-500"
+                    role="presentation"
+                  >
+                    {item.region}
+                  </div>
+                );
+              }
+
+              // item.type === "lang"
               const isSelected = value === item.code;
               const optionId = id ? `${id}-option-${index}` : `option-${index}`;
               
@@ -156,6 +228,7 @@ export function LanguageSelector({ value, onChange, id, compact = false }) {
                   key={item.code || "auto"}
                   id={optionId}
                   role="option"
+                  id={`lang-option-${item.code}`}
                   aria-selected={isSelected}
                   data-index={index}
                   onClick={() => selectLanguage(item.code)}
