@@ -18,7 +18,6 @@ VoiceForge is a browser-based assistive video tool that lets a user type during 
 - [API](#api)
 - [Roadmap](#roadmap)
 - [License](#license)
-- [About](#about)
 
 ---
 
@@ -81,6 +80,8 @@ npm run dev
 
 6. Open `http://localhost:5173` in Chrome or Edge.
 
+For more details on how to develop locally, including Docker instructions and our mock architecture, see the [Development Workflow & Local-First Architecture Guide](docs/development-workflow.md).
+
 ---
 
 ## Environment Variables
@@ -94,6 +95,8 @@ All variables live in your local `.env` file (copy from `.env.example`). **None 
 | `PORT` | `3001` | Express API port. |
 | `CLIENT_URL` | `http://localhost:5173` | Allowed CORS origin for the Vite dev server. |
 | `STREAM_SECRET` | *(auto-generated)* | AES-256-GCM signing key for speech stream tokens. Set a fixed value to survive server restarts. |
+| `JWT_SECRET` | *(commented out)* | Signing key for JWT access tokens. |
+| `JWT_REFRESH_SECRET` | *(commented out)* | Signing key for JWT refresh tokens. |
 
 ### Dual-Mode Voice Engine Setup
 
@@ -182,13 +185,29 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 
 ## API
 
+> [!NOTE]
+> All sensitive endpoints (e.g., voice cloning, speech generation, and voices) require a valid JWT bearer token in the `Authorization` header (`Authorization: Bearer <token>`).
+
+### Authentication Endpoints
+
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/api/voice/clone` | Upload reference audio. Stores it server-side and returns a `voice_id`. No external API call in mock mode. |
-| `POST` | `/api/voice/speak` | Send text, `voice_id`, and optional voice settings. Returns a signed `speechId` and streaming `audioUrl`. |
-| `GET` | `/api/voice/speak/stream?t=<speechId>` | Stream the Chatterbox-generated audio for a pending signed speech token (`t`). Proxied from the Hugging Face Space. |
-| `GET` | `/api/voice/status` | Returns current engine mode (`isMock`, `space`) for debugging. |
-| `GET` | `/api/health` | Returns local API health status. |
+| `POST` | `/api/auth/register` | Register a new user. Returns user info, an access token (valid for 15m), and a refresh token (valid for 7d). |
+| `POST` | `/api/auth/login` | Login user. Returns user info, an access token, and a refresh token. |
+| `POST` | `/api/auth/refresh` | Refresh access token using a valid `refreshToken`. Returns a new access token. |
+
+### Voice & Database Endpoints
+
+| Method | Endpoint | Auth Required | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/voice/clone` | Yes | Upload reference audio. Stores it server-side and returns a `voice_id`. |
+| `POST` | `/api/voice/speak` | Yes | Send text, `voice_id`, and optional voice settings. Returns a signed `speechId` and streaming `audioUrl`. |
+| `GET` | `/api/voice/speak/stream` | No | Stream the Chatterbox-generated audio for a pending signed speech token (`t`). |
+| `GET` | `/api/voice/status` | No | Returns current engine mode (`isMock`, `space`) for debugging. |
+| `POST` | `/api/voices` | Yes | Save or replace a voice profile in the database. |
+| `GET` | `/api/voices` | Yes | Retrieve all voice profiles. |
+| `GET` | `/api/voices/:id` | Yes | Retrieve details of a specific voice profile. |
+| `GET` | `/api/health` | No | Returns local API health status. |
 
 
 
@@ -201,7 +220,7 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 - In progress: The MVP virtual camera uses canvas capture; full WebRTC Insertable Streams frame replacement remains future work.
 - TODO: Replace the placeholder `models/wav2lip.onnx` with a real lightweight browser Wav2Lip ONNX model.
 - TODO: Implement real ONNX Runtime Web Wav2Lip inference.
-- TODO: Replace the fallback mouth animation with model-driven mouth movement.
+- Done: Replace the fallback mouth animation with model-driven mouth movement.
 - Done: Add richer virtual camera documentation for OBS and each call provider.
 - TODO: Add automated browser tests for camera and microphone permission flows.
 - TODO: Persist voice profiles across server restarts (database or object-store backend).
@@ -209,3 +228,6 @@ Go to Settings > Devices > Camera and select **OBS Virtual Camera**.
 ## License
 
 MIT
+
+
+<!-- GSSoC Contribution: Resolves #760 -->
