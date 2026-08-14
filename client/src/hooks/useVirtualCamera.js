@@ -4,12 +4,19 @@ export default function useVirtualCamera(canvasRef) {
   const [isLive, setIsLive] = React.useState(false);
   const [status, setStatus] = React.useState("Idle");
   const [stream, setStream] = React.useState(null);
+  const originalTrackRef = React.useRef(null);
 
   function browserSupportsInsertableStreams() {
-    return "MediaStreamTrackProcessor" in window && "MediaStreamTrackGenerator" in window && "TransformStream" in window;
+    return (
+      "MediaStreamTrackProcessor" in window &&
+      "MediaStreamTrackGenerator" in window &&
+      "TransformStream" in window
+    );
   }
 
   async function start() {
+    stop();
+
     const canvas = canvasRef.current;
     if (!canvas) {
       setStatus("Preview canvas unavailable");
@@ -18,31 +25,63 @@ export default function useVirtualCamera(canvasRef) {
 
     const canvasStream = canvas.captureStream(30);
     const [track] = canvasStream.getVideoTracks();
+    originalTrackRef.current = track;
+
+    let outputStream = canvasStream;
+    let outputTrack = track;
 
     if (browserSupportsInsertableStreams()) {
-      setStatus("Canvas stream live; Insertable Streams available");
-      // TODO: Replace this MVP passthrough with a TransformStream that emits Wav2Lip-rendered frames.
+      setStatus("Canvas stream live; Insertable Streams active");
+      const processor = new MediaStreamTrackProcessor({ track });
+      const generator = new MediaStreamTrackGenerator({ kind: "video" });
+
+      const transformer = new TransformStream({
+        async transform(videoFrame, controller) {
+          // Pass the frame through. Future Wav2Lip manipulations can happen here.
+          controller.enqueue(videoFrame);
+        },
+      });
+
+      processor.readable.pipeThrough(transformer).pipeTo(generator.writable);
+      outputStream = new MediaStream([generator]);
+      outputTrack = generator;
     } else {
-      setStatus("Canvas stream live; Insertable Streams unavailable in this browser");
+      setStatus(
+        "Canvas stream live; Insertable Streams unavailable in this browser",
+      );
     }
 
-    setStream(canvasStream);
+    setStream(outputStream);
     setIsLive(true);
-    return { stream: canvasStream, track };
+    return { stream: outputStream, track: outputTrack };
   }
 
   function stop() {
+    originalTrackRef.current?.stop();
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
     setIsLive(false);
     setStatus("Stopped");
   }
 
+  const streamRef = React.useRef(stream);
   React.useEffect(() => {
-    return () => {
-      stream?.getTracks().forEach((track) => track.stop());
-    };
+    streamRef.current = stream;
   }, [stream]);
 
-  return { isLive, status, stream, start, stop, browserSupportsInsertableStreams };
+  React.useEffect(() => {
+    return () => {
+      originalTrackRef.current?.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  return {
+    isLive,
+    status,
+    stream,
+    start,
+    stop,
+    browserSupportsInsertableStreams,
+  };
 }

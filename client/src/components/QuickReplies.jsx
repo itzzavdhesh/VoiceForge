@@ -1,22 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { Plus, X, Check } from "lucide-react";
-import { useToast, ToastContainer } from "./useToast.jsx";
+import React from "react";
 
-const CATEGORIES = ["General", "Social", "Needs", "Urgent"];
-
-const DEFAULT_QUICK_REPLIES = [
-  { label: "Hello", phrase: "Hello", category: "Social" },
-  { label: "Thank you", phrase: "Thank you", category: "Social" },
-  { label: "Please wait", phrase: "Please wait", category: "Urgent" },
-  { label: "I need help", phrase: "I need help", category: "Urgent" },
-  { label: "Can you repeat that?", phrase: "Can you repeat that?", category: "Needs" },
-  { label: "Yes, I understand", phrase: "Yes, I understand", category: "Social" },
-  { label: "No, thank you", phrase: "No, thank you", category: "Needs" },
+const QUICK_REPLIES = [
+  { label: "Hello", phrase: "Hello" },
+  { label: "Thank you", phrase: "Thank you" },
+  { label: "Please wait", phrase: "Please wait" },
+  { label: "I need help", phrase: "I need help" },
+  { label: "Repeat that?", phrase: "Can you repeat that?" },
+  { label: "Yes", phrase: "Yes, I understand" },
+  { label: "No thanks", phrase: "No, thank you" },
 ];
 
 const STORAGE_KEY = "vf_quick_replies";
 
-export function QuickReplies({ onSelect }) {
+export function QuickReplies({ onSelect, showToast }) {
   const [replies, setReplies] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -24,10 +20,16 @@ export function QuickReplies({ onSelect }) {
       const parsed = JSON.parse(saved);
       if (
         Array.isArray(parsed) &&
-        parsed.every((item) => item && typeof item.phrase === "string" && typeof item.label === "string")
+        parsed.every(
+          (item) =>
+            item &&
+            typeof item.phrase === "string" &&
+            typeof item.label === "string",
+        )
       ) {
         return parsed.map((item) => ({
           ...item,
+          id: item.id || generateId(),
           category: item.category && CATEGORIES.includes(item.category) ? item.category : "General",
         }));
       }
@@ -39,23 +41,51 @@ export function QuickReplies({ onSelect }) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingReplyId, setEditingReplyId] = useState(null);
+  const [editingReplyData, setEditingReplyData] = useState(null);
   const [newPhrase, setNewPhrase] = useState("");
+  const [editingPhrase, setEditingPhrase] = useState(null);
+  const [editedValue, setEditedValue] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [newCategory, setNewCategory] = useState("General");
-
-  const { toasts, showToast } = useToast();
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(replies));
     } catch {
-      console.error('Failed to persist quick replies to localStorage');
+      console.error("Failed to persist quick replies to localStorage");
     }
   }, [replies]);
+
+  useEffect(() => {
+    function handleStorage(event) {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue);
+          if (Array.isArray(parsed)) {
+            setReplies(parsed);
+          }
+        } catch {
+          /* ignore invalid JSON payload */
+        }
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+      return () => window.removeEventListener("storage", handleStorage);
+    }
+  }, []);
 
   const handleAdd = (e) => {
     e.preventDefault();
     const cleanPhrase = newPhrase.trim();
+    
+
+    if (cleanPhrase.length > 120) {
+      showToast("Phrase is too long (max 120 characters)", "error");
+      return;
+    }
 
     if (cleanPhrase.length > 120) {
       showToast("Phrase is too long (max 120 characters)", "error");
@@ -68,7 +98,7 @@ export function QuickReplies({ onSelect }) {
     }
 
     const isDuplicate = replies.some(
-      (r) => r.phrase.toLowerCase() === cleanPhrase.toLowerCase()
+      (r) => r.phrase.toLowerCase() === cleanPhrase.toLowerCase(),
     );
 
     if (isDuplicate) {
@@ -76,7 +106,12 @@ export function QuickReplies({ onSelect }) {
       return;
     }
 
-    const newReply = { label: cleanPhrase, phrase: cleanPhrase, category: newCategory };
+    const newReply = {
+      id: generateId(),
+      label: cleanPhrase,
+      phrase: cleanPhrase,
+      category: newCategory,
+    };
     setReplies((prev) => [...prev, newReply]);
     setNewPhrase("");
     setNewCategory("General");
@@ -84,47 +119,207 @@ export function QuickReplies({ onSelect }) {
     showToast("Quick reply added", "success");
   };
 
-  const handleDelete = (phraseToDelete) => {
-    setReplies((prev) => prev.filter((r) => r.phrase !== phraseToDelete));
+  const handleDelete = (idToDelete) => {
+    setReplies((prev) => prev.filter((r) => r.id !== idToDelete));
     showToast("Quick reply deleted", "success");
+  };
+  const handleEdit = (oldPhrase) => {
+  const cleanPhrase = editedValue.trim();
+  const normalizedOldPhrase = oldPhrase.toLowerCase();
+  const isDuplicate = replies.some(
+    (reply) =>
+      reply.phrase.toLowerCase() === cleanPhrase.toLowerCase() &&
+    reply.phrase.toLowerCase() !== normalizedOldPhrase
+  );
+
+
+
+  if (!cleanPhrase) {
+    showToast("Phrase cannot be empty", "error");
+    return;
+  }
+  if (cleanPhrase.length > 120) {
+    showToast("Phrase is too long (max 120 characters)", "error");
+    return;
+  }
+  if (isDuplicate) {
+    showToast("This quick reply already exists", "error");
+    return;
+  }
+
+  setReplies((prev) =>
+    prev.map((reply) =>
+      reply.phrase === oldPhrase
+        ? {
+            ...reply,
+            phrase: cleanPhrase,
+            label: cleanPhrase,
+          }
+        : reply
+    )
+  );
+
+  setEditingPhrase(null);
+  setEditedValue("");
+  showToast("Quick reply updated", "success");
+};
+const handleEditKeyDown = (e, oldPhrase) => {
+  if (e.key === "Enter") {
+    handleEdit(oldPhrase);
+  }
+
+  if (e.key === "Escape") {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }
+};
+
+  const handleEditStart = (id, reply) => {
+    setIsAdding(false);
+    setEditingReplyId(id);
+    setEditingReplyData({
+      phrase: reply.phrase,
+      category: reply.category || "General",
+    });
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (draggedItem === null) return;
+    const oldIndex = replies.findIndex((r) => r.id === draggedItem);
+    const newIndex = replies.findIndex((r) => r.id === targetId);
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newReplies = [...replies];
+      const [removed] = newReplies.splice(oldIndex, 1);
+      newReplies.splice(newIndex, 0, removed);
+      setReplies(newReplies);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (draggedItem === null) return;
+    const oldIndex = replies.findIndex((r) => r.id === draggedItem);
+    const newIndex = replies.findIndex((r) => r.id === targetId);
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newReplies = [...replies];
+      const [removed] = newReplies.splice(oldIndex, 1);
+      newReplies.splice(newIndex, 0, removed);
+      setReplies(newReplies);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleEditSave = (e) => {
+    e.preventDefault();
+    if (!editingReplyId || !editingReplyData) return;
+
+    const cleanPhrase = editingReplyData.phrase.trim();
+    if (cleanPhrase.length > 120) {
+      showToast("Phrase is too long (max 120 characters)", "error");
+      return;
+    }
+    if (!cleanPhrase) {
+      showToast("Phrase cannot be empty", "error");
+      return;
+    }
+
+    const isDuplicate = replies.some(
+      (r) =>
+        r.id !== editingReplyId &&
+        r.phrase.toLowerCase() === cleanPhrase.toLowerCase(),
+    );
+
+    if (isDuplicate) {
+      showToast("This quick reply already exists", "error");
+      return;
+    }
+
+    setReplies((prev) =>
+      prev.map((r) => {
+        if (r.id === editingReplyId) {
+          return {
+            ...r,
+            label: cleanPhrase,
+            phrase: cleanPhrase,
+            category: editingReplyData.category,
+          };
+        }
+        return r;
+      }),
+    );
+
+    setEditingReplyId(null);
+    setEditingReplyData(null);
+    showToast("Quick reply updated", "success");
   };
 
   const filteredReplies = replies.filter((reply) => {
     if (selectedCategoryTab === "All") return true;
     return reply.category === selectedCategoryTab;
   });
+  const allCats = ["All", ...categories];
+
+  const handleTabKeyDown = (e) => {
+    const currentIndex = allCats.indexOf(selectedCategoryTab);
+    let nextIndex = -1;
+
+    if (e.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % allCats.length;
+    } else if (e.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + allCats.length) % allCats.length;
+    } else if (e.key === "Home") {
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      nextIndex = allCats.length - 1;
+    }
+
+    if (nextIndex >= 0) {
+      e.preventDefault();
+      setSelectedCategoryTab(allCats[nextIndex]);
+      const buttons = tablistRef.current?.querySelectorAll('[role="tab"]');
+      buttons?.[nextIndex]?.focus();
+    }
+  };
 
   return (
     <section
       aria-labelledby="qr-heading"
-      className="flex-shrink-0 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-background"
+      className="flex-shrink-0 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black"
     >
-      <div className="mb-2 flex items-center justify-between">
-        <h3
-          id="qr-heading"
-          className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500"
-        >
-          Quick replies
-        </h3>
-        <div className="flex items-center gap-3">
-          {isEditing && (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-              aria-label="Add new quick reply"
-            >
-              <Plus size={12} aria-hidden="true" />
-              Add
-            </button>
-          )}
+      <h3
+        id="qr-heading"
+        className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500"
+      >
+        Quick replies
+      </h3>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Quick reply phrases">
+        {QUICK_REPLIES.map(({ label, phrase }) => (
           <button
-            onClick={() => {
-              setIsEditing(!isEditing);
-              setIsAdding(false);
-              setNewPhrase("");
-            }}
-            className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
-            aria-label={isEditing ? "Done customizing quick replies" : "Customize quick replies"}
+            key={phrase}
+            onClick={() => onSelect(phrase)}
+            className={[
+              "rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5",
+              "text-sm text-neutral-700 transition-all duration-150",
+              "hover:-translate-y-px hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
+              "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1",
+              "active:translate-y-0 active:scale-95",
+              "dark:border-border dark:bg-surface dark:text-neutral-300",
+              "dark:hover:border-blue-500 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:focus:ring-offset-black",
+            ].join(" ")}
+            aria-label={`Quick reply: ${phrase}`}
           >
             {isEditing ? "Done" : "Customize"}
           </button>
@@ -136,6 +331,7 @@ export function QuickReplies({ onSelect }) {
         className="mb-3 flex overflow-x-auto gap-1.5 pb-1 no-scrollbar"
         role="tablist"
         aria-label="Quick replies categories"
+        onKeyDown={handleTabKeyDown}
       >
         {["All", ...CATEGORIES].map((cat) => (
           <button
@@ -156,31 +352,132 @@ export function QuickReplies({ onSelect }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick reply phrases">
-        {filteredReplies.map(({ label, phrase }) => {
+        {filteredReplies.map(({ id, label, phrase, category }) => {
+          const isCurrentlyEditing = editingReplyId === id;
+
           if (isEditing) {
+            if (isCurrentlyEditing) {
+              return (
+                <form
+                  key={`edit-${id}`}
+                  onSubmit={handleEditSave}
+                  className="flex items-center gap-1.5 rounded-full border border-blue-400 bg-white pl-3 pr-2 py-1 dark:border-blue-500 dark:bg-neutral-900"
+                >
+                  <input
+                    type="text"
+                    value={editingReplyData.phrase}
+                    onChange={(e) =>
+                      setEditingReplyData({
+                        ...editingReplyData,
+                        phrase: e.target.value,
+                      })
+                    }
+                    maxLength={120}
+                    autoFocus
+                    className="flex-1 min-w-[5rem] max-w-[10rem] bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                  />
+                  <select
+                    value={editingReplyData.category}
+                    onChange={(e) =>
+                      setEditingReplyData({
+                        ...editingReplyData,
+                        category: e.target.value,
+                      })
+                    }
+                    aria-label="Category"
+                    className="bg-transparent text-xs text-neutral-500 dark:text-neutral-400 focus:outline-none border-l border-neutral-200 dark:border-neutral-700 pl-1.5 mr-1 cursor-pointer"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="dark:bg-neutral-900 dark:text-neutral-100">
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    aria-label="Save changes"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+                  >
+                    <Check size={12} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingReplyId(null);
+                      setEditingReplyData(null);
+                    }}
+                    aria-label="Cancel"
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </form>
+              );
+            }
+
             return (
               <div
-                key={phrase}
+                key={`view-${id}`}
                 className={[
                   "flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 pl-3 pr-2 py-1.5",
                   "text-sm text-neutral-700 dark:border-border dark:bg-surface dark:text-neutral-300",
                 ].join(" ")}
               >
-                <span className="truncate max-w-[150px]">{label}</span>
-                <button
-                  onClick={() => handleDelete(phrase)}
-                  aria-label={`Delete quick reply: ${phrase}`}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
+              {editingPhrase === phrase ? (
+  <>
+    <input
+      value={editedValue}
+      onChange={(e) => setEditedValue(e.target.value)}
+      onKeyDown={(e) => handleEditKeyDown(e, phrase)}
+      className="bg-transparent text-sm outline-none"
+      autoFocus
+    />
+
+    <button
+      onClick={() => handleEdit(phrase)}
+      aria-label="Save quick reply"
+    >
+      <Check size={12} />
+    </button>
+    <button
+  onClick={() => {
+    setEditingPhrase(null);
+    setEditedValue("");
+  }}
+  aria-label="Cancel edit"
+>
+  <X size={12} />
+</button>
+  </>
+) : (
+  <>
+    <span className="truncate max-w-[150px]">{label}</span>
+
+    <button
+      onClick={() => {
+        setEditingPhrase(phrase);
+        setEditedValue(label);
+      }}
+      aria-label="Edit quick reply"
+    >
+      <Pencil size={12} />
+    </button>
+
+    <button
+      onClick={() => handleDelete(phrase)}
+      aria-label={`Delete quick reply: ${phrase}`}
+    >
+      <X size={12} />
+    </button>
+  </>
+)}
               </div>
             );
           }
 
           return (
             <button
-              key={phrase}
+              key={id}
               onClick={() => onSelect(phrase)}
               className={[
                 "rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5",
@@ -248,14 +545,11 @@ export function QuickReplies({ onSelect }) {
         {filteredReplies.length === 0 && !isAdding && (
           <p className="text-xs text-neutral-400 dark:text-neutral-500 italic">
             {isEditing
-              ? 'No quick replies in this category. Click "Add" to create one.'
-              : 'No quick replies in this category.'}
+              ? `No quick replies in this category. Click "Add" to create one.`
+              : "No quick replies in this category."}
           </p>
         )}
       </div>
-
-      <ToastContainer toasts={toasts} />
     </section>
   );
 }
-

@@ -1,16 +1,11 @@
-import React, {
-  useCallback,
-  useRef,
-  useState,
-  useEffect,
-} from "react";
-import { Copy, Eraser, Mic2, History, X } from "lucide-react";
-import { VoiceQuickSettings } from "./VoiceQuickSettings";
+import React, { useCallback, useRef, useState } from "react";
+import { Copy, Eraser, Mic2 } from "lucide-react";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
 import { SpeechHistory } from "./SpeechHistory";
 import { ToastContainer, useToast } from "./useToast.jsx";
 import { useSpeechHistory } from "../hooks/useSpeechHistory";
+import useTTS from "../hooks/useTTS.js";
 import { LanguageSelector } from "./LanguageSelector.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
 
@@ -26,6 +21,8 @@ export default function VoiceForge() {
   const [announcement, setAnnouncement] = useState("");
   const textareaRef = useRef(null);
 
+  const { speak: ttsSpeak } = useTTS();
+
   const {
     history,
     favorites,
@@ -34,47 +31,83 @@ export default function VoiceForge() {
     removeMessage,
     toggleFavorite,
     clearHistory,
+    archiveOldHistory,
+    importBackup,
   } = useSpeechHistory();
 
   const { toasts, showToast } = useToast();
+  const handleClearHistory = useCallback(() => {
+  speakCounterRef.current++;
+  audioMapRef.current.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+  audioMapRef.current.clear();
+  clearHistory();
+}, [clearHistory]);
 
-  const speak = useCallback((text) => {
+  const speak = useCallback(async (text) => {
     if (!text.trim()) return;
 
-    if (!("speechSynthesis" in window)) {
-      showToast("Speech synthesis is not supported in this browser", "error");
-      return;
-    }
+    setIsSpeaking(true);
+    setAnnouncement("Speech synthesis started.");
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language;
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
+    try {
+      await ttsSpeak({ text, language_code: language });
+      setAnnouncement("Speech playback completed.");
+    } catch (err) {
+      showToast(err?.message || "Speech playback failed", "error");
+      setAnnouncement("Speech playback failed.");
+    } finally {
       setIsSpeaking(false);
-      showToast("Speech playback failed", "error");
-    };
-    window.speechSynthesis.speak(utterance);
-  }, [showToast, language]);
+    }
+  }, [ttsSpeak, showToast, language]);
 
-  const handleSpeak = useCallback(() => {
+  const handleSpeak = useCallback(async () => {
     const text = inputText.trim();
     if (!text) {
       showToast("Please type a message first", "error");
       textareaRef.current?.focus();
       return;
     }
-    speak(text);
-    addMessage(text);
-    showToast("Saved to history", "success");
+    try {
+      await speak(text);
+      addMessage(text);
+      showToast("Saved to history", "success");
+    } catch {
+      // speech failed — don't save to history
+    }
   }, [inputText, speak, addMessage, showToast]);
 
   const handleReplay = useCallback((text) => {
     speak(text);
     showToast("Replaying...", "info");
   }, [speak, showToast]);
+
+    const getAudioUrl = useCallback((id) => {
+  return audioMapRef.current.get(id);
+}, []);
+
+const handleDownload = useCallback((id, text) => {
+  const blobUrl = audioMapRef.current.get(id);
+  if (!blobUrl) return;
+  const safeName = text.trim().slice(0, 40).replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "audio";
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}-${String(now.getMinutes()).padStart(2,"0")}-${String(now.getSeconds()).padStart(2,"0")}`;
+  anchor.download = `${safeName}_${timestamp}.mp3`;
+  anchor.style.cssText = "position:absolute;opacity:0;pointer-events:none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}, []);
+
+const handleDeleteMessage = useCallback((id) => {
+  const blobUrl = audioMapRef.current.get(id);
+  if (blobUrl) {
+    URL.revokeObjectURL(blobUrl);
+    audioMapRef.current.delete(id);
+  }
+  removeMessage(id);
+}, [removeMessage]);
 
   const handleReuse = useCallback((text) => {
     setInputText(text);
@@ -120,7 +153,6 @@ export default function VoiceForge() {
 
   const charsLeft = MAX_CHARS - inputText.length;
 
-  
   const hasAnnouncedRef = useRef(false);
 
   // Move focus into the history drawer when it opens (a11y)
@@ -139,19 +171,20 @@ export default function VoiceForge() {
       setAnnouncement("");
     }
   }, [charsLeft]);
+
   useEffect(() => {
     persistLanguage(language);
   }, [language]);
 
   function getCounterColor() {
-    if (charsLeft < 50)  return "text-red-500";
+    if (charsLeft < 50) return "text-red-500";
     if (charsLeft < 100) return "text-orange-500";
     if (charsLeft < 200) return "text-yellow-500";
-    return "text-neutral-400 dark:text-neutral-500";
+    return "text-neutral-400 dark:text-neutral-400";
   }
 
   function getTextareaBorder() {
-    if (charsLeft < 50)  return "border-red-300 dark:border-red-800";
+    if (charsLeft < 50) return "border-red-300 dark:border-red-800";
     if (charsLeft < 100) return "border-orange-300 dark:border-orange-800";
     if (charsLeft < 200) return "border-yellow-300 dark:border-yellow-800";
     return "border-neutral-200 dark:border-border";
@@ -159,6 +192,11 @@ export default function VoiceForge() {
 
   return (
     <div className="relative flex h-[calc(100vh-57px)] overflow-hidden bg-white font-sans antialiased dark:bg-black sm:h-[calc(100vh-65px)]">
+      {/* Screen reader live announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
+      </div>
+
       {/* Mobile history drawer overlay */}
       {historyOpen && (
         <div
@@ -195,19 +233,11 @@ export default function VoiceForge() {
       </div>
 
       <main className="flex flex-1 flex-col overflow-hidden" aria-label="Speech composer">
-        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-border dark:bg-black sm:px-5 sm:py-3.5">
-          {/* Mobile: history toggle */}
-          <button
-            className="mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-neutral-200 text-neutral-500 transition hover:bg-neutral-100 lg:hidden dark:border-border dark:text-neutral-400"
-            onClick={() => setHistoryOpen((o) => !o)}
-            aria-label={historyOpen ? "Close history" : "Open history"}
-          >
-            {historyOpen ? <X size={15} aria-hidden="true" /> : <History size={15} aria-hidden="true" />}
-          </button>
+        <header className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-5 py-3.5 dark:border-border dark:bg-black">
           <h1 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">
             VoiceForge
           </h1>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500 sm:text-sm">
+          <span className="text-sm text-neutral-400 dark:text-neutral-500">
             Speech Composer
           </span>
           {isSpeaking && (
@@ -238,14 +268,14 @@ export default function VoiceForge() {
           <div className="flex items-center justify-between">
             <label
               htmlFor="vf-compose"
-              className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500"
+              className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-400"
             >
               Compose message
             </label>
             <span
               className={[
                 "text-xs tabular-nums",
-                getCounterColor(),
+                charsLeft < 50 ? "text-red-500" : "text-neutral-400 dark:text-neutral-500",
               ].join(" ")}
               aria-live="polite"
             >
@@ -273,7 +303,7 @@ export default function VoiceForge() {
               "dark:placeholder:text-neutral-600",
               "focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200",
               "dark:focus:bg-black dark:focus:ring-blue-500/30",
-              getTextareaBorder(),
+              charsLeft < 50 ? "border-red-300 dark:border-red-800" : "border-neutral-200 dark:border-border",
             ].join(" ")}
             rows={6}
           />
@@ -283,24 +313,12 @@ export default function VoiceForge() {
             <kbd className="rounded border border-neutral-200 px-1 font-mono text-[10px] dark:border-border">Enter</kbd> to speak quickly.
           </p>
 
-          <VoiceQuickSettings />
-
           <div className="flex items-center gap-2">
-            <label htmlFor="vf-language" className="text-sm font-medium text-neutral-600 dark:text-neutral-300">Language:</label>
-            <LanguageSelector
-              id="vf-language"
-              value={language}
-              onChange={setLanguage}
-              compact
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleCopy(inputText)}
               disabled={!inputText.trim()}
               aria-label="Copy message to clipboard"
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
+              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
             >
               <Copy size={15} aria-hidden="true" />
               Copy
@@ -310,7 +328,7 @@ export default function VoiceForge() {
               onClick={() => setInputText("")}
               disabled={!inputText}
               aria-label="Clear compose area"
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
+              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-3.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40 dark:border-border dark:text-neutral-300 dark:hover:bg-surface"
             >
               <Eraser size={15} aria-hidden="true" />
               Clear
@@ -321,7 +339,7 @@ export default function VoiceForge() {
               disabled={!inputText.trim() || isSpeaking}
               aria-label={isSpeaking ? "Currently speaking" : "Speak and save to history"}
               className={[
-                "ml-auto flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition",
+                "ml-auto flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium text-white transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-black",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 isSpeaking ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",

@@ -56,18 +56,7 @@ export default function About({ onNavigate }) {
         <h2 className="text-2xl font-semibold mb-8">How It Works</h2>
         <div className="grid gap-6 sm:grid-cols-3">
           {steps.map((step) => (
-            <div
-              key={step.number}
-              className="
-                rounded-xl border border-border bg-card p-6
-                transition-all duration-300 ease-out
-                hover:-translate-y-2
-                hover:shadow-xl
-                hover:border-primary
-                hover:bg-accent/20
-                cursor-pointer
-              "
-            >
+            <div key={step.number} className="rounded-xl border border-border bg-card p-6">
               <span className="text-3xl font-bold text-primary opacity-40">{step.number}</span>
               <h3 className="mt-2 text-lg font-semibold">{step.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
@@ -84,6 +73,21 @@ export default function About({ onNavigate }) {
               {tech.name}
             </span>
           ))}
+        </div>
+      </section>
+
+      <section className="mb-12 rounded-xl border border-border bg-card p-6">
+        <h2 className="text-xl font-semibold mb-2">Software Version & Release Info</h2>
+        <div className="flex flex-wrap items-center justify-between text-sm text-muted-foreground gap-4">
+          <div>
+            <span className="font-bold text-foreground">VoiceForge v1.0.0</span> (Stable Release)
+          </div>
+          <div>
+            Build: <code className="font-mono bg-muted px-2 py-0.5 rounded text-xs">2026.08-prod</code>
+          </div>
+          <div>
+            License: <span className="font-semibold text-foreground">MIT License</span>
+          </div>
         </div>
       </section>
 

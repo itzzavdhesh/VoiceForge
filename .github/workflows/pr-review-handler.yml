@@ -122,12 +122,12 @@ jobs:
               core.info('Could not determine pull request associated with this workflow run. Skipping.');
               return;
             }
-            
+
             issue_number = pr.number;
             const prHeadSha = pr.head?.sha || headSha;
-            
+
             core.info(`Processing review state for PR #${issue_number} (SHA: ${headSha})`);
-            
+
             // ─────────────────────────────────────────────────────────────
             // CONFIGURATION: keep in sync with other workflows
             // ─────────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ jobs:
               'joyprakashk',
               'rushi-k12',
               'itzzavdheshh',
-              'vedhapprakashni'
+              'Nitya-003'
             ];
             const mentorLabelMap = {
               'sabeenaviklar':  'mentor:sabeenaviklar',
@@ -153,12 +153,12 @@ jobs:
               'joyprakashk':    'mentor:joyprakashk',
               'rushi-k12':      'mentor:rushi-k12',
               'itzzavdheshh':    'mentor:itzzavdheshh',
-              'vedhapprakashni': 'mentor:vedhapprakashni'
+              'Nitya-003':      'mentor:Nitya-003'
             };
             const ADMINS = ['itzzavdhesh'];
             const STATUS_CONTEXT = 'voiceforge/mentor-approved';
             // ─────────────────────────────────────────────────────────────
-            
+
             // 1. Fetch current labels on the PR fresh from the API
             let currentLabelsLower = [];
             try {
@@ -182,13 +182,14 @@ jobs:
               return;
             }
 
-            // 3. Build a map of latest review states per user
+            // 3. Build a map of latest review states per user (normalized to uppercase)
             const latestReviewByUser = {};
             for (const review of reviews) {
               const login = review.user?.login?.toLowerCase();
               if (!login) continue;
-              latestReviewByUser[login] = review.state; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+              latestReviewByUser[login] = review.state?.toUpperCase(); // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
             }
+
 
             // Helper: ensure a label exists in the repo
             async function ensureLabel(name, color, description) {
@@ -282,7 +283,7 @@ jobs:
             // 4. Update mentor label logic
             const labelsToAdd = [];
             const labelsToRemove = [];
-            
+
             for (const mentor of MENTORS) {
               const state = latestReviewByUser[mentor.toLowerCase()];
               const label = mentorLabelMap[mentor];
@@ -294,11 +295,11 @@ jobs:
                 labelsToRemove.push(label);
               }
             }
-            
+
             // 5. Check if any mentor approved/changes requested
             let hasApproved = false;
             let hasChangesRequested = false;
-            
+
             for (const user in latestReviewByUser) {
               const state = latestReviewByUser[user];
               const isMentor = MENTORS.map(m => m.toLowerCase()).includes(user);
@@ -322,7 +323,7 @@ jobs:
                 }
               }
             }
-            
+
             if (hasChangesRequested) {
               labelsToAdd.push('needs revision');
               labelsToRemove.push('ready for review');
@@ -365,7 +366,7 @@ jobs:
               const state = latestReviewByUser[m.toLowerCase()];
               return state === 'APPROVED' || state === 'COMMENTED' || state === 'CHANGES_REQUESTED';
             });
-            
+
             if (reviewingMentors.length > 0) {
               const names = reviewingMentors.join(', ');
               await setStatus('success', `Reviewed by mentor(s): ${names} — eligible to merge.`);

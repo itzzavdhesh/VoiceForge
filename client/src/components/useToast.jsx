@@ -31,6 +31,8 @@ export function ToastContainer({ toasts }) {
 
   return (
     <div
+      role="region"
+      aria-label="Notifications"
       aria-live="polite"
       aria-atomic="false"
       className="pointer-events-none fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2"

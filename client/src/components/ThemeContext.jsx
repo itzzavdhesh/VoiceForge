@@ -12,7 +12,9 @@ function getStoredTheme() {
   }
 
   try {
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : DEFAULT_THEME;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : DEFAULT_THEME;
   } catch {
     return DEFAULT_THEME;
   }
@@ -21,6 +23,8 @@ function getStoredTheme() {
 function storeTheme(theme) {
   try {
     localStorage.setItem("voiceforge:theme", theme);
+    // Dispatch a custom event so all open tabs can react immediately
+    window.dispatchEvent(new CustomEvent("voiceforge:themeChanged", { detail: { theme } }));
   } catch {
     // Theme still works for the current session when persistence is unavailable.
   }
@@ -39,6 +43,34 @@ export function ThemeProvider({ children }) {
     storeTheme(theme);
   }, [theme]);
 
+  React.useEffect(() => {
+    function handleStorage(event) {
+      if (event.key === "voiceforge:theme" && (event.newValue === "dark" || event.newValue === "light")) {
+        setTheme(event.newValue);
+      }
+    }
+
+    function handleSystemThemeChange(e) {
+      // Only auto-switch if user hasn't explicitly stored a manual theme preference
+      try {
+        if (!localStorage.getItem("voiceforge:theme")) {
+          setTheme(e.matches ? "dark" : "light");
+        }
+      } catch {}
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+      const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+      mediaQuery?.addEventListener?.("change", handleSystemThemeChange);
+
+      return () => {
+        window.removeEventListener("storage", handleStorage);
+        mediaQuery?.removeEventListener?.("change", handleSystemThemeChange);
+      };
+    }
+  }, []);
+
   function toggleTheme() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   }
@@ -55,7 +87,3 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
   return ctx;
 }
-
-
-
-

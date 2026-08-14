@@ -35,7 +35,20 @@ const HEADING_ID = "keyboard-shortcuts-heading";
 
 export default function KeyboardShortcutsModal({ isOpen, onClose }) {
   const modalRef = React.useRef(null);
+  const searchInputRef = React.useRef(null);
   const previousFocusRef = React.useRef(null);
+  const [query, setQuery] = React.useState("");
+
+  const filteredGroups = React.useMemo(() => {
+    if (!query.trim()) return SHORTCUTS;
+    const q = query.toLowerCase();
+    return SHORTCUTS.map(group => ({
+      ...group,
+      shortcuts: group.shortcuts.filter(
+        s => s.description.toLowerCase().includes(q) || s.keys.some(k => k.toLowerCase().includes(q))
+      )
+    })).filter(g => g.shortcuts.length > 0);
+  }, [query]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -108,11 +121,13 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby={HEADING_ID}
+      aria-describedby="keyboard-shortcuts-desc"
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       <div
         className="absolute inset-0 bg-black/50 dark:bg-black/70"
         onClick={onClose}
+        role="presentation"
         aria-hidden="true"
       />
       <div
@@ -122,7 +137,11 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
       >
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4 dark:border-border">
           <div className="flex items-center gap-2">
-            <Keyboard size={18} aria-hidden="true" className="text-ink dark:text-neutral-200" />
+            <Keyboard
+              size={18}
+              aria-hidden="true"
+              className="text-ink dark:text-neutral-200"
+            />
             <h2
               id={HEADING_ID}
               className="text-base font-semibold text-ink dark:text-neutral-100"
@@ -140,9 +159,9 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
           </button>
         </div>
         <div className="divide-y divide-ink/5 px-6 py-2 dark:divide-border">
-          {SHORTCUTS.map((group) => (
+          {filteredGroups.map((group) => (
             <div key={group.context} className="py-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink/40 dark:text-neutral-500">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink/40 dark:text-neutral-400">
                 {group.context}
               </p>
               <div className="flex flex-col gap-2">
@@ -171,7 +190,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
           ))}
         </div>
         <div className="flex items-center justify-between border-t border-ink/10 px-6 py-3 dark:border-border">
-          <p className="text-xs text-ink/40 dark:text-neutral-500">
+          <p id="keyboard-shortcuts-desc" className="text-xs text-ink/40 dark:text-neutral-500">
             Press{" "}
             <kbd className="rounded border border-ink/15 bg-ink/5 px-1 font-mono text-[10px] dark:border-border dark:bg-white/5">
               ?

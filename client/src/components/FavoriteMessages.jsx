@@ -5,8 +5,16 @@ const FEW_SHOWN = 5;
 
 export function FavoriteMessages({ history, favorites, onReuse, onUnpin }) {
   const [expanded, setExpanded] = useState(false);
+  const [sortBy, setSortBy] = useState("recent");
 
-  const pinned = history.filter((message) => favorites.has(message.id));
+  const pinned = React.useMemo(() => {
+    const items = history.filter((message) => favorites.has(message.id));
+    if (sortBy === "alpha") {
+      return [...items].sort((a, b) => a.text.localeCompare(b.text));
+    }
+    return items;
+  }, [history, favorites, sortBy]);
+
   if (pinned.length === 0) return null;
 
   const displayed = expanded ? pinned : pinned.slice(0, FEW_SHOWN);
@@ -36,7 +44,7 @@ export function FavoriteMessages({ history, favorites, onReuse, onUnpin }) {
           >
             <button
               onClick={() => onReuse(message.text)}
-              className="max-w-[150px] truncate text-left focus:outline-none focus:underline sm:max-w-[180px]"
+              className="max-w-[180px] truncate text-left focus:outline-none focus:underline"
               aria-label={`Load pinned phrase: ${message.text}`}
               title={message.text}
             >

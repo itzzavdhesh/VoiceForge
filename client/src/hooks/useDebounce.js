@@ -1,23 +1,37 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
-export default function useDebounce(value, delay) {
+export const DEFAULT_DEBOUNCE_MS = 400;
+
+export default function useDebounce(value, delay = DEFAULT_DEBOUNCE_MS) {
   const [debouncedValue, setDebouncedValue] = useState(value);
+  const timerRef = useRef(null);
+
+  const cancel = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const flush = useCallback(() => {
+    cancel();
+    setDebouncedValue(value);
+  }, [value, cancel]);
 
   useEffect(() => {
-    // If search is empty or whitespace only, bypass delay and update immediately
-    if (value.trim() === "") {
+    if (typeof value === "string" && value.trim() === "") {
       setDebouncedValue(value);
       return undefined;
     }
 
-    const handler = setTimeout(() => {
+    timerRef.current = setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
 
     return () => {
-      clearTimeout(handler);
+      cancel();
     };
-  }, [value, delay]);
+  }, [value, delay, cancel]);
 
   return debouncedValue;
 }

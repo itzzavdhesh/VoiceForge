@@ -1,10 +1,12 @@
 // Renders the first-time setup flow for recording and cloning a reference voice.
+import React, { useRef, useEffect } from "react";
+import { CheckCircle2, Loader2, CircleAlert, ArrowRight } from "lucide-react";
 import React from "react";
 import { CheckCircle2, Loader2, CircleAlert, ArrowRight, RotateCcw } from "lucide-react";
 import VoiceRecorder from "../components/VoiceRecorder.jsx";
 import useVoiceClone from "../hooks/useVoiceClone.js";
-import { hasApiKey } from "../utils/apiKeyStorage.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
+import { API_BASE_URL } from "../utils/apiConfig.js";
 
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -13,9 +15,9 @@ import {
 } from "../utils/voiceSettings.js";
 
 /**
- * A labelled range slider for a 0–1 voice parameter.
+ * A labelled range slider for a voice parameter.
  */
-function VoiceSlider({ id, label, description, value, onChange }) {
+function VoiceSlider({ id, label, description, value, onChange, min = 0, max = 1 }) {
   return (
     <div className="space-y-1.5">
       <label
@@ -34,8 +36,8 @@ function VoiceSlider({ id, label, description, value, onChange }) {
       <input
         id={id}
         type="range"
-        min="0"
-        max="1"
+        min={min}
+        max={max}
         step="0.01"
         value={value}
         onChange={onChange}
@@ -88,15 +90,6 @@ function Step2VoiceSettings({ onBack, onContinue }) {
     };
   }
 
-  function toggleSpeakerBoost() {
-    setSettings((prev) => {
-      const next = { ...prev, use_speaker_boost: !prev.use_speaker_boost };
-      persistVoiceSettings(next);
-      flashSaved();
-      return next;
-    });
-  }
-
   function resetToDefaults() {
     const defaults = { ...DEFAULT_VOICE_SETTINGS };
     setSettings(defaults);
@@ -113,7 +106,7 @@ function Step2VoiceSettings({ onBack, onContinue }) {
             Voice Workspace Parameters
           </h3>
           <p className="mt-1 text-sm text-ink/60 dark:text-muted">
-            Fine-tune how ElevenLabs generates your cloned speech. Changes are
+            Fine-tune how Chatterbox generates your cloned speech. Changes are
             saved instantly and shared across all tabs.
           </p>
         </div>
@@ -142,11 +135,13 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           onChange={updateSlider("stability")}
         />
         <VoiceSlider
-          id="ob-similarity"
-          label="Similarity Boost"
-          description="Higher values make the output closer to the original reference voice. Very high values may introduce artefacts."
-          value={settings.similarity_boost}
-          onChange={updateSlider("similarity_boost")}
+          id="ob-temperature"
+          label="Temperature"
+          description="Lower values are steadier; higher values allow more variation in the generated speech."
+          value={settings.temperature}
+          onChange={updateSlider("temperature")}
+          min={0.05}
+          max={5}
         />
         <VoiceSlider
           id="ob-style"
@@ -154,42 +149,8 @@ function Step2VoiceSettings({ onBack, onContinue }) {
           description="Higher values exaggerate the style and prosody of the reference audio. Keep low for neutral delivery."
           value={settings.style}
           onChange={updateSlider("style")}
+          max={2}
         />
-
-        {/* ── Speaker Boost toggle ── */}
-        <div className="flex items-center justify-between rounded-lg border border-ink/10 p-4 dark:border-border">
-          <div>
-            <p className="text-sm font-semibold text-ink dark:text-neutral-200">
-              Speaker Boost
-            </p>
-            <p className="mt-0.5 text-xs text-ink/55 dark:text-muted">
-              Boosts similarity to the reference speaker. Recommended on for
-              most voices; disable if you hear metallic artefacts.
-            </p>
-          </div>
-          <button
-            id="ob-speaker-boost"
-            type="button"
-            role="switch"
-            aria-checked={settings.use_speaker_boost}
-            onClick={toggleSpeakerBoost}
-            className={[
-              "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
-              "transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-moss focus:ring-offset-2 dark:focus:ring-glow dark:focus:ring-offset-black",
-              settings.use_speaker_boost
-                ? "bg-moss dark:bg-glow"
-                : "bg-neutral-300 dark:bg-neutral-600",
-            ].join(" ")}
-            aria-label="Toggle Speaker Boost"
-          >
-            <span
-              className={[
-                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
-                settings.use_speaker_boost ? "translate-x-5" : "translate-x-0",
-              ].join(" ")}
-            />
-          </button>
-        </div>
       </div>
 
       {/* ── Info note ── */}
@@ -236,14 +197,31 @@ function Step2VoiceSettings({ onBack, onContinue }) {
   );
 }
 
+const MIN_NAME_LENGTH = 3;
+const MAX_NAME_LENGTH = 100;
+
 export default function Onboarding({ onReady }) {
   const [recording, setRecording] = React.useState(null);
+  const [recordingDuration, setRecordingDuration] = React.useState(0);
+
+  function handleRecordingReady(blob, duration = 0) {
+    setRecording(blob);
+    setRecordingDuration(duration);
+  }
+
   const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
   const [successProfile, setSuccessProfile] = React.useState(null);
   const { cloneVoice, status, error: apiError } = useVoiceClone();
   const { toasts, showToast } = useToast();
   const isCloning = status === "cloning";
-  const [serverStatus, setServerStatus] = React.useState({ isMock: false, hasServerKey: false });
+<<<<<<< HEAD
+  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+=======
+  const [serverStatus, setServerStatus] = React.useState({
+    isMock: false,
+    hasServerKey: false,
+  });
+>>>>>>> 7eeb8da (refactor: reuse voice name length constants)
 
   React.useEffect(() => {
     fetch("/api/voice/status")
@@ -252,18 +230,80 @@ export default function Onboarding({ onReady }) {
       .catch((err) => console.error("Failed to fetch server status:", err));
   }, []);
 
-  const hasKey = React.useMemo(() => {
-    return hasApiKey() || serverStatus.isMock || serverStatus.hasServerKey;
-  }, [serverStatus]);
+  const recordingDuration = recording?.duration || 0;
 
-  // Derived validation: compute an error message from the current voiceName.
-  // Using a constant (not useState) because the value is always in sync with voiceName.
+const MIN_NAME_LENGTH = 3;
+const MAX_NAME_LENGTH = 100;
+
+export default function Onboarding({ onReady }) {
+  const [recording, setRecording] = React.useState(null);
+  const [recordingDuration, setRecordingDuration] = React.useState(0);
+
+  function handleRecordingReady(blob, duration = 0) {
+    setRecording(blob);
+    setRecordingDuration(duration);
+  }
+
+  const [voiceName, setVoiceName] = React.useState("VoiceForge Voice");
+  const [successProfile, setSuccessProfile] = React.useState(null);
+  const { cloneVoice, status, error: apiError } = useVoiceClone();
+  const { toasts, showToast } = useToast();
+  const isCloning = status === "cloning";
+  const [serverStatus, setServerStatus] = React.useState({ isMock: false, space: "" });
+
+  React.useEffect(() => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+
+  fetch(`${API_BASE_URL}/api/voice/status`, { signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        throw new Error("Server returned non-JSON response");
+      }
+
+      return res.json();
+    })
+    .then((data) => {
+      setServerStatus(data);
+    })
+    .catch((err) => {
+      if (err.name === "AbortError") {
+        console.error("Failed to fetch server status (timeout or cancelled):", err);
+      } else {
+        console.error("Failed to fetch server status:", err);
+      }
+      // Do NOT call setServerStatus here — leave previous/default state intact
+    });
+
+  return () => {
+    clearTimeout(timeoutId);
+    controller.abort();
+  };
+}, []);
+  const hasKey = React.useMemo(() => {
+    return serverStatus.isMock || Boolean(serverStatus.space);
+  }, [serverStatus]);
+  
   const nameError = React.useMemo(() => {
-    const trimmed = voiceName.trim();
-    if (trimmed.length === 0) return "Voice name is required.";
-    if (trimmed.length > 100) return "Voice name must be 100 characters or fewer.";
-    return "";
-  }, [voiceName]);
+  const trimmed = voiceName.trim();
+  if (trimmed.length === 0) {
+    return "Voice name is required.";
+  }
+  if (trimmed.length < MIN_NAME_LENGTH) {
+    return `Voice name must be at least ${MIN_NAME_LENGTH} characters.`;
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return `Voice name must be ${MAX_NAME_LENGTH} characters or fewer.`;
+  }
+  return "";
+}, [voiceName]);
 
 
   // Track the highest milestone step the user is allowed to navigate to
@@ -284,11 +324,10 @@ export default function Onboarding({ onReady }) {
     return Math.min(parsedStep, parsedMax);
   });
 
-  // Dynamic content dictionary for the header banner based on activeStep
   const stepContent = {
     1: {
       title: "Create your voice profile",
-      description: "Record a short, consent-based reference clip. VoiceForge sends it to ElevenLabs through your local server and saves the returned voice ID in this browser.",
+      description: "Record a short, consent-based reference clip. VoiceForge sends it via the Chatterbox engine on Hugging Face through your local server and saves the returned voice ID in this browser.",
       labels: ["Record", "Clone", "Next"]
     },
     2: {
@@ -312,101 +351,67 @@ export default function Onboarding({ onReady }) {
     localStorage.setItem("voiceforge:maxUnlockedStep", maxUnlockedStep.toString());
   }, [maxUnlockedStep]);
 
-  async function handleClone() {
-    // 1. Strict validation guards: Don't run without API key, a recording, or a valid name
-    if (!hasKey || !recording) return;
-    if (nameError) return; // block on empty / whitespace / over-limit name
+  const recordingDuration = recording?.duration ?? 0;
 
-    try {
-      // 2. Perform real API call without overlapping mock declarations
-      const profile = await cloneVoice(recording, voiceName.trim());
-      if (profile) {
-        setSuccessProfile(profile);
-        setMaxUnlockedStep(2);
-        showToast("Voice cloned successfully", "success");
-        setActiveStep(2); // Move user to Step 2 instantly upon real success
-      }
-    } catch (err) {
-      console.error("Voice cloning process failed:", err);
-      showToast("Voice cloning failed. Please try again.", "error");
-      // No artificial mock bypasses here. Real failure is preserved in apiError and shown below.
-    }
+  function handleRecordingReady(blob, payload) {
+    setRecording(normalizeRecordingResult(blob, payload));
   }
 
-  function handleManualStepNavigation(targetStep) {
-    if (targetStep <= maxUnlockedStep) {
-      setActiveStep(targetStep);
-    }
+  async function handleClone() {
+    // 1. Strict validation guards: recording and a valid name are required.
+    if (!hasKey || !recording) return;
+    if (recordingDuration < 10) return;
+    if (nameError) return; // block on empty / whitespace / over-limit name
+
+  function handleRecordingReady(blob, payload) {
+    setRecording(normalizeRecordingResult(blob, payload));
+  }
+
+  async function handleClone() {
+    if (!recording || !recording.isValid) return;
+    const profile = await cloneVoice(recording.blob, voiceName);
+    setSuccessProfile(profile);
   }
 
   return (
     <div className="space-y-6">
-      {/* GLOBAL ONBOARDING HEADER BANNER VIEW */}
-      <section className="rounded-lg border border-ink/10 bg-white p-6 text-ink shadow-soft dark:border-border dark:bg-surface dark:text-white dark:shadow-soft-dk">
+      <section className="rounded-lg bg-black p-6 text-white shadow-soft dark:border dark:border-border dark:bg-surface dark:shadow-soft-dk">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">
-              Step {activeStep} of 3
+              Step 1 of 3
             </p>
             <h2 className="mt-2 text-3xl font-bold">
-              {stepContent[activeStep].title}
+              Create your voice profile
             </h2>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-ink/75 dark:text-white/75">
-              {stepContent[activeStep].description}
+            <p className="mt-3 max-w-3xl text-base leading-7 text-white/75">
+              Record a short, consent-based reference clip. VoiceForge sends it
+              to ElevenLabs through your local server and saves the returned
+              voice ID in this browser.
             </p>
           </div>
-          
-          {/* STEP PROGRESS INDICATORS COMPONENT GRID */}
-          <div className="grid w-full grid-cols-3 gap-2 sm:max-w-xs lg:max-w-sm" aria-label="Onboarding progress indicators">
-            {stepContent[activeStep].labels.map((label, index) => {
-              let isBarFilled = false;
-              if (activeStep === 1) {
-                if (index === 0) isBarFilled = true;
-                if (index === 1 && recording) isBarFilled = true;
-                if (index === 2 && (successProfile || maxUnlockedStep >= 2)) isBarFilled = true;
-              } else if (activeStep === 2) {
-                if (index === 0) isBarFilled = true;
-                if (index === 1) isBarFilled = true;
-                if (index === 2 && maxUnlockedStep >= 3) isBarFilled = true;
-              } else if (activeStep === 3) {
-                isBarFilled = true;
-              }
-
-              return (
-                <div
-                  key={label}
-                  className={`h-2 rounded-full transition-all duration-300 ${isBarFilled ? "bg-coral" : "bg-ink/15 dark:bg-white/25"}`}
-                  title={label}
-                />
-              );
-            })}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onReady}
+              className="text-xs font-semibold text-white/70 hover:text-white underline transition"
+            >
+              Skip Onboarding →
+            </button>
+            <div
+              className="grid w-full max-w-sm grid-cols-3 gap-2"
+              aria-label="Onboarding progress"
+            >
+            {["Record", "Clone", "Call"].map((step, index) => (
+              <div
+                key={step}
+                className={`h-2 rounded-full ${index === 0 ? "bg-coral" : "bg-white/25"}`}
+                title={step}
+              />
+            ))}
           </div>
         </div>
       </section>
-
-      {/* REFACTORED ACCESSIBLE INTERACTIVE NAVIGATION STEP DOT TRACKS */}
-      <div className="flex items-center justify-center gap-3" role="tablist" aria-label="Onboarding step navigation">
-        {[1, 2, 3].map((stepNum) => {
-          const isAccessible = stepNum <= maxUnlockedStep;
-          const isCurrent = activeStep === stepNum;
-
-          return (
-            <button
-              key={stepNum}
-              type="button"
-              disabled={!isAccessible}
-              onClick={() => handleManualStepNavigation(stepNum)}
-              aria-label={`Go to Step ${stepNum}`}
-              aria-current={isCurrent ? "step" : undefined}
-              className={`h-3 w-3 rounded-full transition-all duration-300 ${
-                isCurrent 
-                  ? "bg-coral scale-125 ring-2 ring-coral/30" 
-                  : isAccessible ? "bg-mint" : "bg-ink/15 dark:bg-white/10"
-              } ${!isAccessible ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
-            />
-          );
-        })}
-      </div>
 
       {/* STEP 1: PROFILE MANAGEMENT CONTROLS */}
       {activeStep === 1 && (
@@ -415,13 +420,13 @@ export default function Onboarding({ onReady }) {
             <div className="flex items-center gap-2 rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink dark:text-neutral-100">
               <CircleAlert size={18} aria-hidden="true" className="shrink-0 text-coral" />
               <span>
-                No ElevenLabs API key found. Go to the{" "}
-                <strong>Settings</strong> tab to add your key before cloning.
+              No voice engine available. Ensure your local server is running on port 3001. Check your{" "}
+                <strong>.env</strong> file and the README.
               </span>
             </div>
           )}
 
-          <VoiceRecorder onRecordingReady={setRecording} disabled={isCloning} />
+          <VoiceRecorder onRecordingReady={handleRecordingReady} disabled={isCloning} />
 
           <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft dark:border-border dark:bg-surface dark:shadow-soft-dk">
             <label className="block text-sm font-bold text-ink dark:text-neutral-100" htmlFor="voice-name">
@@ -433,7 +438,7 @@ export default function Onboarding({ onReady }) {
                 value={voiceName}
                 onChange={(event) => setVoiceName(event.target.value)}
                 disabled={isCloning}
-                maxLength={100}
+                maxLength={MAX_NAME_LENGTH}
                 aria-describedby="voice-name-feedback"
                 aria-invalid={nameError ? "true" : undefined}
                 className={[
@@ -448,7 +453,7 @@ export default function Onboarding({ onReady }) {
               <button
                 type="button"
                 onClick={handleClone}
-                disabled={isCloning || !hasKey || !recording || Boolean(nameError)}
+                disabled={isCloning || !hasKey || !recording || recordingDuration < 10 || Boolean(nameError)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-5 font-bold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCloning && <Loader2 className="animate-spin" size={18} />}
@@ -477,9 +482,9 @@ export default function Onboarding({ onReady }) {
                     : "text-ink/45 dark:text-muted",
                 ].join(" ")}
                 aria-live="polite"
-                aria-label={`${voiceName.length} of 100 characters used`}
+                aria-label={`${voiceName.length} of ${MAX_NAME_LENGTH} characters used`}
               >
-                {voiceName.length}/100
+                {voiceName.length}/{MAX_NAME_LENGTH}
               </span>
             </div>
 

@@ -1,26 +1,35 @@
 // Floating button fixed to the bottom-right corner that scrolls to the page bottom.
 import React from "react";
 import { ChevronDown } from "lucide-react";
-
-export default function ScrollToBottomButton({ activeTab }) {
-  const [visible, setVisible] = React.useState(true);
+export function ScrollToBottomButton({ activeTab, threshold = 200 }) {
+  const [visible, setVisible] = React.useState(false);
 
   React.useEffect(() => {
-    function handleScroll() {
+    let ticking = false;
+
+    function updateVisibility() {
       const scrolled = window.scrollY + window.innerHeight;
       const total = document.body.scrollHeight;
-      setVisible(scrolled < total - 40);
+      setVisible(scrolled < total - threshold);
+      ticking = false;
+    }
+
+    function handleScroll() {
+      if (!ticking) {
+        window.requestAnimationFrame(updateVisibility);
+        ticking = true;
+      }
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleScroll, { passive: true });
-    handleScroll();
+    updateVisibility();
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
     };
-  }, [activeTab]);
+  }, [activeTab, threshold]);
 
   if (!visible) return null;
 
@@ -40,3 +49,5 @@ export default function ScrollToBottomButton({ activeTab }) {
     </button>
   );
 }
+
+export default React.memo(ScrollToBottomButton);

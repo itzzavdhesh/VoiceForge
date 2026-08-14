@@ -5,18 +5,24 @@
 
 /* Light mode CSS variables */
 :root {
-  --bg-page:    #f6f8f5;
-  --bg-card:    #ffffff;
-  --bg-input:   #f6f8f5;
-  --text-base:  #16201d;
+  --bg-page: #f6f8f5;
+  --bg-card: #ffffff;
+  --bg-input: #f6f8f5;
+  --text-base: #16201d;
   --text-muted: #4b5563;
-  --border:     rgba(22, 32, 29, 0.1);
-  --ring:       #c9ead7;
+  --border: rgba(22, 32, 29, 0.1);
+  --ring: #c9ead7;
 
   color: var(--text-base);
   background: var(--bg-page);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   font-synthesis: none;
   text-rendering: optimizelegibility;
   -webkit-font-smoothing: antialiased;
@@ -40,10 +46,23 @@
 
 body {
   overflow-x: hidden;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   /* Smooth background transition when toggling theme */
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--bg-page);
+}
+
+::selection {
+  background: rgba(34, 197, 94, 0.28);
 }
 
 html,
@@ -93,21 +112,47 @@ textarea {
   animation: recording-wave 900ms ease-in-out infinite;
   transform-origin: bottom;
 }
-.recording-wave span:nth-child(2) { animation-delay: 90ms; }
-.recording-wave span:nth-child(3) { animation-delay: 180ms; }
-.recording-wave span:nth-child(4) { animation-delay: 270ms; }
-.recording-wave span:nth-child(5) { animation-delay: 360ms; }
+.recording-wave span:nth-child(2) {
+  animation-delay: 90ms;
+}
+.recording-wave span:nth-child(3) {
+  animation-delay: 180ms;
+}
+.recording-wave span:nth-child(4) {
+  animation-delay: 270ms;
+}
+.recording-wave span:nth-child(5) {
+  animation-delay: 360ms;
+}
 
 @keyframes recording-wave {
-  0%, 100% { transform: scaleY(0.35); }
-  50%       { transform: scaleY(1); }
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 /* Toast fade-in-up animation */
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .animate-fade-in-up {
   animation: fade-in-up 0.2s ease-out;
+}
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-down {
+  animation: fade-in-down 0.2s ease-out;
 }

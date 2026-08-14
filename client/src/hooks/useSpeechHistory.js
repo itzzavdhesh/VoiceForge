@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { saveTranscript } from "../utils/db.js";
 
 const HISTORY_KEY = "vf_history";
 const FAVS_KEY = "vf_favorites";
@@ -106,6 +107,25 @@ export function useSpeechHistory() {
     }
   }, [favorites]);
 
+
+  // ── Cross-Tab Synchronization ─────────────────────────────────────────────
+  useEffect(() => {
+    function handleStorage(event) {
+      if (event.key === HISTORY_KEY) {
+        setHistory(readStorage(HISTORY_KEY, []));
+      } else if (event.key === FAVS_KEY) {
+        setFavorites(new Set(readStorage(FAVS_KEY, [])));
+      } else if (event.key === ANALYTICS_KEY) {
+        setAnalyticsHistory(readStorage(ANALYTICS_KEY, []));
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+      return () => window.removeEventListener("storage", handleStorage);
+    }
+  }, []);
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /**
@@ -119,29 +139,27 @@ export function useSpeechHistory() {
  * - enforces MAX_HISTORY limit
  *
  * @param {string} text - Message text to store
+ * @param {string} [id] - Optional stable id to assign to this entry
  */
-const addMessage = useCallback((text) => {
+  const addMessage = useCallback((text, id) => {
   const trimmed = text.trim();
-
   if (!trimmed) return;
 
   const timestamp = Date.now();
 
   setSessionTranscript((prev) => [
-    ...prev,
-    { text: trimmed, timestamp },
-  ]);
+  ...prev,
+  {
+    text: trimmed,
+    timestamp,
+    status: "success",
+  },
+]);
 
   setHistory((prev) => {
     // Check existing message
     const existing = prev.find((m) => m.text === trimmed);
 
-    // Preserve existing ID if duplicate found
-    const entry = existing || {
-      id: crypto.randomUUID(),
-      text: trimmed,
-      timestamp,
-    };
     // Preserve existing ID if duplicate found, but update timestamp
     // so re-spoken messages sort correctly after a page reload.
     const entry = existing
@@ -156,7 +174,9 @@ const addMessage = useCallback((text) => {
 
     return updated.slice(0, MAX_HISTORY);
   });
-}, []);
+
+  return resolvedId;
+}, [history]);
 
   /**
    * Removes a message by id and also removes it from favorites.

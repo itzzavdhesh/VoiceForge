@@ -1,0 +1,174 @@
+import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+
+/**
+ * Handles face detection and cropping using MediaPipe.
+ */
+export class FaceProcessor {
+  constructor() {
+    this.faceLandmarker = null;
+    this.isInitialized = false;
+  }
+
+  /**
+   * Loads the MediaPipe FaceLandmarker model.
+   */
+  async initialize() {
+    if (this.isInitialized) return;
+
+    try {
+      const localWasmPath = typeof window !== "undefined" && window.location.origin
+        ? `${window.location.origin}/wasm`
+        : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+
+      const vision = await FilesetResolver.forVisionTasks(localWasmPath).catch(() =>
+        FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm")
+      );
+
+      const localModelPath = typeof window !== "undefined" && window.location.origin
+        ? `${window.location.origin}/models/face_landmarker.task`
+        : "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+      
+      this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: localModelPath,
+          delegate: "GPU"
+        },
+        outputFaceBlendshapes: false,
+        runningMode: "VIDEO",
+        numFaces: 1,
+      });
+
+      this.isInitialized = true;
+      console.log("FaceLandmarker initialized successfully");
+    } catch (error) {
+      console.warn("FaceLandmarker initialization skipped (offline fallback mode):", error?.message || error);
+    }
+  }
+
+  /**
+   * Detects face landmarks in a video frame.
+   * @param {HTMLVideoElement} videoElement The source video
+   * @param {number} timestamp Current timestamp for video processing
+   * @returns {Object|null} Landmark data or null if not detected
+   */
+  detectFace(videoElement, timestamp) {
+    if (!this.isInitialized || !this.faceLandmarker) return null;
+
+    try {
+      const results = this.faceLandmarker.detectForVideo(
+        videoElement,
+        timestamp,
+      );
+      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+        return results.faceLandmarks[0];
+      }
+    } catch (error) {
+      console.error("Face detection error:", error);
+    }
+    return null;
+  }
+
+  /**
+   * Crops the face from the source canvas, resizes to 96x96 on the target canvas,
+   * and builds a [1, 6, 96, 96] Float32Array tensor for Wav2Lip ONNX.
+   * Channels 0,1,2 = Target Face RGB.
+   * Channels 3,4,5 = Masked Target Face RGB (lower half is 0).
+   * 
+   * @param {HTMLCanvasElement} sourceCanvas The canvas containing the full frame
+   * @param {Array} landmarks The detected face landmarks
+   * @param {HTMLCanvasElement} targetCanvas The canvas to draw the crop onto
+   * @returns {Object|null} The cropped image data and original crop coordinates
+   */
+  cropMouthRegion(sourceCanvas, landmarks, targetCanvas) {
+    if (!landmarks || !sourceCanvas || !targetCanvas) return null;
+
+    // Mouth landmarks indices in MediaPipe FaceMesh
+    const MOUTH_LANDMARKS = [
+      0, 13, 14, 17, 37, 39, 40, 61, 78, 80, 81, 82, 83, 84, 87, 88, 91, 95, 96,
+      146, 178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 313, 314,
+      317, 318, 321, 324, 326, 375, 402, 405, 409, 415,
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const idx of MOUTH_LANDMARKS) {
+      const lm = landmarks[idx];
+      if (lm) {
+        minX = Math.min(minX, lm.x);
+        maxX = Math.max(maxX, lm.x);
+        minY = Math.min(minY, lm.y);
+        maxY = Math.max(maxY, lm.y);
+      }
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const mouthWidth = maxX - minX;
+    const mouthHeight = maxY - minY;
+
+    // We want a square crop centered around the mouth
+    const cropSize = Math.max(mouthWidth, mouthHeight) * 1.8;
+
+    const srcW = sourceCanvas.width;
+    const srcH = sourceCanvas.height;
+
+    let w = Math.floor(cropSize * srcW);
+    let h = Math.floor(cropSize * srcH);
+    let x = Math.floor((centerX - cropSize / 2) * srcW);
+    let y = Math.floor((centerY - cropSize / 2) * srcH);
+
+    // Clamp coordinates and scale crop dimensions to stay within canvas boundaries
+    if (x < 0) {
+      w += x;
+      x = 0;
+    }
+    if (y < 0) {
+      h += y;
+      y = 0;
+    }
+    if (x + w > srcW) w = srcW - x;
+    if (y + h > srcH) h = srcH - y;
+    w = Math.max(1, w);
+    h = Math.max(1, h);
+
+    const ctx = targetCanvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+    ctx.drawImage(
+      sourceCanvas,
+      x,
+      y,
+      w,
+      h,
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
+    );
+
+    const imageData = ctx.getImageData(
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
+    );
+    return {
+      imageData,
+      coords: { x, y, w, h },
+    };
+  }
+  /**
+   * Cleans up resources and closes the FaceLandmarker.
+   */
+  dispose() {
+    if (this.faceLandmarker) {
+      this.faceLandmarker.close();
+      this.faceLandmarker = null;
+    }
+    this.isInitialized = false;
+  }
+}

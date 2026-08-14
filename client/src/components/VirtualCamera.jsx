@@ -23,6 +23,8 @@ export default function VirtualCamera({ isLive, status, onStart, onStop }) {
         <button
           type="button"
           onClick={isLive ? onStop : onStart}
+          title={isLive ? "Stop the virtual camera feed" : "Start the virtual camera feed"}
+          aria-label={isLive ? "Stop the virtual camera feed" : "Start the virtual camera feed"}
           className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-bold text-white transition ${
             isLive
               ? "bg-black hover:bg-black/90 dark:bg-surface dark:hover:bg-neutral-900"
