@@ -8,9 +8,9 @@ export default {
     extend: {
       colors: {
         // ── Light mode tokens (unchanged) ───────────────────────────────
-        ink:   "#16201d",
-        moss:  "#3f5f4d",
-        mint:  "#c9ead7",
+        ink: "#16201d",
+        moss: "#3f5f4d",
+        mint: "#c9ead7",
         coral: "#f26f63",
         amber: "#f3bc51",
         cloud: "#f6f8f5",
@@ -26,7 +26,7 @@ export default {
         glow: "#22c55e",
       },
       boxShadow: {
-        soft:     "0 18px 60px rgba(22, 32, 29, 0.12)",
+        soft: "0 18px 60px rgba(22, 32, 29, 0.12)",
         "soft-dk": "0 18px 60px rgba(0, 0, 0, 0.45)",
       },
     },

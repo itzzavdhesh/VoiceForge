@@ -1,7 +1,6 @@
 // Floating button fixed to the bottom-right corner that scrolls to the page bottom.
 import React from "react";
 import { ChevronDown } from "lucide-react";
-
 export default function ScrollToBottomButton({ activeTab }) {
   const [visible, setVisible] = React.useState(true);
 

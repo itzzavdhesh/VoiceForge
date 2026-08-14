@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Copy, Pin, Play, RotateCcw, Trash2 } from "lucide-react";
-import { formatTime } from "../utils/formatTime.js";
 
-function useRelativeTime(timestamp) {
-  const [label, setLabel] = useState(() => formatTime(timestamp));
-
-  useEffect(() => {
-    setLabel(formatTime(timestamp));
-    const interval = setInterval(() => setLabel(formatTime(timestamp)), 30_000);
-    return () => clearInterval(interval);
-  }, [timestamp]);
-
-  return label;
+function formatTime(timestamp) {
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return "Just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return new Date(timestamp).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export function MessageCard({
@@ -22,9 +22,24 @@ export function MessageCard({
   onToggleFav,
   onDelete,
   onCopy,
+  audioUrl,
+  onDownload,
 }) {
-  const { id, text, timestamp } = message;
+  const { id, text, timestamp, tags } = message;
   const timeLabel = useRelativeTime(timestamp);
+
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTagText, setNewTagText] = useState("");
+
+  const handleAddTagSubmit = (e) => {
+    e.preventDefault();
+    const tag = newTagText.trim();
+    if (!tag) return;
+    if (tag.length > 15) return;
+    onAddTag(id, tag);
+    setNewTagText("");
+    setIsAddingTag(false);
+  };
 
   return (
     <article

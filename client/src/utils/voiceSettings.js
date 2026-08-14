@@ -1,23 +1,12 @@
-// Shared voice-settings helpers used by Onboarding, Settings, VoiceQuickSettings, and useTTS.
-//
-// Single source of truth for:
-//   - the localStorage key
-//   - the default/fallback values
-//   - the sanitized loader (type-checks and clamps every field)
-//   - the persister (safely stringifies to localStorage)
+// Voice settings utilities for VoiceForge
 
-export const VOICE_SETTINGS_KEY = "voiceforge:voiceSettings";
-
-/**
- * Canonical defaults for every ElevenLabs voice-settings field.
- * Components that only surface a subset of these sliders still load the full
- * object so their writes never drop unknown fields from storage.
- */
 export const DEFAULT_VOICE_SETTINGS = {
   stability: 0.45,
   similarity_boost: 0.8,
-  style: 0.2,
+  style: 0.5,
   use_speaker_boost: true,
+  speed: 1.0,
+  pitch: 0.5,
 };
 
 /**
@@ -33,17 +22,14 @@ export const DEFAULT_VOICE_SETTINGS = {
  * regardless of what was previously written to (or injected into) storage.
  */
 export function loadVoiceSettings() {
-  let parsed = {};
   try {
-    const raw = localStorage.getItem(VOICE_SETTINGS_KEY);
-    if (raw) {
-      const candidate = JSON.parse(raw);
-      if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
-        parsed = candidate;
-      }
+    const saved = localStorage.getItem('voiceforge_voice_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_VOICE_SETTINGS, ...parsed };
     }
-  } catch {
-    // Malformed JSON — fall back to defaults for all keys.
+  } catch (error) {
+    console.warn('Failed to load voice settings:', error);
   }
 
   const result = {};
@@ -54,6 +40,8 @@ export function loadVoiceSettings() {
       const coerced = parsed[key] == null ? NaN : Number(parsed[key]);
       if (Number.isNaN(coerced)) {
         result[key] = defaultVal;
+      } else if (key === "speed") {
+        result[key] = Math.min(2.0, Math.max(0.5, coerced));
       } else if (defaultVal >= 0 && defaultVal <= 1) {
         // Slider range: clamp to [0, 1].
         result[key] = Math.min(1, Math.max(0, coerced));
@@ -66,20 +54,26 @@ export function loadVoiceSettings() {
       result[key] = typeof parsed[key] === "boolean" ? parsed[key] : defaultVal;
     } else {
       // For any future non-numeric, non-boolean key, copy only on type match.
-      result[key] = typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
+      result[key] =
+        typeof parsed[key] === typeof defaultVal ? parsed[key] : defaultVal;
     }
   }
   return result;
 }
 
-/**
- * Persists voice settings to localStorage.
- * Fails silently if storage is unavailable (private-browsing quota exceeded, etc.).
- */
 export function persistVoiceSettings(settings) {
   try {
-    localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    // Storage unavailable — continue without persisting.
+    localStorage.setItem('voiceforge_voice_settings', JSON.stringify(settings));
+  } catch (error) {
+    console.warn('Failed to save voice settings:', error);
   }
+}
+
+export function resetVoiceSettings() {
+  try {
+    localStorage.removeItem('voiceforge_voice_settings');
+  } catch (error) {
+    console.warn('Failed to reset voice settings:', error);
+  }
+  return DEFAULT_VOICE_SETTINGS;
 }
