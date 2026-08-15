@@ -202,7 +202,8 @@ test("cloneVoice enforces maximum voice store size and evicts oldest first", asy
     });
 
     request.file = {
-      buffer: Buffer.from(`audio-${i}`),
+      // FIX:
+buffer: Buffer.concat([Buffer.from("RIFF"), Buffer.from(`audio-${i}`)]),
       mimetype: "audio/webm"
     };
 
@@ -292,7 +293,7 @@ test("cloneVoice removes expired voices after TTL", async (t) => {
     body: { name: "temporary voice" }
   });
   cloneRequest.file = {
-    buffer: Buffer.from("audio"),
+    buffer: Buffer.concat([Buffer.from("RIFF"), Buffer.from("audio")]),
     mimetype: "audio/webm"
   };
 
@@ -371,7 +372,7 @@ test("cloneVoice prunes only expired voices and preserves recent ones", async (t
   Date.now = () => baseTime;
 
   const oldRequest = createRequest({ body: { name: "old voice" } });
-  oldRequest.file = { buffer: Buffer.from("audio-old"), mimetype: "audio/webm" };
+  oldRequest.file = { buffer: Buffer.concat([Buffer.from("RIFF"), Buffer.from("audio-old")]), mimetype: "audio/webm" };
   const oldResponse = createResponse();
   await invoke(cloneVoice, oldRequest, oldResponse);
   const oldVoiceId = oldResponse.jsonBody.voice_id;
@@ -382,7 +383,8 @@ test("cloneVoice prunes only expired voices and preserves recent ones", async (t
   Date.now = () => baseTime + 30_000;
 
   const newRequest = createRequest({ body: { name: "new voice" } });
-  newRequest.file = { buffer: Buffer.from("audio-new"), mimetype: "audio/webm" };
+  newRequest.file = { buffer: Buffer.concat([Buffer.from("RIFF"), Buffer.from("audio-new")]),
+ mimetype: "audio/webm" };
   const newResponse = createResponse();
   await invoke(cloneVoice, newRequest, newResponse);
   assert.ok(newResponse.jsonBody.voice_id);
@@ -395,7 +397,7 @@ test("cloneVoice prunes only expired voices and preserves recent ones", async (t
 
   // Any store access triggers pruneVoiceStore() - use a third clone to do so.
   const triggerRequest = createRequest({ body: { name: "trigger prune" } });
-  triggerRequest.file = { buffer: Buffer.from("audio-trigger"), mimetype: "audio/webm" };
+  triggerRequest.file = { buffer: Buffer.concat([Buffer.from("RIFF"), Buffer.from("audio-trigger")]), mimetype: "audio/webm" };
   const triggerResponse = createResponse();
   await invoke(cloneVoice, triggerRequest, triggerResponse);
 
