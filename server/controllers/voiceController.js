@@ -3,9 +3,23 @@
 import crypto from "crypto";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
-import { logger } from "../utils/logger.js";
 import { FileVoiceStore } from "../utils/FileVoiceStore.js";
 
+// ADD after line 7:
+import { isValidAudioBuffer } from "../middleware/upload.js";
+import { getDb } from "../db.js";
+
+// ADD after the imports above:
+const ALGORITHM = "aes-256-gcm";
+const IV_LENGTH = 12;
+if (!process.env.TOKEN_SECRET) {
+  throw new Error("TOKEN_SECRET environment variable is required to sign speech stream tokens.");
+}
+const ENCRYPTION_KEY = crypto.createHash("sha256").update(process.env.TOKEN_SECRET).digest();
+
+function requireApiKey(request) {
+  return request.get("X-ElevenLabs-Api-Key")?.trim() || "";
+}
 export function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
   return Number.isFinite(numeric) ? Math.max(min, numeric) : fallback;
@@ -267,8 +281,6 @@ export function __getVoiceStoreSize() {
 // ---------------------------------------------------------------------------
 
 export async function cloneVoice(request, response, next) {
-  const lockId = getRequestLockId(request);
-
   try {
     const audioFile = request.file;
 
@@ -287,7 +299,7 @@ export async function cloneVoice(request, response, next) {
 
     // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
-      const voiceId = crypto.randomUUID();
+      const voiceId = "mock-voice-id-00000000";
       voiceStore.set(voiceId, {
         name: request.body.name || "VoiceForge Voice (mock)",
         audioBuffer: Buffer.from("mock"),
@@ -326,23 +338,20 @@ export async function cloneVoice(request, response, next) {
       ownerTokenHash,
       expiresAt: Date.now() + VOICE_STORE_TTL_MS
     });
+// FIX: elevenResponse was never populated anywhere — this app clones via
+// Chatterbox/Gradio, not a separate ElevenLabs API call, so that whole
+// check is dead code left over from an earlier implementation. Storage
+// already happened above; just respond. Also drop the two
+// releaseCloneLock() calls since that function doesn't exist (removed
+// along with the lock in fix #4).
     pruneVoiceStore();
 
-    if (!elevenResponse.ok) {
-      const error = new Error(await readElevenLabsError(elevenResponse));
-      error.status = elevenResponse.status;
-      throw error;
-    }
-
-    const payload = await elevenResponse.json();
-    releaseCloneLock(lockId);
     response.json({
       voice_id: voiceId,
       owner_token: ownerToken,
       name: request.body.name || "VoiceForge Voice",
     });
   } catch (error) {
-    releaseCloneLock(lockId);
     next(error);
   }
 }
