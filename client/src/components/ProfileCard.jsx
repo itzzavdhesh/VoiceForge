@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Play, Pause, Share2, Trash2 } from "lucide-react";
+import { playMediaElement } from "../utils/audioUnlock.js";
 
 export function ProfileCard({ profile, onDelete, onShare }) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -27,7 +28,9 @@ export function ProfileCard({ profile, onDelete, onShare }) {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch(console.error);
+      // Routed through playMediaElement so the preview also plays on iOS Safari,
+      // where a suspended AudioContext otherwise blocks playback silently.
+      playMediaElement(audioRef.current).catch(console.error);
     }
   };
 

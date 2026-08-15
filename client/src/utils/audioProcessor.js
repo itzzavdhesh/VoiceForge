@@ -1,5 +1,6 @@
 import Meyda from "meyda";
 import { PitchShifter } from "./pitchShifter.js";
+import { getAudioContext, unlockAudio } from "./audioUnlock.js";
 
 /**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
@@ -18,6 +19,8 @@ export class AudioProcessor {
     this.midFilter = null;
     this.trebleFilter = null;
     this.pitchShifter = null;
+    // Only a context this processor created itself may be closed on dispose.
+    this.ownsContext = true;
   }
 
   /**
@@ -26,12 +29,27 @@ export class AudioProcessor {
    */
   async initialize(audioElement) {
     if (!this.audioContext) {
-      // Must be created after a user gesture
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Reuse the app-wide context so analysis runs on the one the user's first
+      // gesture unlocked. Safari also caps how many contexts a page may open.
+      const sharedContext = getAudioContext();
+      if (sharedContext) {
+        this.audioContext = sharedContext;
+        this.ownsContext = false;
+      } else {
+        // Must be created after a user gesture
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.ownsContext = true;
+      }
     }
-    
+
     if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+      if (this.ownsContext) {
+        await this.audioContext.resume();
+      } else {
+        // resume() alone is not enough on iOS — unlockAudio also runs a silent
+        // buffer, which is what actually starts the shared context there.
+        await unlockAudio();
+      }
     }
 
     if (this.analyzer) {
@@ -167,10 +185,12 @@ export class AudioProcessor {
       }
       this.source = null;
     }
-    if (this.audioContext && this.audioContext.state !== "closed") {
+    // Never close the shared context — other parts of the app still use it, and
+    // on iOS a closed context cannot be reopened without another user gesture.
+    if (this.ownsContext && this.audioContext && this.audioContext.state !== "closed") {
       this.audioContext.close();
-      this.audioContext = null;
     }
+    this.audioContext = null;
     this.melHistory = [];
   }
 
