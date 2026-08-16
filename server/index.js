@@ -9,6 +9,7 @@ import dbRoutes from "./routes/dbRoutes.js";
 import { getDatabase } from "./utils/db.js";
 import { getIsMock } from "./utils/mock.js";
 import helmet from "helmet";
+import morgan from "morgan";
 import { requestId } from "./middleware/requestId.js";
 
 import path from "path";
@@ -36,10 +37,11 @@ if (getIsMock()) {
 }
 
 const app = express();
+const isDev = process.env.NODE_ENV !== "production";
 app.use(requestId);
+app.use(morgan(isDev ? "dev" : "combined"));
 const port = process.env.PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-const isDev = process.env.NODE_ENV !== "production";
 
 // Enable trust proxy so rate limiters can identify real client IPs correctly
 app.set("trust proxy", 1);

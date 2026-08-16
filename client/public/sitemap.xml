@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VoiceForge sitemap.
+  Replace the placeholder origin below with the production domain once the app
+  is deployed. VoiceForge is a single-page application, so the crawlable entry
+  points are the public landing/root route and the main app route.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://voiceforge.example.com/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

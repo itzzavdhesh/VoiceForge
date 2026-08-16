@@ -1,0 +1,11 @@
+# VoiceForge robots.txt
+# VoiceForge is a local-first assistive video tool. These directives apply if
+# the app is ever exposed to search crawlers on a public deployment.
+
+User-agent: *
+Allow: /
+# The /api proxy must not be crawled.
+Disallow: /api/
+
+# Point this at the production origin once the app is deployed, e.g.:
+# Sitemap: https://your-deployed-domain.example/sitemap.xml
