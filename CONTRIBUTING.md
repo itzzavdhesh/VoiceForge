@@ -122,6 +122,10 @@ Polite assignment requests such as "please assign this issue to me" or "I would 
 
 ## Good First Issues
 
+Browse open issues on the [Issues](https://github.com/itzzavdhesh/VoiceForge/issues) page and look for labels such as `gssoc26`, `level: easy`, or `go ahead`. These are scoped, reviewed, and ready for contribution. If you are new to VoiceForge, start with a bug fix or small documentation improvement before tackling a feature.
+
+When you find an issue you want to work on, comment with `-assign` or `/assign` to request assignment. Wait for maintainer confirmation before opening a pull request.
+
 ## Pull Request Checklist
 
 - The app runs with `npm install && npm run dev`.
