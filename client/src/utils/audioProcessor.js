@@ -2,6 +2,20 @@ import Meyda from "meyda";
 import { PitchShifter } from "./pitchShifter.js";
 
 /**
+ * Remembers which MediaElementAudioSourceNode belongs to which media element,
+ * together with the AudioContext that created it.
+ *
+ * The Web Audio spec allows only one source node per media element, and that
+ * node is permanently bound to its context. Keeping the binding in a WeakMap
+ * rather than as a property on the DOM node means two AudioProcessor instances
+ * can no longer clobber each other's state, and the entry disappears on its own
+ * once the element is garbage collected.
+ *
+ * @type {WeakMap<HTMLMediaElement, { context: AudioContext, node: MediaElementAudioSourceNode }>}
+ */
+const mediaElementSources = new WeakMap();
+
+/**
  * Extracts Mel-spectrogram features from an HTMLMediaElement using the Web Audio API.
  * Tracks a history of mel-spectrograms for Wav2Lip ONNX real-time inference.
  */
@@ -18,14 +32,26 @@ export class AudioProcessor {
     this.midFilter = null;
     this.trebleFilter = null;
     this.pitchShifter = null;
+    this.mediaElement = null;
   }
 
   /**
    * Initializes the audio processor with a given audio element.
-   * @param {HTMLMediaElement|null} audioElement The <audio> or <video> element to analyze (optional).
+   * @param {HTMLMediaElement} audioElement The <audio> or <video> element to analyze.
    */
   async initialize(audioElement) {
-    if (!this.audioContext) {
+    if (!audioElement) {
+      throw new TypeError("AudioProcessor.initialize() requires a media element.");
+    }
+
+    const existingBinding = mediaElementSources.get(audioElement);
+
+    if (existingBinding) {
+      // This element is already bound to a context for the lifetime of the page.
+      // Adopt that context instead of opening a second one — mixing nodes across
+      // contexts is what corrupted state when the component remounted.
+      this.audioContext = existingBinding.context;
+    } else if (!this.audioContext) {
       // Must be created after a user gesture
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -39,22 +65,28 @@ export class AudioProcessor {
       this.analyzer = null;
     }
 
-    // Clean up previous source node connection to prevent memory leak
-    if (this.source) {
+    // Clean up the previous source node connection to prevent a memory leak,
+    // unless it is the very node we are about to reuse for this element.
+    if (this.source && this.source !== existingBinding?.node) {
       this.source.disconnect();
-      this.source = null;
     }
+    this.source = null;
 
-    // Prevent re-creating the source node if it already exists for this element.
-    // We map the node to the element's lifecycle using a direct property.
-    if (audioElement._audioSourceNode) {
-      this.source = audioElement._audioSourceNode;
+    if (existingBinding) {
+      this.source = existingBinding.node;
     } else {
       this.source = this.audioContext.createMediaElementSource(audioElement);
-      // Connect to destination so we can still hear it
-      this.source.connect(this.audioContext.destination);
-      audioElement._audioSourceNode = this.source;
+      mediaElementSources.set(audioElement, {
+        context: this.audioContext,
+        node: this.source,
+      });
     }
+
+    // Always (re)connect to the destination. A reused node was disconnected by an
+    // earlier initialize() or dispose(), which is what silenced playback on the
+    // second mount. Reconnecting an already-connected pair is a no-op.
+    this.source.connect(this.audioContext.destination);
+    this.mediaElement = audioElement;
 
     // Reset history when initialized/re-initialized
     this.melHistory = [];
@@ -167,10 +199,20 @@ export class AudioProcessor {
       }
       this.source = null;
     }
-    if (this.audioContext && this.audioContext.state !== "closed") {
+    // A media element can never be bound to a second source node, so closing the
+    // context that owns its binding would silence that element permanently. Keep
+    // such a context alive — the WeakMap entry, and with it the context, is
+    // released once the element itself is garbage collected.
+    const ownsMediaBinding =
+      this.mediaElement &&
+      mediaElementSources.get(this.mediaElement)?.context === this.audioContext;
+
+    if (!ownsMediaBinding && this.audioContext && this.audioContext.state !== "closed") {
       this.audioContext.close();
-      this.audioContext = null;
     }
+
+    this.mediaElement = null;
+    this.audioContext = null;
     this.melHistory = [];
   }
 
