@@ -3,8 +3,29 @@
 import crypto from "crypto";
 import { getIsMock } from "../utils/mock.js";
 import { isValidLanguageCode, toChatterboxLanguageCode } from "../utils/languages.js";
-import { logger } from "../utils/logger.js";
 import { FileVoiceStore } from "../utils/FileVoiceStore.js";
+import { isValidAudioBuffer } from "../middleware/upload.js";
+import { getDb } from "../db.js";
+
+const ALGORITHM = "aes-256-gcm";
+const IV_LENGTH = 12;
+
+let cachedEncryptionKey = null;
+function getEncryptionKey() {
+  if (!cachedEncryptionKey) {
+    if (!process.env.STREAM_SECRET) {
+      const err = new Error("STREAM_SECRET environment variable is required to sign speech stream tokens.");
+      err.status = 500;
+      throw err;
+    }
+    cachedEncryptionKey = crypto.createHash("sha256").update(process.env.STREAM_SECRET).digest();
+  }
+  return cachedEncryptionKey;
+}
+
+function getApiKey(request) {
+  return request.get("X-ElevenLabs-Api-Key")?.trim() || "";
+}
 
 export function parseBoundedNumber(rawValue, fallback, min) {
   const numeric = Number(rawValue);
@@ -44,7 +65,7 @@ function withTimeout(promise, ms, label, abortSignal = null) {
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-    
+
     if (abortSignal) {
       if (abortSignal.aborted) {
         clearTimeout(timeoutId);
@@ -62,7 +83,7 @@ function withTimeout(promise, ms, label, abortSignal = null) {
 
 function encryptToken(payload) {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, getEncryptionKey(), iv);
 
   let encrypted = cipher.update(JSON.stringify(payload), "utf8", "base64");
   encrypted += cipher.final("base64");
@@ -85,7 +106,7 @@ function decryptToken(token) {
 
     const decipher = crypto.createDecipheriv(
       ALGORITHM,
-      ENCRYPTION_KEY,
+      getEncryptionKey(),
       Buffer.from(iv, "base64"),
     );
     decipher.setAuthTag(Buffer.from(tag, "base64"));
@@ -128,8 +149,8 @@ async function getGradioClient() {
       currentSpaceIdentifier = spaceIdentifier;
     } catch (err) {
       if (
-        err.message?.includes("SPACE_INITIALIZING") || 
-        err.message?.includes("Space is sleeping") || 
+        err.message?.includes("SPACE_INITIALIZING") ||
+        err.message?.includes("Space is sleeping") ||
         err.message?.includes("is sleeping") ||
         err.message?.includes("Chatterbox client init timed out")
       ) {
@@ -143,6 +164,7 @@ async function getGradioClient() {
   }
   return cachedGradioClient;
 }
+
 /**
  * Calls the ResembleAI/Chatterbox-Multilingual-TTS Gradio space and returns
  * the URL of the generated audio file.
@@ -174,7 +196,7 @@ async function generateClonedVoice(
       signal: controller.signal
     });
     clearTimeout(timer);
-    
+
     if (hfRes.ok) {
       const hfData = await hfRes.json();
       const stage = hfData.runtime?.stage;
@@ -182,7 +204,7 @@ async function generateClonedVoice(
         const { client } = await import("@gradio/client");
         // Trigger client initialization asynchronously in background to wake it up
         client(spaceIdentifier).catch(() => {});
-        
+
         const error = new Error(`Voice engine is warming up (current status: ${stage}). Please try again shortly.`);
         error.status = 503;
         throw error;
@@ -267,8 +289,6 @@ export function __getVoiceStoreSize() {
 // ---------------------------------------------------------------------------
 
 export async function cloneVoice(request, response, next) {
-  const lockId = getRequestLockId(request);
-
   try {
     const audioFile = request.file;
 
@@ -279,7 +299,7 @@ export async function cloneVoice(request, response, next) {
 
     // The MIME type checked in upload.js comes from the client and can be
     // spoofed. Verify the buffer begins with a known audio magic-byte
-    // signature so arbitrary binary data cannot be forwarded to ElevenLabs.
+    // signature so arbitrary binary data cannot be forwarded downstream.
     if (!isValidAudioBuffer(audioFile.buffer)) {
       response.status(400).json({ error: "Uploaded file does not appear to be valid audio." });
       return;
@@ -287,7 +307,7 @@ export async function cloneVoice(request, response, next) {
 
     // --- mock mode: return a deterministic fixture voice_id ---
     if (getIsMock()) {
-      const voiceId = crypto.randomUUID();
+      const voiceId = "mock-voice-id-00000000";
       voiceStore.set(voiceId, {
         name: request.body.name || "VoiceForge Voice (mock)",
         audioBuffer: Buffer.from("mock"),
@@ -295,7 +315,7 @@ export async function cloneVoice(request, response, next) {
         expiresAt: Date.now() + VOICE_STORE_TTL_MS
       });
       pruneVoiceStore();
-      
+
       response.json({
         voice_id: voiceId,
         name: request.body.name || "VoiceForge Voice (mock)"
@@ -328,27 +348,18 @@ export async function cloneVoice(request, response, next) {
     });
     pruneVoiceStore();
 
-    if (!elevenResponse.ok) {
-      const error = new Error(await readElevenLabsError(elevenResponse));
-      error.status = elevenResponse.status;
-      throw error;
-    }
-
-    const payload = await elevenResponse.json();
-    releaseCloneLock(lockId);
     response.json({
       voice_id: voiceId,
       owner_token: ownerToken,
       name: request.body.name || "VoiceForge Voice",
     });
   } catch (error) {
-    releaseCloneLock(lockId);
     next(error);
   }
 }
 
 // Hard cap on the number of pending stream entries kept in memory.
-// Each entry stores an ElevenLabs API key and request parameters for up
+// Each entry stores the caller's API key and request parameters for up
 // to 60 seconds. Without a cap a burst of requests can exhaust heap memory.
 // When the cap is reached the oldest entry is evicted to make room.
 const pendingStreams = new Map();
@@ -379,8 +390,15 @@ function addPendingStream(id, value, ttlMs = 60000) {
 
 export async function speak(request, response, next) {
   try {
-    const apiKey = requireApiKey(request);
-    const { text, voice_id: voiceId, voice_settings, model_id } = request.body;
+    const apiKey = getApiKey(request);
+    const {
+      text,
+      voice_id: voiceId,
+      voice_settings,
+      model_id,
+      language_code,
+      owner_token: ownerToken,
+    } = request.body;
 
     if (pendingStreams.size >= PENDING_STREAMS_MAX) {
       response.status(503).json({
@@ -484,6 +502,19 @@ export async function speak(request, response, next) {
       ) {
         sanitizedSettings.style = clamp01(voice_settings.style);
       }
+      if (
+        voice_settings.temperature !== undefined &&
+        (typeof voice_settings.temperature !== "number" ||
+          !Number.isFinite(voice_settings.temperature) ||
+          voice_settings.temperature < 0.05 ||
+          voice_settings.temperature > 5)
+      ) {
+        response.status(400).json({ error: "voice_settings.temperature must be between 0.05 and 5." });
+        return;
+      }
+      if (typeof voice_settings.temperature === "number") {
+        sanitizedSettings.temperature = voice_settings.temperature;
+      }
       if (typeof voice_settings.use_speaker_boost === "boolean") {
         sanitizedSettings.use_speaker_boost =
           voice_settings.use_speaker_boost;
@@ -495,15 +526,7 @@ export async function speak(request, response, next) {
     // Cryptographically secure, 128-bit identifier. Unlike Math.random(), this
     // cannot be reproduced from a seed or enumerated by a co-located process,
     // so the stored API key cannot be retrieved by guessing the stream key.
-    const speechId = randomUUID();
-
-    evictOldestPendingStreams();
-
-    const timeout = setTimeout(() => {
-      deletePendingStream(speechId);
-    }, PENDING_STREAM_TTL_MS);
-    // Do not keep the event loop alive solely for this cleanup timer.
-    timeout.unref?.();
+    const speechId = crypto.randomUUID();
 
     if (getIsMock()) {
       console.warn(`[VoiceForge] MOCK_CHATTERBOX: speak enqueued mock stream for speechId=${speechId}`);
@@ -517,11 +540,28 @@ export async function speak(request, response, next) {
       voice_settings: mergedSettings,
       expiresAt
     });
+
+    // Register this speechId so streamSpeech() can find it, authorize the
+    // matching API key, and replay-protect the token.
+    addPendingStream(
+      speechId,
+      {
+        apiKey,
+        text: trimmedText,
+        voiceId: trimmedVoiceId,
+        language_code,
+        voice_settings: mergedSettings,
+      },
+      PENDING_STREAM_TTL_MS
+    );
+
+    response.json({
+      speechId: token,
+      audioUrl: `/api/voice/speak/stream?t=${token}`,
+    });
   } catch (error) {
     next(error);
   }
-}
-
 }
 
 /**
@@ -542,24 +582,13 @@ export async function streamSpeech(request, response, next) {
     }
     const { speechId, text, voiceId, language_code, voice_settings } = decryptToken(token);
 
-    const streamData = pendingStreams.get(speechId);
-
     // Fix (replay protection): decryptToken only checks that the token is
     // authentic and not expired - it does not check that it hasn't already
-    // been consumed. Previously this only *checked* pendingStreams.has(),
-    // and the entry wasn't removed until the `finally` block after
-    // generation completed - so two replays arriving within that window
-    // (or within the 60s token validity window generally) could both pass
-    // the check and each trigger a full, costly Chatterbox generation.
-    //
-    // Fix: consume (delete) the pending entry atomically right here, before
-    // any async work starts. A missing/undefined entry means the token was
-    // already redeemed (or never existed), so we 410. The later cleanup
-    // calls to deletePendingStream() elsewhere in this handler are now
-    // no-ops for the happy path, but are kept as a safety net for the
-    // abort/mock code paths.
-    const pendingEntry = speechId ? deletePendingStream(speechId) : undefined;
-    if (!pendingEntry) {
+    // been consumed. Consume (delete) the pending entry atomically right
+    // here, before any async work starts. A missing/undefined entry means
+    // the token was already redeemed (or never existed), so we 410.
+    const streamData = speechId ? deletePendingStream(speechId) : undefined;
+    if (!streamData) {
       response.status(410).json({
         error:
           "This speech token has already been used or has expired. Please request a new one.",
@@ -567,22 +596,14 @@ export async function streamSpeech(request, response, next) {
       return;
     }
 
-    // Verify the caller's API key matches the key used to create the speech stream.
-    // This prevents unauthorized callers from using another user's speechId to consume their quota.
-    if (requestApiKey !== streamData.apiKey) {
+    // Verify the caller's API key matches the key used to create the speech
+    // stream. This prevents unauthorized callers from using another user's
+    // speechId to consume their quota.
+    const requestApiKey = getApiKey(request);
+    if (requestApiKey !== (streamData.apiKey || "")) {
       response.status(403).json({ error: "Unauthorized. The API key provided does not match the speech request." });
       return;
     }
-
-    // Verify the caller's API key matches the key used to create the speech stream.
-    // This prevents unauthorized callers from using another user's speechId to consume their quota.
-    if (requestApiKey !== streamData.apiKey) {
-      response.status(403).json({ error: "Unauthorized. The API key provided does not match the speech request." });
-      return;
-    }
-
-    // Clean up immediately after retrieving parameters to prevent memory leaks
-    pendingStreams.delete(speechId);
 
     // Resolve the stored reference audio for this voice profile.
     await pruneVoiceStore();
@@ -594,13 +615,21 @@ export async function streamSpeech(request, response, next) {
       return;
     }
 
+    // --- mock mode: stream back fake audio bytes without calling Chatterbox ---
+    if (getIsMock()) {
+      response.setHeader("Content-Type", "audio/mpeg");
+      response.setHeader("Transfer-Encoding", "chunked");
+      response.write(Buffer.from("mock-audio-bytes"));
+      response.end();
+      return;
+    }
+
     const chatterboxLanguage = toChatterboxLanguageCode(language_code);
 
     // Set up abortion for client disconnect
     const generateController = new AbortController();
     const onClose = () => {
       console.log("[VoiceForge] Request aborted by client");
-      if (speechId) deletePendingStream(speechId);
       generateController.abort();
     };
     request.on("close", onClose);
@@ -632,7 +661,6 @@ export async function streamSpeech(request, response, next) {
       throw error;
     } finally {
       request.off("close", onClose);
-      if (speechId) deletePendingStream(speechId);
     }
 
     // Proxy the audio bytes back to the client so they don't need to reach

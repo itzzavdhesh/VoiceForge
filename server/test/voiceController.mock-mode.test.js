@@ -154,7 +154,7 @@ test("MOCK_CHATTERBOX: streamSpeech returns 400 for an invalid speechId", async 
   const response = createResponse();
   const err = await invoke(streamSpeech, request, response);
   assert.ok(err, "should call next with an error for invalid token");
-  assert.equal(err.status, 401);
+assert.equal(err.status, 400);
 });
 
 // ---------------------------------------------------------------------------
