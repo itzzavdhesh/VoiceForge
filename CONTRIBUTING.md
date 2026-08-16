@@ -122,6 +122,8 @@ Polite assignment requests such as "please assign this issue to me" or "I would 
 
 ## Good First Issues
 
+New contributors can start with issues labeled [`good first issue`](https://github.com/itzzavdhesh/VoiceForge/labels/good%20first%20issue). These are scoped to a single concern and require no deep familiarity with the codebase. Browse the list, leave a `/assign` comment on the one you want to pick up, and then follow the [Pull Request Checklist](#pull-request-checklist) below.
+
 ## Pull Request Checklist
 
 - The app runs with `npm install && npm run dev`.
