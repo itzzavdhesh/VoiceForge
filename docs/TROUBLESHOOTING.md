@@ -44,7 +44,7 @@ If something here is out of date, please open an issue.
 | Symptom | Likely cause |
 | --- | --- |
 | Server exits on start in production | `STREAM_SECRET` is not set in production (tokens are invalidated on restart). Set it in your environment. |
-| All speech rejected | `ELEVENLABS_API_KEY` missing or invalid. |
+| All speech rejected | No ElevenLabs key submitted with the request. Enter it in the app's Settings page (stored as `voiceforge:elevenlabsApiKey`). |
 | Frontend cannot reach API | `CLIENT_URL` mismatch (see CORS above) or wrong `PORT`. |
 
 See the README's [Environment Variables](../README.md#environment-variables) section for the full reference.
