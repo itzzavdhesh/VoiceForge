@@ -20,6 +20,7 @@ VoiceForge is a browser-based assistive video tool that lets a user type during 
 - [Roadmap](#roadmap)
 - [License](#license)
 - [About](#about)
+- [Troubleshooting & FAQ](docs/TROUBLESHOOTING.md)
 
 ---
 
