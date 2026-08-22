@@ -44,7 +44,7 @@ If something here is out of date, please open an issue.
 | Symptom | Likely cause |
 | --- | --- |
 | Server exits on start in production | `STREAM_SECRET` is not set in production (tokens are invalidated on restart). Set it in your environment. |
-| All speech rejected | No ElevenLabs key submitted with the request. Enter it in the app's Settings page (stored as `voiceforge:elevenlabsApiKey`). |
+| All speech rejected | Chatterbox is disabled or cannot reach Hugging Face. Set `MOCK_CHATTERBOX=false`, verify Hugging Face connectivity, and provide the required `owner_token` for cloned voices. |
 | Frontend cannot reach API | `CLIENT_URL` mismatch (see CORS above) or wrong `PORT`. |
 
 See the README's [Environment Variables](../README.md#environment-variables) section for the full reference.
