@@ -370,7 +370,7 @@ export default function App() {
         <motion.div
       aria-hidden="true"
       className="
-        fixed left-0 right-0 bottom-0 z-[9999]
+        fixed left-0 right-0 top-0 z-[9999]
         h-0.5 origin-left
         bg-[#008bfd]
         shadow-[0_0_8px_rgba(21,128,61,0.35)]
