@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound.jsx";
 import Contributors from "./pages/Contributors.jsx";
 import { clearTokens as clearStorage, logout } from "./utils/auth.js";
 import BrowserWarningBanner from "./components/BrowserWarningBanner.jsx";
+import { motion, useScroll, useSpring } from "framer-motion";
 
 const tabs = [
   { id: "landing", label: "Home", icon: Sparkles },
@@ -218,6 +219,15 @@ export default function App() {
     };
   }, []);
 
+  /* Scroll ProgressBar */
+  const { scrollYProgress } = useScroll();
+
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 30,
+    mass: 0.2,
+  });
+
   return (
     <div className="min-h-screen flex flex-col bg-cloud text-ink dark:bg-night dark:text-neutral-100">
       <BrowserWarningBanner />
@@ -357,6 +367,18 @@ export default function App() {
             </nav>
           </div>
         )}
+        <motion.div
+      aria-hidden="true"
+      className="
+        fixed left-0 right-0 bottom-0 z-[9999]
+        h-0.5 origin-left
+        bg-[#008bfd]
+        shadow-[0_0_8px_rgba(21,128,61,0.35)]
+        dark:bg-[#4ADE80]
+        dark:shadow-[0_0_10px_rgba(74,222,128,0.65)]
+      "
+      style={{ scaleX }}
+    />
       </header>
 
       {/* Main Content Area */}
