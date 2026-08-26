@@ -19,7 +19,7 @@
     "format": "npx prettier --write ."
   },
   "devDependencies": {
-    "concurrently": "^10.0.3"
+    "concurrently": "^10.0.5"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
