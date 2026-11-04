@@ -24,6 +24,7 @@ import { useSpeechHistory } from "../hooks/useSpeechHistory.js";
 import { useToast, ToastContainer } from "../components/useToast.jsx";
 import { loadLanguage, persistLanguage } from "../utils/languages.js";
 import PrivacyModeToggle from "../components/PrivacyModeToggle.jsx";
+import { getAudioContext, unlockAudioContext } from "../utils/audioContext.js";
 
 const QUICK_REPLIES = [
   { label: "Hello", phrase: "Hello" },
@@ -37,9 +38,9 @@ const QUICK_REPLIES = [
 
 function playSoundEffect(type) {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    unlockAudioContext(ctx);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -316,6 +317,7 @@ export default function Call() {
     if (!activeProfile?.voice_id) return;
 
     try {
+      unlockAudioContext();
       setActiveText(text);
       const result = await speak({
         text,

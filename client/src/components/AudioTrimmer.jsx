@@ -1,7 +1,8 @@
-// client/src/components/AudioTrimmer.jsx
+// Visual audio waveform trimmer allowing users to crop audio segments before voice cloning.
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, Scissors, RotateCcw } from "lucide-react";
 import { encodeWAV } from "../utils/wavEncoder.js";
+import { getAudioContext, unlockAudioContext, setupAudioUnlock } from "../utils/audioContext.js";
 
 export function AudioTrimmer({ audioBlob, onTrimComplete }) {
   const [audioBuffer, setAudioBuffer] = useState(null);
@@ -30,8 +31,9 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
       return;
     }
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioCtx = getAudioContext() || new (window.AudioContext || window.webkitAudioContext)();
     audioCtxRef.current = audioCtx;
+    setupAudioUnlock(audioCtx);
 
     let active = true;
 
@@ -241,6 +243,9 @@ export function AudioTrimmer({ audioBlob, onTrimComplete }) {
     stopPreview();
 
     const ctx = audioCtxRef.current;
+    if (ctx.state === "suspended") {
+      unlockAudioContext(ctx);
+    }
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(ctx.destination);

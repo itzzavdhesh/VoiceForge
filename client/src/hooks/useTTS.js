@@ -2,6 +2,7 @@
 import React from "react";
 import { loadVoiceSettings } from "../utils/voiceSettings.js";
 import { API_BASE_URL } from "../utils/apiConfig.js";
+import { unlockAudioContext } from "../utils/audioContext.js";
 
 export default function useTTS() {
   const [status, setStatus] = React.useState("idle");
@@ -28,6 +29,9 @@ export default function useTTS() {
         voiceId = voiceIdParam || "";
         languageCode = languageCodeParam || "en";
       }
+
+      // Synchronously unlock AudioContext within the user gesture event loop before async fetch
+      unlockAudioContext();
 
       const controller = new AbortController();
       setError("");

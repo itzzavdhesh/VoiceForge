@@ -1,4 +1,6 @@
+// Root application component managing navigation tabs, dark/light theme, and global audio unlock.
 import React, { useState } from "react";
+import { setupAudioUnlock } from "./utils/audioContext.js";
 import {
   Camera,
   Mic2,
@@ -139,6 +141,12 @@ export default function App() {
     keysToClear.forEach((key) => localStorage.removeItem(key));
     logout();
   };
+
+  // Set up global user gesture listeners to unlock Web Audio on iOS/WebKit
+  React.useEffect(() => {
+    const cleanup = setupAudioUnlock();
+    return cleanup;
+  }, []);
 
   // Keyboard shortcut to open shortcuts modal
   React.useEffect(() => {
