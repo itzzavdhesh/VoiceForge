@@ -12,6 +12,10 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
   const [error, setError] = useState("");
   const modalRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const codeReaderRef = useRef(null);
+  const pcRef = useRef(null);
+  const videoRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -76,7 +80,9 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
   }, [onClose]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (codeReaderRef.current) {
         codeReaderRef.current.releaseAllStreams();
       }
@@ -127,9 +133,11 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
               audioBlob,
             );
 
+            if (!mountedRef.current) return;
             setStep("done");
             if (onSuccess) onSuccess();
           } catch (err) {
+            if (!mountedRef.current) return;
             setError("Failed to save profile: " + err.message);
           }
         });
@@ -137,6 +145,7 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
 
       pc.onicecandidate = (e) => {
         if (e.candidate === null) {
+          if (!mountedRef.current) return;
           const answer = JSON.stringify(pc.localDescription);
           setAnswerText(btoa(answer));
           setStep("waiting_for_sender");
@@ -147,6 +156,7 @@ export function ReceiveProfileModal({ onClose, onSuccess }) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError("Invalid offer format: " + err.message);
       setStep("waiting_for_offer");
     }
