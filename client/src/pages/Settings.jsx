@@ -1,4 +1,6 @@
+// VoiceForge settings page for model selection, API credentials, audio presets, and profile management.
 import React from "react";
+import { getAudioContext, unlockAudioContext } from "../utils/audioContext.js";
 import {
   ExternalLink,
   Trash2,
@@ -199,6 +201,14 @@ export default function Settings() {
     setPlayingPreset(presetKey);
 
     try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = getAudioContext();
+      }
+      const audioCtx = audioContextRef.current;
+      if (audioCtx) {
+        await unlockAudioContext(audioCtx);
+      }
+
       const response = await fetch("/api/voice/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -221,14 +231,8 @@ export default function Settings() {
       const payload = await response.json();
       const audioUrl = payload.audioUrl;
 
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (
-          window.AudioContext || window.webkitAudioContext
-        )();
-      }
-      const audioCtx = audioContextRef.current;
-      if (audioCtx.state === "suspended") {
-        await audioCtx.resume();
+      if (!audioCtx) {
+        throw new Error("Web Audio API is not supported in this browser.");
       }
 
       const audio = new Audio(audioUrl);

@@ -9,6 +9,7 @@ import {
   FileUp,
 } from "lucide-react";
 import { extractAudioFromFile } from "../utils/audioExtractor.js";
+import { unlockAudioContext, setupAudioUnlock } from "../utils/audioContext.js";
 
 const MAX_RECORDING_SECONDS = 300; // 5 minute max recording cap
 const MIN_DURATION = 3; // 3 second min duration threshold
@@ -295,7 +296,8 @@ export default function VoiceRecorder({ onRecordingReady, disabled = false }) {
           throw new Error("Web Audio API is not supported in this browser.");
         }
         const audioCtx = new AudioContextClass();
-        await audioCtx.resume();
+        setupAudioUnlock(audioCtx);
+        await unlockAudioContext(audioCtx);
         if (cancelled) {
           audioCtx.close();
           return;

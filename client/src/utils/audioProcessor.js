@@ -1,5 +1,11 @@
+// Manages Web Audio API context, audio feature extraction, and real-time DSP filters.
 import Meyda from "meyda";
 import { PitchShifter } from "./pitchShifter.js";
+import {
+  unlockAudioContext,
+  setupAudioUnlock,
+  isSharedAudioContext,
+} from "./audioContext.js";
 
 /**
  * Remembers which MediaElementAudioSourceNode belongs to which media element,
@@ -20,8 +26,8 @@ const mediaElementSources = new WeakMap();
  * Tracks a history of mel-spectrograms for Wav2Lip ONNX real-time inference.
  */
 export class AudioProcessor {
-  constructor() {
-    this.audioContext = null;
+  constructor(audioContext = null) {
+    this.audioContext = audioContext;
     this.source = null;
     this.analyzer = null;
     this.analyser = null; // AnalyserNode for audio visualization
@@ -55,13 +61,15 @@ export class AudioProcessor {
       this.audioContext = existingBinding.context;
     } else if (!this.audioContext) {
       // Must be created after a user gesture
-      this.audioContext = new (
-        window.AudioContext || window.webkitAudioContext
-      )();
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+      this.audioContext = new AudioContextClass();
     }
 
+    setupAudioUnlock(this.audioContext);
+
     if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+      await unlockAudioContext(this.audioContext);
     }
 
     if (this.analyzer) {
@@ -214,6 +222,7 @@ export class AudioProcessor {
     if (
       !ownsMediaBinding &&
       this.audioContext &&
+      !isSharedAudioContext(this.audioContext) &&
       this.audioContext.state !== "closed"
     ) {
       this.audioContext.close();

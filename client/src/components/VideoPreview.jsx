@@ -707,7 +707,7 @@ export default React.forwardRef(function VideoPreview(
         )}
       </div>
       {audioUrl && (
-        <audio className="mt-4 w-full" controls src={audioUrl} autoPlay>
+        <audio ref={audioRef} className="mt-4 w-full" controls src={audioUrl} autoPlay onPlay={() => onSpeakingChange?.(true)} onEnded={() => onSpeakingChange?.(false)} onPause={() => onSpeakingChange?.(false)}>
           <track kind="captions" />
         </audio>
       )}

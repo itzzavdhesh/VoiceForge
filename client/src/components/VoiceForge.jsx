@@ -1,4 +1,6 @@
+// Main compose interface for text-to-speech synthesis, speech history, and quick replies.
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { unlockAudioContext } from "../utils/audioContext.js";
 import { Copy, Eraser, Mic2 } from "lucide-react";
 import { FavoriteMessages } from "./FavoriteMessages";
 import { QuickReplies } from "./QuickReplies";
@@ -48,6 +50,7 @@ export default function VoiceForge() {
   const speak = useCallback(
     async (text) => {
       if (!text.trim()) return;
+      unlockAudioContext();
 
       setIsSpeaking(true);
       setAnnouncement("Speech synthesis started.");
